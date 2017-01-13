@@ -5,12 +5,12 @@ ECHO=echo
 
 #reguły
 %.o:%.asm
-    @$(ECHO) [ASM] $@
-    @$(ASM) $(ASMFLAGS) -o $(OBJDIR)/$@ $<
+	@$(ECHO) [ASM] $@
+	@$(ASM) $(ASMFLAGS) -o $(OBJDIR)/$@ $<
 
 %.o:%.c
-    @$(ECHO) [C] $@
-    @$(CC) $(CFLAGS) -o $(OBJDIR)/$@ $<
+	@$(ECHO) [C] $@
+	@$(CC) $(CFLAGS) -o $(OBJDIR)/$@ $<
 
 ifeq ($(ARCH), 64)
 FILEASMOBJ=$(FILEASM64OBJ)
@@ -25,29 +25,29 @@ FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 
 #komendy zewnętrzne
 build: $(OUTFILE)
-    @$(ECHO) Build Finished
+	@$(ECHO) Build Finished
 
 rebuild: clean build
-    @$(ECHO) Rebuild Finished
+	@$(ECHO) Rebuild Finished
 
 run: $(OUTFILE)
-    ./$(OUTFILE)
+	./$(OUTFILE)
 
 clean:
-    @$(ECHO) Cleanup...
-    @$(ECHO) [RM] $(FILECOBJ_)
-    @rm -f $(FILECOBJ_)
-    @$(ECHO) [RM] $(FILEASM64OBJ_) $(FILEASM32OBJ_)
-    @rm -f $(FILEASM32OBJ_) $(FILEASM64OBJ_)
-    @$(ECHO) [RM] $(OUTFILE)
-    @rm -f $(OUTFILE)
+	@$(ECHO) Cleanup...
+	@$(ECHO) [RM] $(FILECOBJ_)
+	@rm -f $(FILECOBJ_)
+	@$(ECHO) [RM] $(FILEASM64OBJ_) $(FILEASM32OBJ_)
+	@rm -f $(FILEASM32OBJ_) $(FILEASM64OBJ_)
+	@$(ECHO) [RM] $(OUTFILE)
+	@rm -f $(OUTFILE)
 
 prepare:
-    @$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
-    @$(ECHO) CC=$(CC) CFLAGS=$(CFLAGS)
-    @$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
+	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
+	@$(ECHO) CC=$(CC) CFLAGS=$(CFLAGS)
+	@$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
 
 #kompilacja
 $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
-    @$(ECHO) [COMPILE] $(OUTFILE)
-    @$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
+	@$(ECHO) [COMPILE] $(OUTFILE)
+	@$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
