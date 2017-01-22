@@ -2,6 +2,8 @@
 FILEASM32OBJ=
 FILEASM64OBJ=
 FILECOBJ=\
+    import.o\
+    database.o\
     main.o
 
 #plik wynikowy
