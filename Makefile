@@ -23,21 +23,18 @@ FILEASM32OBJ_=$(FILEASM32OBJ:%=$(OBJDIR)/%)
 FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 
+clean_dependencies:
+	@$(MAKE) -C sqlite clean
+	
 build_dependencies:
 	@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
 	@$(MAKE) -C sqlite all
 
 #komendy zewnętrzne
-all: build_dependencies $(OUTFILE)
+build: build_dependencies $(OUTFILE)
 	@$(ECHO) Build Finished
 
-rebuild: clean build
-	@$(ECHO) Rebuild Finished
-
-run: $(OUTFILE)
-	./$(OUTFILE)
-
-clean:
+clean: clean_dependencies
 	@$(ECHO) Cleanup...
 	@$(ECHO) [RM] $(FILECOBJ_)
 	@rm -f $(FILECOBJ_)
@@ -45,6 +42,12 @@ clean:
 	@rm -f $(FILEASM32OBJ_) $(FILEASM64OBJ_)
 	@$(ECHO) [RM] $(OUTFILE)
 	@rm -f $(OUTFILE)
+
+all: clean build
+	@$(ECHO) Rebuild Finished
+
+run: all
+	./$(OUTFILE)
 
 prepare:
 	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)

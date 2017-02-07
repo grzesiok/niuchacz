@@ -7,4 +7,4 @@ FILECOBJ=\
     src/main.o
 
 #plik wynikowy
-OUTFILE=../niuchacz.out
+OUTFILE=niuchacz.out
