@@ -1,6 +1,6 @@
 #ifndef _DATABASE_H
 #define _DATABASE_H
-#include <sqlite3.h>
+#include "../sqlite/sqlite3.h"
 
 extern sqlite3* db;
 

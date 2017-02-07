@@ -24,8 +24,8 @@ FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 
 build_dependencies:
-	@sqlite/configure CPPFLAGS=-DSQLITE_DEBUG
-	@$(MAKE) -f sqlite/Makefile $@
+	@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
+	@$(MAKE) -C sqlite all
 
 #komendy zewnętrzne
 all: build_dependencies $(OUTFILE)
