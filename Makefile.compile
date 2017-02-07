@@ -2,9 +2,9 @@
 FILEASM32OBJ=
 FILEASM64OBJ=
 FILECOBJ=\
-    import.o\
-    database.o\
-    main.o
+    src/import.o\
+    src/database.o\
+    src/main.o
 
 #plik wynikowy
 OUTFILE=../niuchacz.out
