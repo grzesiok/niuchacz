@@ -23,8 +23,12 @@ FILEASM32OBJ_=$(FILEASM32OBJ:%=$(OBJDIR)/%)
 FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 
+build_dependencies:
+	@sqlite/configure CPPFLAGS=-DSQLITE_DEBUG
+	@$(MAKE) -f sqlite/Makefile $@
+
 #komendy zewnętrzne
-build: $(OUTFILE)
+all: build_dependencies $(OUTFILE)
 	@$(ECHO) Build Finished
 
 rebuild: clean build
