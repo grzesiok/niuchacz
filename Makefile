@@ -24,11 +24,11 @@ FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 
 clean_dependencies:
-	@$(MAKE) -C sqlite clean
+	#@$(MAKE) -C sqlite clean
 	
 build_dependencies:
-	@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
-	@$(MAKE) -C sqlite all
+	#@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
+	#@$(MAKE) -C sqlite all
 
 #komendy zewnętrzne
 build: build_dependencies $(OUTFILE)

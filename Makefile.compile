@@ -2,8 +2,9 @@
 FILEASM32OBJ=
 FILEASM64OBJ=
 FILECOBJ=\
-    src/import.o\
-    src/database.o\
+    src/psmgr/psmgr.o\
+    src/database/database.o\
+    src/svc_kernel/svc_lock.o\
     src/main.o
 
 #plik wynikowy
