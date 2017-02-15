@@ -1,4 +1,4 @@
-#include "svc_log.h"
+#include "svc_kernel.h"
 #include <fcntl.h>
 
 typedef struct _LOGMGR
