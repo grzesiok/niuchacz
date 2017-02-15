@@ -10,8 +10,6 @@
 #include <sys/types.h>
 #include <ifaddrs.h>
 
-
-bool isRunning;
 pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void frames_callback(const char* device, const unsigned char *packet, struct timeval ts, unsigned int packet_len) {
@@ -55,7 +53,7 @@ void* pcap_thread_routine(void* arg)
 		fprintf(stderr, "error reading pcap file: %s\n", errbuf);
 		return -1;
 	}
-	while(isRunning) {
+	while(svc_kernel_is_running()) {
 		packet = pcap_next(pcap, &header);
 		if(packet != NULL)
 		{
@@ -69,7 +67,7 @@ void* pcap_thread_routine(void* arg)
 void sig_handler(int signo)
 {
 	if(signo == SIGINT)
-		isRunning = false;
+		svc_kernel_status(SVC_KERNEL_STATUS_STOP_PENDING);
 }
 
 int main(int argc, char* argv[])
@@ -77,7 +75,7 @@ int main(int argc, char* argv[])
 	DPRINTF("main\n");
 	KSTATUS _status;
 
-	isRunning = true;
+	svc_kernel_status(SVC_KERNEL_STATUS_START_PENDING);
 	if(signal(SIGINT, sig_handler) == SIG_ERR)
 		perror("\ncan't catch SIGINT\n");
 	_status = psmgr_start();
@@ -86,6 +84,7 @@ int main(int argc, char* argv[])
 	_status = database_start();
 	if(!KSUCCESS(_status))
 		goto __psmgr_stop_andexit;
+	svc_kernel_status(SVC_KERNEL_STATUS_RUNNING);
 
 	struct ifaddrs *ifaddr, *ifa;
 	int n;
@@ -119,5 +118,6 @@ __database_stop_andexit:
 __psmgr_stop_andexit:
 	psmgr_stop();
 __exit:
+	svc_kernel_status(SVC_KERNEL_STATUS_STOPPED);
 	return 0;
 }
