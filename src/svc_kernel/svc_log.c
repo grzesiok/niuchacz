@@ -1,5 +1,6 @@
 #include "svc_kernel.h"
 #include <fcntl.h>
+#include <stdarg.h>
 
 typedef struct _LOGMGR
 {
