@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "kernel.h"
 #include "psmgr/psmgr.h"
 #include <openssl/md5.h>
@@ -8,6 +9,7 @@
 #include <net/ethernet.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
+
 
 bool isRunning;
 pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -100,6 +102,13 @@ int main(int argc, char* argv[])
 		    printf("Prepare listen on device=NULL\n");
 			continue;
 		}
+		printf("%-8s %s (%d)\n", ifa->ifa_name,
+		                      (ifa->ifa_addr->sa_family == AF_PACKET) ? "AF_PACKET" :
+		                      (ifa->ifa_addr->sa_family == AF_INET) ? "AF_INET" :
+		                      (ifa->ifa_addr->sa_family == AF_INET6) ? "AF_INET6" : "???",
+		                      ifa->ifa_addr->sa_family);
+		if(ifa->ifa_addr->sa_family != AF_PACKET)
+			continue;
 	    printf("Prepare listen on device=%s\n", ifa->ifa_name);
 		_status = psmgr_create_thread(pcap_thread_routine, ifa->ifa_name);
 	}
