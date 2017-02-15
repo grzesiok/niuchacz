@@ -5,6 +5,8 @@ FILECOBJ=\
     src/psmgr/psmgr.o\
     src/database/database.o\
     src/svc_kernel/svc_lock.o\
+    src/svc_kernel/svc_log.o\
+    src/svc_kernel/svc_kernel.o\
     src/main.o
 
 #plik wynikowy
