@@ -3,7 +3,6 @@
 
 #ifdef __GNUC__
 #define NORETURN __attribute__((noreturn))
-#define NORETURN_EXIT __builtin_unreachable()
 #else
 #error "Unsupported compiler"
 #endif

@@ -25,7 +25,7 @@ KSTATUS svc_kernel_init(void)
 void svc_kernel_exit(int code)
 {
 	signal(SIGINT, SIG_DFL);
-	NORETURN_EXIT;
+	exit(code);
 }
 
 KSTATUS svc_kernel_status(int requested_status)
