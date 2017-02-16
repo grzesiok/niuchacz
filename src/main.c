@@ -75,7 +75,9 @@ int main(int argc, char* argv[])
 	DPRINTF("main\n");
 	KSTATUS _status;
 
-	svc_kernel_status(SVC_KERNEL_STATUS_START_PENDING);
+	_status = svc_kernel_init();
+	if(!KSUCCESS(_status))
+		goto __exit;
 	if(signal(SIGINT, sig_handler) == SIG_ERR)
 		perror("\ncan't catch SIGINT\n");
 	_status = psmgr_start();
@@ -118,6 +120,5 @@ __database_stop_andexit:
 __psmgr_stop_andexit:
 	psmgr_stop();
 __exit:
-	svc_kernel_status(SVC_KERNEL_STATUS_STOPPED);
 	return 0;
 }
