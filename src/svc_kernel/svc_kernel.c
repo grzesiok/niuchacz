@@ -24,7 +24,8 @@ KSTATUS svc_kernel_status(int requested_status)
 			&& old_status == SVC_KERNEL_STATUS_START_PENDING)
 	{
 		__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_RUNNING, __ATOMIC_RELEASE);
-	}
+	} else return KSTATUS_UNSUCCESS;
+	return KSTATUS_SUCCESS;
 }
 
 int svc_kernel_get_current_status(void)
