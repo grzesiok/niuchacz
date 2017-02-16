@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "kernel.h"
 #include "psmgr/psmgr.h"
+#include "database/database.h"
 #include <openssl/md5.h>
 #include <pcap.h>
 #include <unistd.h>
@@ -14,12 +15,12 @@ pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 void frames_callback(const char* device, const unsigned char *packet, struct timeval ts, unsigned int packet_len) {
 	MD5_CTX c;
 	unsigned char packet_md5[MD5_DIGEST_LENGTH];
-	unsigned char stmt[512];
+	char stmt[512];
 	struct ether_header *eth_header;
 
 	MD5_Init(&c);
     MD5_Update(&c, packet, packet_len);
-    MD5_Final(packet_md5, &c);
+    MD5_Final((unsigned char*)packet_md5, &c);
     eth_header = (struct ether_header *) packet;
     sprintf(stmt, "insert into frames (device, type, ts, len, hash) "
     			  "values (\"%s\", %u, %d.%06d, %d, \"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\")",
@@ -42,7 +43,6 @@ void* pcap_thread_routine(void* arg)
 	pcap_t *pcap;
 	struct pcap_pkthdr header;
 	const unsigned char *packet;
-	int i;
 
     pthread_mutex_lock(&mutex);
     printf("Listen on device=%s\n", device);
@@ -50,7 +50,7 @@ void* pcap_thread_routine(void* arg)
 	pcap = pcap_open_live(device, BUFSIZ, 0, 1000, errbuf);
 	if(pcap == NULL) {
 		fprintf(stderr, "error reading pcap file: %s\n", errbuf);
-		return -1;
+		return NULL;
 	}
 	while(svc_kernel_is_running()) {
 		packet = pcap_next(pcap, &header);
@@ -60,7 +60,7 @@ void* pcap_thread_routine(void* arg)
 		}
 	}
 	pcap_close(pcap);
-	return 0;
+	return NULL;
 }
 
 int main(int argc, char* argv[])

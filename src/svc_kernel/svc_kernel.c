@@ -22,9 +22,10 @@ KSTATUS svc_kernel_init(void)
 	return KSTATUS_SUCCESS;
 }
 
-void svc_kernel_exit(int code) NORETURN
+void svc_kernel_exit(int code)
 {
 	signal(SIGINT, SIG_DFL);
+	NORETURN_EXIT;
 }
 
 KSTATUS svc_kernel_status(int requested_status)

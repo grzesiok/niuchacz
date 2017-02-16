@@ -3,12 +3,7 @@
 
 #ifdef __GNUC__
 #define NORETURN __attribute__((noreturn))
-#elif __MINGW32__
-#define NORETURN __attribute__((noreturn))
-#elif __clang__
-#define NORETURN __attribute__((noreturn))
-#elif _MSC_VER
-#define NORETURN __declspec(noreturn)
+#define NORETURN_EXIT __builtin_unreachable()
 #else
 #error "Unsupported compiler"
 #endif

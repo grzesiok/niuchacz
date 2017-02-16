@@ -1,6 +1,7 @@
 #include "svc_kernel.h"
 #include <fcntl.h>
 #include <stdarg.h>
+#include <unistd.h>
 
 typedef struct _LOGMGR
 {
@@ -13,6 +14,7 @@ static LOGMGR gLogmgrCfg;
 KSTATUS svc_log_start(const char* pfile_name)
 {
 	gLogmgrCfg._logfd = open(pfile_name, O_APPEND | O_CREAT);
+	return KSTATUS_SUCCESS;
 }
 
 void svc_log_stop(void)

@@ -2,6 +2,7 @@
 #define _SVC_LOCK_H
 #include "svc_status.h"
 #include "../kernel.h"
+#include <pthread.h>
 
 typedef struct _LOCKER_T
 {
@@ -11,7 +12,7 @@ typedef struct _LOCKER_T
 #endif
 } LOCKER, *PLOCKER;
 
-#define LOCK_VAR LOCKER _locker ALIGN_CACHELINE
+#define LOCK_VAR LOCKER _locker
 
 #ifndef DEBUG_MODE
 #define LOCK_INIT(var, type, name) lock_init(&((type*)var)->_locker)
