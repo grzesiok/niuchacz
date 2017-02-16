@@ -3,7 +3,6 @@
 #include "psmgr/psmgr.h"
 #include <openssl/md5.h>
 #include <pcap.h>
-#include <signal.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <net/ethernet.h>
@@ -64,12 +63,6 @@ void* pcap_thread_routine(void* arg)
 	return 0;
 }
 
-void sig_handler(int signo)
-{
-	if(signo == SIGINT)
-		svc_kernel_status(SVC_KERNEL_STATUS_STOP_PENDING);
-}
-
 int main(int argc, char* argv[])
 {
 	DPRINTF("main\n");
@@ -78,8 +71,6 @@ int main(int argc, char* argv[])
 	_status = svc_kernel_init();
 	if(!KSUCCESS(_status))
 		goto __exit;
-	if(signal(SIGINT, sig_handler) == SIG_ERR)
-		perror("\ncan't catch SIGINT\n");
 	_status = psmgr_start();
 	if(!KSUCCESS(_status))
 		goto __exit;
@@ -120,5 +111,5 @@ __database_stop_andexit:
 __psmgr_stop_andexit:
 	psmgr_stop();
 __exit:
-	return 0;
+	svc_kernel_exit(0);
 }

@@ -11,7 +11,7 @@ typedef struct _LOCKER_T
 #endif
 } LOCKER, *PLOCKER;
 
-#define LOCK_VAR LOCKER _locker __attribute__((aligned(CACHE_LINE)))
+#define LOCK_VAR LOCKER _locker ALIGN_CACHELINE
 
 #ifndef DEBUG_MODE
 #define LOCK_INIT(var, type, name) lock_init(&((type*)var)->_locker)

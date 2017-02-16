@@ -10,6 +10,7 @@
 #define SVC_KERNEL_STATUS_STOP_PENDING 3
 
 KSTATUS svc_kernel_init(void);
+void svc_kernel_exit(int code) NORETURN;
 KSTATUS svc_kernel_status(int requested_status);
 int svc_kernel_get_current_status(void);
 #define svc_kernel_is_running() (svc_kernel_get_current_status() == SVC_KERNEL_STATUS_RUNNING)

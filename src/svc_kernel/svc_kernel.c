@@ -1,4 +1,5 @@
 #include "svc_kernel.h"
+#include <signal.h>
 
 typedef struct _KERNEL
 {
@@ -7,10 +8,23 @@ typedef struct _KERNEL
 
 static KERNEL gKernelCfg;
 
+void svc_kernel_sig_handler(int signo)
+{
+	if(signo == SIGINT)
+		svc_kernel_status(SVC_KERNEL_STATUS_STOP_PENDING);
+}
+
 KSTATUS svc_kernel_init(void)
 {
 	__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_START_PENDING, __ATOMIC_RELEASE);
+	if(signal(SIGINT, svc_kernel_sig_handler) == SIG_ERR)
+		return KSTATUS_UNSUCCESS;
 	return KSTATUS_SUCCESS;
+}
+
+void svc_kernel_exit(int code) NORETURN
+{
+	signal(SIGINT, SIG_DFL);
 }
 
 KSTATUS svc_kernel_status(int requested_status)

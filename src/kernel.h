@@ -19,4 +19,6 @@
 #define DPRINTF(...)
 #define ASSERT(expression)
 #endif
+
+#include "compiler.h"
 #endif
