@@ -10,8 +10,6 @@
 #include <sys/types.h>
 #include <ifaddrs.h>
 
-pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
-
 void frames_callback(const char* device, const unsigned char *packet, struct timeval ts, unsigned int packet_len) {
 	MD5_CTX c;
 	unsigned char packet_md5[MD5_DIGEST_LENGTH];
@@ -31,9 +29,7 @@ void frames_callback(const char* device, const unsigned char *packet, struct tim
 				  packet_md5[4], packet_md5[5], packet_md5[6], packet_md5[7],
 				  packet_md5[8], packet_md5[9], packet_md5[10], packet_md5[11],
 				  packet_md5[12], packet_md5[13], packet_md5[14], packet_md5[15]);
-    pthread_mutex_lock(&mutex);
-    printf("%s\n", stmt);//sql_stmt(stmt);
-    pthread_mutex_unlock(&mutex);
+    database_exec(stmt);
 }
 
 void* pcap_thread_routine(void* arg)
@@ -44,9 +40,7 @@ void* pcap_thread_routine(void* arg)
 	struct pcap_pkthdr header;
 	const unsigned char *packet;
 
-    pthread_mutex_lock(&mutex);
     printf("Listen on device=%s\n", device);
-    pthread_mutex_unlock(&mutex);
 	pcap = pcap_open_live(device, BUFSIZ, 0, 1000, errbuf);
 	if(pcap == NULL) {
 		fprintf(stderr, "error reading pcap file: %s\n", errbuf);
@@ -63,6 +57,20 @@ void* pcap_thread_routine(void* arg)
 	return NULL;
 }
 
+KSTATUS schema_sync(void)
+{
+	KSTATUS _status;
+	_status = database_exec("create table if not exists frames "
+							"("
+							"device text, "
+							"type int, "
+							"ts text, "
+							"len int, "
+							"hash text"
+							");");
+	return _status;
+}
+
 int main(int argc, char* argv[])
 {
 	DPRINTF("main\n");
@@ -75,6 +83,9 @@ int main(int argc, char* argv[])
 	if(!KSUCCESS(_status))
 		goto __exit;
 	_status = database_start();
+	if(!KSUCCESS(_status))
+		goto __psmgr_stop_andexit;
+	_status = schema_sync();
 	if(!KSUCCESS(_status))
 		goto __psmgr_stop_andexit;
 	svc_kernel_status(SVC_KERNEL_STATUS_RUNNING);

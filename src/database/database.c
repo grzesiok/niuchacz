@@ -23,7 +23,7 @@ sqlite3* database_getinstance()
 
 KSTATUS database_exec(const char* stmt, ...)
 {
-	DPRINTF("database_exec\n");
+	DPRINTF("database_exec(%s)\n", stmt);
 	int ret;
 	va_list args;
 	char buff[512];
