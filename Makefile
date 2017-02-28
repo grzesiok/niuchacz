@@ -58,3 +58,7 @@ prepare:
 $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
 	@$(ECHO) [COMPILE] $(OUTFILE)
 	@$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
+	
+testqueue.out: $(FILECOBJ_TESTQUEUE)
+	@$(ECHO) [COMPILE] testqueue.out
+	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTQUEUE)

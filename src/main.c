@@ -9,6 +9,22 @@
 #include <net/ethernet.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
+////////////////////
+#include <time.h>
+
+struct timespec timer_start(){
+    struct timespec start_time;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_time);
+    return start_time;
+}
+
+long timer_end(struct timespec start_time){
+    struct timespec end_time;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_time);
+    long diffInNanos = end_time.tv_nsec - start_time.tv_nsec;
+    return diffInNanos;
+}
+////////////////////
 
 void frames_callback(const char* device, const unsigned char *packet, struct timeval ts, unsigned int packet_len) {
 	MD5_CTX c;
@@ -16,6 +32,7 @@ void frames_callback(const char* device, const unsigned char *packet, struct tim
 	char stmt[512];
 	struct ether_header *eth_header;
 
+	struct timespec vartime = timer_start();
 	MD5_Init(&c);
     MD5_Update(&c, packet, packet_len);
     MD5_Final((unsigned char*)packet_md5, &c);
@@ -30,6 +47,8 @@ void frames_callback(const char* device, const unsigned char *packet, struct tim
 				  packet_md5[8], packet_md5[9], packet_md5[10], packet_md5[11],
 				  packet_md5[12], packet_md5[13], packet_md5[14], packet_md5[15]);
     database_exec(stmt);
+    long time_elapsed_nanos = timer_end(vartime);
+    printf("Time taken (nanoseconds): %ld\n", time_elapsed_nanos);
 }
 
 void* pcap_thread_routine(void* arg)

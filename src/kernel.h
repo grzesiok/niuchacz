@@ -9,6 +9,7 @@
 #define DEBUG_MODE
 
 #define MALLOC(type, num) (type*)malloc(sizeof(type)*num)
+#define MALLOC2(type, num, extrasize) (type*)malloc(sizeof(type)*num+extrasize)
 #define REALLOC(var, type, num) (type*)realloc(var, sizeof(type)*num)
 #define FREE(var) free(var)
 
