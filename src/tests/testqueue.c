@@ -156,13 +156,91 @@ int test3()
 	return 0;
 }
 
+typedef struct _TEST_ENTRY41
+{
+	unsigned char _key;
+	char _value[6];
+} TEST_ENTRY41;
+
+void* thread_producer(void* ptr)
+{
+	PQUEUE mainqueue = (PQUEUE)ptr;
+	KSTATUS _status;
+	TEST_ENTRY41 val;
+	int i;
+	for(i = 0;i < 254;i++)
+	{
+		val._key = i+1;
+		strcpy(val._value, "Third");
+		printf("enqueue[%d] = %s\n", val._key, val._value);
+tryagain:
+		_status = queuemgr_enqueue(mainqueue, &val, sizeof(val));
+		if(!KSUCCESS(_status))
+		{
+			goto tryagain;
+		}
+	}
+}
+
+void* thread_consumer(void* ptr)
+{
+	PQUEUE mainqueue = (PQUEUE)ptr;
+	KSTATUS _status;
+	TEST_ENTRY41 val;
+	unsigned char old_key = 0;
+	unsigned long long size;
+	int i;
+	for(i = 0;i < 254;i++)
+	{
+tryagain:
+		size = 0;
+		queuemgr_dequeue(mainqueue, &val, &size);
+		if(size != sizeof(val))
+		{
+			goto tryagain;
+		}
+		if(val._key != old_key+1)
+		{
+			printf("ERROR IN ORDER\n");
+		} else old_key = val._key;
+		dump_memory(&val, sizeof(val));
+		printf("dequeue[%d] = %s\n", val._key, val._value);
+	}
+}
+
+int test4()
+{
+	printf("==================TEST4\n");
+	PQUEUE mainqueue = NULL;
+	KSTATUS _status;
+	pthread_t thread_cons;
+	pthread_t thread_prod;
+	int ret;
+	void *ret_ptr;
+
+	_status = queuemgr_create(&mainqueue, 148);
+	if(!KSUCCESS(_status))
+	{
+		printf("Error during allocate queue = %u\n", _status);
+		return 1;
+	}
+    ret = pthread_create(&thread_prod, NULL, thread_producer, mainqueue);
+	ret = pthread_create(&thread_cons, NULL, thread_consumer, mainqueue);
+	pthread_join(thread_prod, &ret_ptr);
+	pthread_join(thread_cons, &ret_ptr);
+	queuemgr_destroy(mainqueue);
+	return 0;
+}
+
 int main()
 {
-	/*if(test1() != 0)
+	if(test1() != 0)
 		return 1;
 	if(test2() != 0)
-		return 1;*/
+		return 1;
 	if(test3() != 0)
+		return 1;
+	if(test4() != 0)
 		return 1;
 	return 0;
 }
