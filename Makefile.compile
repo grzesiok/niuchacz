@@ -7,6 +7,8 @@ FILECOBJ=\
     src/svc_kernel/svc_lock.o\
     src/svc_kernel/svc_log.o\
     src/svc_kernel/svc_kernel.o\
+    src/svc_kernel/svc_statistics.o\
+    src/svc_kernel/svc_time.o\
     src/main.o\
     src/queuemgr/queuemgr.o
     
