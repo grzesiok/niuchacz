@@ -9,6 +9,7 @@
 #include <net/ethernet.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
+#include "queuemgr/queuemgr.h"
 ////////////////////
 #include <time.h>
 
@@ -26,38 +27,74 @@ long timer_end(struct timespec start_time){
 }
 ////////////////////
 
-void frames_callback(const char* device, const unsigned char *packet, struct timeval ts, unsigned int packet_len) {
+PQUEUE gpFramesQueue;
+
+void framesproducer_callback(const char* device, unsigned char *packet, struct timeval ts, unsigned int packet_len) {
+	KSTATUS _status;
+
+	struct timespec vartime = timer_start();
+	_status = queuemgr_enqueue(gpFramesQueue, ts, packet, packet_len);
+	if(!KSUCCESS(_status))
+	{
+		printf("Error in enqueue msg!\n");
+		return;
+	}
+    long time_elapsed_nanos = timer_end(vartime);
+    printf("[Producer]Time taken (nanoseconds): %ld\n", time_elapsed_nanos);
+}
+
+void framesconsumer_callback(const char* device, unsigned char *buffer) {
 	MD5_CTX c;
 	unsigned char packet_md5[MD5_DIGEST_LENGTH];
 	char stmt[512];
 	struct ether_header *eth_header;
+	size_t packet_len;
+	struct timeval timestamp;
+	KSTATUS _status;
 
 	struct timespec vartime = timer_start();
+	_status = queuemgr_dequeue(gpFramesQueue, &timestamp, buffer, &packet_len);
+	if(!KSUCCESS(_status))
+	{
+		printf("Error in dequeue msg!\n");
+		return;
+	}
 	MD5_Init(&c);
-    MD5_Update(&c, packet, packet_len);
+    MD5_Update(&c, buffer, packet_len);
     MD5_Final((unsigned char*)packet_md5, &c);
-    eth_header = (struct ether_header *) packet;
-    sprintf(stmt, "insert into frames (device, type, ts, len, hash) "
-    			  "values (\"%s\", %u, %d.%06d, %d, \"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\")",
+    eth_header = (struct ether_header *) buffer;
+    sprintf(stmt, "insert into frames (device, src_mac, dst_mac, type, ts, len, hash) "
+    			  "values (\"%s\", %u, %d.%06d, %zu, \"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\")",
 				  device,
 				  ntohs(eth_header->ether_type),
-				  (int) ts.tv_sec, (int) ts.tv_usec, packet_len,
+				  (int) timestamp.tv_sec, (int) timestamp.tv_usec, packet_len,
 				  packet_md5[0], packet_md5[1], packet_md5[2], packet_md5[3],
 				  packet_md5[4], packet_md5[5], packet_md5[6], packet_md5[7],
 				  packet_md5[8], packet_md5[9], packet_md5[10], packet_md5[11],
 				  packet_md5[12], packet_md5[13], packet_md5[14], packet_md5[15]);
     database_exec(stmt);
     long time_elapsed_nanos = timer_end(vartime);
-    printf("Time taken (nanoseconds): %ld\n", time_elapsed_nanos);
+    printf("[Consumer]Time taken (nanoseconds): %ld\n", time_elapsed_nanos);
 }
 
-void* pcap_thread_routine(void* arg)
+void* pcapconsumer_thread_routine(void* arg)
+{
+	const char* device = (const char*)arg;
+	unsigned char *buffer = MALLOC(unsigned char, 1024*1024);
+
+	while(svc_kernel_is_running()) {
+		framesconsumer_callback(device, buffer);
+	}
+	return NULL;
+}
+
+void* pcapproducer_thread_routine(void* arg)
 {
 	const char* device = (const char*)arg;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t *pcap;
 	struct pcap_pkthdr header;
-	const unsigned char *packet;
+	unsigned char *packet;
 
     printf("Listen on device=%s\n", device);
 	pcap = pcap_open_live(device, BUFSIZ, 0, 1000, errbuf);
@@ -66,10 +103,10 @@ void* pcap_thread_routine(void* arg)
 		return NULL;
 	}
 	while(svc_kernel_is_running()) {
-		packet = pcap_next(pcap, &header);
+		packet = (unsigned char*)pcap_next(pcap, &header);
 		if(packet != NULL)
 		{
-			frames_callback(device, packet, header.ts, header.caplen);
+			framesproducer_callback(device, packet, header.ts, header.caplen);
 		}
 	}
 	pcap_close(pcap);
@@ -95,6 +132,7 @@ int main(int argc, char* argv[])
 	DPRINTF("main\n");
 	KSTATUS _status;
 
+	_status = queuemgr_create(&gpFramesQueue, 1024*1024);
 	_status = svc_kernel_init();
 	if(!KSUCCESS(_status))
 		goto __exit;
@@ -132,9 +170,15 @@ int main(int argc, char* argv[])
 		if(ifa->ifa_addr->sa_family != AF_PACKET)
 			continue;
 	    printf("Prepare listen on device=%s\n", ifa->ifa_name);
-		_status = psmgr_create_thread(pcap_thread_routine, ifa->ifa_name);
+		_status = psmgr_create_thread(pcapproducer_thread_routine, ifa->ifa_name);
+		if(!KSUCCESS(_status))
+			goto __freeaddr_database_stop_andexit;
+		_status = psmgr_create_thread(pcapconsumer_thread_routine, ifa->ifa_name);
+		if(!KSUCCESS(_status))
+			goto __freeaddr_database_stop_andexit;
 	}
 	psmgr_idle();
+__freeaddr_database_stop_andexit:
 	freeifaddrs(ifaddr);
 __database_stop_andexit:
 	database_stop();
