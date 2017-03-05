@@ -13,8 +13,8 @@
 typedef struct _QUEUE_MSG
 {
 	unsigned char _flags;
-	unsigned int _msgsize;
-	unsigned int _memsize;
+	size_t _msgsize;
+	size_t _memsize;
 	struct timeval _timestamp;
 } QUEUE_MSG, *PQUEUE_MSG;
 
@@ -22,14 +22,14 @@ typedef struct _QUEUE
 {
     void* _head;
     void* _tail;
-    unsigned int _maxsize;
-    unsigned int _leftsize;
+    size_t _maxsize;
+    size_t _leftsize;
     void* _leftborder;
     void* _rightborder;
 } QUEUE, *PQUEUE;
 
-KSTATUS queuemgr_create(PQUEUE *pqueue, unsigned int maxsize);
+KSTATUS queuemgr_create(PQUEUE *pqueue, size_t maxsize);
 void queuemgr_destroy(PQUEUE pqueue);
-KSTATUS queuemgr_enqueue(PQUEUE pqueue, struct timeval timestamp, void* ptr, unsigned int size);
-KSTATUS queuemgr_dequeue(PQUEUE pqueue, struct timeval *timestamp, void* ptr, unsigned int *psize);
+KSTATUS queuemgr_enqueue(PQUEUE pqueue, struct timeval timestamp, void* ptr, size_t size);
+KSTATUS queuemgr_dequeue(PQUEUE pqueue, struct timeval *timestamp, void* ptr, size_t *psize);
 #endif
