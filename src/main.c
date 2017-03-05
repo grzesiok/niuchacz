@@ -54,7 +54,7 @@ void framesconsumer_callback(const char* device, unsigned char *buffer) {
     MD5_Update(&c, buffer, packet_len);
     MD5_Final((unsigned char*)packet_md5, &c);
     eth_header = (struct ether_header *) buffer;
-    sprintf(stmt, "insert into frames (device, src_mac, dst_mac, type, ts, len, hash) "
+    sprintf(stmt, "insert into frames (device, type, ts, len, hash) "
     			  "values (\"%s\", %u, %d.%06d, %zu, \"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\")",
 				  device,
 				  ntohs(eth_header->ether_type),
@@ -122,6 +122,15 @@ KSTATUS schema_sync(void)
 	return _status;
 }
 
+double ns_to_s(unsigned long long nanoseconds) {
+	double ns = (double)nanoseconds;
+	return ns/1.0e9;
+}
+
+void printfTimeStat(const char* statsName, stats_key statsKey) {
+	printf("%s = %fs\n", statsName, ns_to_s(statsGetValue(statsKey)));
+}
+
 int main(int argc, char* argv[])
 {
 	DPRINTF("main\n");
@@ -164,11 +173,13 @@ int main(int argc, char* argv[])
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
 	stats_key statsKeyDBExec = statsFind("db exec time");
+	unsigned long long currentTimestamp = timerCurrentTimestamp();
 	while(svc_kernel_is_running()) {
 		psmgrIdle(1);
-		printf("producerThread = %llu\n", statsGetValue(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey));
-		printf("consumerTherad = %llu\n", statsGetValue(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey));
-		printf("db exec time = %llu\n", statsGetValue(statsKeyDBExec));
+		printfTimeStat("producerThread", g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
+		printfTimeStat("consumerTherad", g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
+		printfTimeStat("db exec time", statsKeyDBExec);
+		printf("Current timestamp = %fs\n", ns_to_s(timerCurrentTimestamp()-currentTimestamp));
 	}
 	statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);

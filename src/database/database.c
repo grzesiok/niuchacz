@@ -45,5 +45,8 @@ KSTATUS database_exec(const char* stmt, ...)
 	startTime = timerStart();
 	ret = sqlite3_exec(gDB, stmt, 0, 0, &errmsg);
 	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
+    if(ret != SQLITE_OK) {
+    	printf("Error during insert data(%s)!\n", errmsg);
+    }
 	return (ret != SQLITE_OK) ? KSTATUS_DB_EXEC_ERROR : KSTATUS_SUCCESS;
 }

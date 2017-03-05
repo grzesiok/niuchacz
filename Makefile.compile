@@ -1,5 +1,4 @@
 #pliki wykorzystywane przy kompilacji
-FILEASM32OBJ=
 FILEASM64OBJ=
 FILECOBJ=\
     src/psmgr/psmgr.o\
