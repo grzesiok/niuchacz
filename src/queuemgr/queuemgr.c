@@ -1,6 +1,6 @@
 #include "queuemgr.h"
 
-static void i_queue_memcpy(PQUEUE pqueue, void* dst, void* src, unsigned long long size)
+static void i_queue_memcpy(PQUEUE pqueue, void* dst, void* src, unsigned int size)
 {
 	unsigned char* pdst = (unsigned char*)dst;
 	unsigned char* psrc = (unsigned char*)src;
@@ -12,7 +12,7 @@ static void i_queue_memcpy(PQUEUE pqueue, void* dst, void* src, unsigned long lo
 	}
 }
 
-static void* i_queue_ptrmove(PQUEUE pqueue, void* dst, unsigned long long size)
+static void* i_queue_ptrmove(PQUEUE pqueue, void* dst, unsigned int size)
 {
 	unsigned long long ptrpos = (unsigned long long)dst+size;
 	if(ptrpos >= (unsigned long long)pqueue->_rightborder)
@@ -22,10 +22,10 @@ static void* i_queue_ptrmove(PQUEUE pqueue, void* dst, unsigned long long size)
 	return (void*)ptrpos;
 }
 
-#define PTRMOVE(ptr, diff) (void*)((unsigned long)ptr+diff)
+#define PTRMOVE(ptr, diff) (void*)((unsigned long long)ptr+diff)
 #define MEM_ALIGN(val, alignment) ((val%alignment == 0) ? val : (val-(val%alignment)+alignment))
 
-KSTATUS queuemgr_create(PQUEUE *pqueue, unsigned long long maxsize)
+KSTATUS queuemgr_create(PQUEUE *pqueue, unsigned int maxsize)
 {
 	DPRINTF("queuemgr_create(maxsize=%llu)\n", maxsize);
 	unsigned long long maxsize_aligned = MEM_ALIGN(maxsize, sizeof(QUEUE_MSG));
@@ -50,7 +50,7 @@ void queuemgr_destroy(PQUEUE pqueue)
 	FREE(pqueue);
 }
 
-KSTATUS queuemgr_enqueue(PQUEUE pqueue, void* ptr, unsigned long long size)
+KSTATUS queuemgr_enqueue(PQUEUE pqueue, struct timeval timestamp, void* ptr, unsigned int size)
 {
 	DPRINTF("queuemgr_enqueue(pqueue=%p, ptr=%p, size=%llu)\n", pqueue, ptr, size);
 	int memsize = MEM_ALIGN(size, sizeof(QUEUE_MSG))+sizeof(QUEUE_MSG);
@@ -72,6 +72,7 @@ __try_again:
 	}
 	pmsg->_msgsize = size;
 	pmsg->_memsize = memsize;
+	pmsg->_timestamp = timestamp;
 	pqueue->_leftsize -= pmsg->_memsize;
 	PQUEUE_MSG pnew_head = (PQUEUE_MSG)i_queue_ptrmove(pqueue, pmsg, pmsg->_memsize);
 	pnew_head->_flags = QUEUE_MSG_FLAGS_CLEAR;
@@ -82,7 +83,7 @@ __try_again:
 	return KSTATUS_SUCCESS;
 }
 
-KSTATUS queuemgr_dequeue(PQUEUE pqueue, void* ptr, unsigned long long *psize)
+KSTATUS queuemgr_dequeue(PQUEUE pqueue, struct timeval *timestamp, void* ptr, unsigned int *psize)
 {
 	DPRINTF("queuemgr_dequeue(pqueue=%p)\n", pqueue);
 	volatile PQUEUE_MSG pmsg;
@@ -103,6 +104,7 @@ __try_again:
 	//copy it's data into some buffer
 	i_queue_memcpy(pqueue, ptr, i_queue_ptrmove(pqueue, pmsg, sizeof(QUEUE_MSG)), pmsg->_msgsize);
 	*psize = pmsg->_msgsize;
+	*timestamp = pmsg->_timestamp;
 	//and free memory
 	desired_flags = QUEUE_MSG_FLAGS_CLEAR;
 	__atomic_store(&pmsg->_flags, &desired_flags, __ATOMIC_RELEASE);

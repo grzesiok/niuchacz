@@ -23,6 +23,7 @@ int test1()
 	KSTATUS _status;
 	TEST_ENTRY val;
 	unsigned long long size, i;
+	struct timeval timestamp;
 
 	_status = queuemgr_create(&mainqueue, 128);
 	if(!KSUCCESS(_status))
@@ -36,7 +37,8 @@ int test1()
 		val._value = i;
 		dump_memory(&val, sizeof(val));
 		printf("enqueue[%c] = %d\n", val._key, val._value);
-		_status = queuemgr_enqueue(mainqueue, &val, sizeof(val));
+		gettimeofday(&timestamp, NULL);
+		_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
 		if(!KSUCCESS(_status))
 		{
 			printf("Error during enqueue = %u\n", _status);
@@ -45,7 +47,7 @@ int test1()
 	}
 	for(i = 0;i < 3;i++)
 	{
-		queuemgr_dequeue(mainqueue, &val, &size);
+		queuemgr_dequeue(mainqueue, &timestamp, &val, &size);
 		if(size != sizeof(val))
 		{
 			printf("Incorrect size of fetched message = %u\n", size);
@@ -65,6 +67,7 @@ int test2()
 	KSTATUS _status;
 	TEST_ENTRY val;
 	unsigned long long size, i;
+	struct timeval timestamp;
 
 	_status = queuemgr_create(&mainqueue, 128);
 	if(!KSUCCESS(_status))
@@ -78,7 +81,8 @@ int test2()
 		val._value = i;
 		dump_memory(&val, sizeof(val));
 		printf("enqueue[%c] = %d\n", val._key, val._value);
-		_status = queuemgr_enqueue(mainqueue, &val, sizeof(val));
+		gettimeofday(&timestamp, NULL);
+		_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
 		if((!KSUCCESS(_status) && i < 3) || (KSUCCESS(_status) && i == 3))
 		{
 			printf("Error during enqueue = %u\n", _status);
@@ -102,6 +106,7 @@ int test3()
 	KSTATUS _status;
 	TEST_ENTRY31 val;
 	unsigned long long size;
+	struct timeval timestamp;
 
 	_status = queuemgr_create(&mainqueue, 148);
 	if(!KSUCCESS(_status))
@@ -112,7 +117,8 @@ int test3()
 	val._key = 'a';
 	strcpy(val._value, "First");
 	printf("enqueue[%c] = %s\n", val._key, val._value);
-	_status = queuemgr_enqueue(mainqueue, &val, sizeof(val));
+	gettimeofday(&timestamp, NULL);
+	_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
 	if(!KSUCCESS(_status))
 	{
 		printf("Error during enqueue = %u\n", _status);
@@ -121,14 +127,15 @@ int test3()
 	val._key = 'b';
 	strcpy(val._value, "Second");
 	printf("enqueue[%c] = %s\n", val._key, val._value);
-	_status = queuemgr_enqueue(mainqueue, &val, sizeof(val));
+	gettimeofday(&timestamp, NULL);
+	_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
 	if(!KSUCCESS(_status))
 	{
 		printf("Error during enqueue = %u\n", _status);
 		return 1;
 	}
 
-	queuemgr_dequeue(mainqueue, &val, &size);
+	queuemgr_dequeue(mainqueue, &timestamp, &val, &size);
 	if(size != sizeof(val))
 	{
 		printf("Incorrect size of fetched message = %u\n", size);
@@ -139,11 +146,12 @@ int test3()
 	val._key = 'c';
 	strcpy(val._value, "Third");
 	printf("enqueue[%c] = %s\n", val._key, val._value);
-	_status = queuemgr_enqueue(mainqueue, &val, sizeof(val));
+	gettimeofday(&timestamp, NULL);
+	_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
 	int i;
 	for(i = 0;i < 2;i++)
 	{
-		queuemgr_dequeue(mainqueue, &val, &size);
+		queuemgr_dequeue(mainqueue, &timestamp, &val, &size);
 		if(size != sizeof(val))
 		{
 			printf("Incorrect size of fetched message = %u\n", size);
@@ -168,13 +176,16 @@ void* thread_producer(void* ptr)
 	KSTATUS _status;
 	TEST_ENTRY41 val;
 	int i;
+	struct timeval timestamp;
+
 	for(i = 0;i < 254;i++)
 	{
 		val._key = i+1;
 		strcpy(val._value, "Third");
 		printf("enqueue[%d] = %s\n", val._key, val._value);
 tryagain:
-		_status = queuemgr_enqueue(mainqueue, &val, sizeof(val));
+		gettimeofday(&timestamp, NULL);
+		_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
 		if(!KSUCCESS(_status))
 		{
 			goto tryagain;
@@ -190,11 +201,13 @@ void* thread_consumer(void* ptr)
 	unsigned char old_key = 0;
 	unsigned long long size;
 	int i;
+	struct timeval timestamp;
+
 	for(i = 0;i < 254;i++)
 	{
 tryagain:
 		size = 0;
-		queuemgr_dequeue(mainqueue, &val, &size);
+		queuemgr_dequeue(mainqueue, &timestamp, &val, &size);
 		if(size != sizeof(val))
 		{
 			goto tryagain;
