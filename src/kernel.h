@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 #define MALLOC(type, num) (type*)malloc(sizeof(type)*num)
 #define MALLOC2(type, num, extrasize) (type*)malloc(sizeof(type)*num+extrasize)
@@ -21,6 +21,12 @@
 #define DPRINTF(...)
 #define ASSERT(expression)
 #endif
+
+//flags operation
+typedef unsigned char flags8;
+#define CMPFLAGS(var, value) ((var & value) == value)
+#define SETFLAGS(var, value) (var |= value)
+#define UNSETFLAGS(var, value) (var &= ~value)
 
 #include "compiler.h"
 #endif

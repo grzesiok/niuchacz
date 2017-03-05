@@ -1,72 +1,72 @@
 #include "psmgr.h"
+#include <errno.h>
 
 #define PSMGR_MAXTHREADS 16
 
-typedef struct _PSMGR
-{
-	pthread_t _thread_list[PSMGR_MAXTHREADS];
-    volatile int _active_threads;
+typedef struct _PSMGR {
+	pthread_t _threadList[PSMGR_MAXTHREADS];
+    volatile int _activeThreads;
 } PSMGR, *PPSMGR;
 
-typedef struct _PSMGR_THREAD_CTX
-{
-	void *(*_routine) (void *);
-	void *_arg;
+typedef struct _PSMGR_THREAD_CTX {
+	void *(*_p_routine) (void *);
+	void *_p_arg;
 } PSMGR_THREAD_CTX, *PPSMGR_THREAD_CTX;
 
-static PSMGR gPsmgrCfg;
+static PSMGR g_PsmgrCfg;
 
-static void* psmgr_routine(void* arg)
-{
-	PPSMGR_THREAD_CTX pthread_ctx = (PPSMGR_THREAD_CTX)arg;
-	void* ret = pthread_ctx->_routine(pthread_ctx->_arg);
-	return ret;
+static void* psmgrRoutine(void* p_arg) {
+	PPSMGR_THREAD_CTX p_threadCtx = (PPSMGR_THREAD_CTX)p_arg;
+	void* p_ret = p_threadCtx->_p_routine(p_threadCtx->_p_arg);
+	return p_ret;
 }
 
-KSTATUS psmgr_start(void)
-{
+KSTATUS psmgrStart(void) {
 	DPRINTF("psmgr_start\n");
-	memset(&gPsmgrCfg, 0, sizeof(PSMGR));
 	return KSTATUS_SUCCESS;
 }
 
-void psmgr_stop(void)
-{
+void psmgrStop(void) {
 	DPRINTF("psmgr_stop\n");
 }
 
-void psmgr_idle(void)
-{
+void psmgrIdle(unsigned long long waitTimeInSec) {
 	DPRINTF("psmgr_idle\n");
-	void *ret;
+	void *p_ret;
 	int i;
-	for(i = 0;i < gPsmgrCfg._active_threads;i++)
-		pthread_join(gPsmgrCfg._thread_list[i], &ret);
+	struct timespec ts;
+	int retStatus;
+
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_sec += waitTimeInSec;
+	for(i = 0;i < g_PsmgrCfg._activeThreads;i++) {
+		retStatus = pthread_timedjoin_np(g_PsmgrCfg._threadList[i], &p_ret, &ts);
+		if(retStatus == ETIMEDOUT)
+			return;
+	}
 }
 
-KSTATUS psmgr_create_thread(void *(*start_routine) (void *), void *arg)
-{
+KSTATUS psmgrCreateThread(void *(*p_startRoutine) (void *), void *p_arg) {
 	DPRINTF("psmgr_create_thread\n");
 	KSTATUS _status = KSTATUS_SUCCESS;
-	PPSMGR_THREAD_CTX pthread_ctx;
+	PPSMGR_THREAD_CTX p_threadCtx;
 
-    if(gPsmgrCfg._active_threads == PSMGR_MAXTHREADS)
+    if(g_PsmgrCfg._activeThreads == PSMGR_MAXTHREADS)
     	return KSTATUS_UNSUCCESS;
-    pthread_ctx = MALLOC(PSMGR_THREAD_CTX, 1);
-    if(pthread_ctx == NULL)
+    p_threadCtx = MALLOC(PSMGR_THREAD_CTX, 1);
+    if(p_threadCtx == NULL)
     	return KSTATUS_OUT_OF_MEMORY;
-    pthread_ctx->_arg = arg;
-    pthread_ctx->_routine = start_routine;
-    if(gPsmgrCfg._active_threads == PSMGR_MAXTHREADS)
-    {
+    p_threadCtx->_p_arg = p_arg;
+    p_threadCtx->_p_routine = p_startRoutine;
+    if(g_PsmgrCfg._activeThreads == PSMGR_MAXTHREADS) {
     	_status = KSTATUS_UNSUCCESS;
     	goto __cleanup;
     }
-    int ret = pthread_create(&gPsmgrCfg._thread_list[gPsmgrCfg._active_threads++], NULL, psmgr_routine, pthread_ctx);
+    int ret = pthread_create(&g_PsmgrCfg._threadList[g_PsmgrCfg._activeThreads++], NULL, psmgrRoutine, p_threadCtx);
     if(ret != 0)
     	_status = KSTATUS_UNSUCCESS;
 __cleanup:
     if(!KSUCCESS(_status))
-    	FREE(pthread_ctx);
+    	FREE(p_threadCtx);
     return _status;
 }

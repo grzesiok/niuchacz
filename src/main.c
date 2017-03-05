@@ -1,6 +1,5 @@
-#define _GNU_SOURCE
 #include "kernel.h"
-#include "psmgr/psmgr.h"
+#include "svc_kernel/svc_kernel.h"
 #include "database/database.h"
 #include <openssl/md5.h>
 #include <pcap.h>
@@ -10,37 +9,30 @@
 #include <sys/types.h>
 #include <ifaddrs.h>
 #include "queuemgr/queuemgr.h"
-////////////////////
-#include <time.h>
 
-struct timespec timer_start(){
-    struct timespec start_time;
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_time);
-    return start_time;
-}
+#define MAIN_THREAD_PRODUCER 0
+#define MAIN_THREAD_CONSUMER 1
 
-long timer_end(struct timespec start_time){
-    struct timespec end_time;
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_time);
-    long diffInNanos = end_time.tv_nsec - start_time.tv_nsec;
-    return diffInNanos;
-}
-////////////////////
+typedef struct _NIUCHACZ_CTX {
+	char* _p_deviceName;
+	stats_key _statsKey;
+} NIUCHACZ_CTX, *PNIUCHACZ_CTX;
 
-PQUEUE gpFramesQueue;
+typedef struct _NIUCHACZ_MAIN {
+	PQUEUE _p_framesQueue;
+	NIUCHACZ_CTX _threads[2];
+} NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
+
+NIUCHACZ_MAIN g_Main;
 
 void framesproducer_callback(const char* device, unsigned char *packet, struct timeval ts, unsigned int packet_len) {
 	KSTATUS _status;
 
-	struct timespec vartime = timer_start();
-	_status = queuemgr_enqueue(gpFramesQueue, ts, packet, packet_len);
+	_status = queuemgr_enqueue(g_Main._p_framesQueue, ts, packet, packet_len);
 	if(!KSUCCESS(_status))
 	{
 		printf("Error in enqueue msg!\n");
-		return;
 	}
-    long time_elapsed_nanos = timer_end(vartime);
-    printf("[Producer]Time taken (nanoseconds): %ld\n", time_elapsed_nanos);
 }
 
 void framesconsumer_callback(const char* device, unsigned char *buffer) {
@@ -52,8 +44,7 @@ void framesconsumer_callback(const char* device, unsigned char *buffer) {
 	struct timeval timestamp;
 	KSTATUS _status;
 
-	struct timespec vartime = timer_start();
-	_status = queuemgr_dequeue(gpFramesQueue, &timestamp, buffer, &packet_len);
+	_status = queuemgr_dequeue(g_Main._p_framesQueue, &timestamp, buffer, &packet_len);
 	if(!KSUCCESS(_status))
 	{
 		printf("Error in dequeue msg!\n");
@@ -73,31 +64,33 @@ void framesconsumer_callback(const char* device, unsigned char *buffer) {
 				  packet_md5[8], packet_md5[9], packet_md5[10], packet_md5[11],
 				  packet_md5[12], packet_md5[13], packet_md5[14], packet_md5[15]);
     database_exec(stmt);
-    long time_elapsed_nanos = timer_end(vartime);
-    printf("[Consumer]Time taken (nanoseconds): %ld\n", time_elapsed_nanos);
 }
 
 void* pcapconsumer_thread_routine(void* arg)
 {
-	const char* device = (const char*)arg;
+	PNIUCHACZ_CTX p_ctx = (PNIUCHACZ_CTX)arg;
 	unsigned char *buffer = MALLOC(unsigned char, 1024*1024);
+	struct timespec startTime;
 
 	while(svc_kernel_is_running()) {
-		framesconsumer_callback(device, buffer);
+		startTime = timerStart();
+		framesconsumer_callback(p_ctx->_p_deviceName, buffer);
+		statsUpdate(p_ctx->_statsKey, timerStop(startTime));
 	}
 	return NULL;
 }
 
 void* pcapproducer_thread_routine(void* arg)
 {
-	const char* device = (const char*)arg;
+	PNIUCHACZ_CTX p_ctx = (PNIUCHACZ_CTX)arg;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t *pcap;
 	struct pcap_pkthdr header;
 	unsigned char *packet;
+	struct timespec startTime;
 
-    printf("Listen on device=%s\n", device);
-	pcap = pcap_open_live(device, BUFSIZ, 0, 1000, errbuf);
+    printf("Listen on device=%s\n", p_ctx->_p_deviceName);
+	pcap = pcap_open_live(p_ctx->_p_deviceName, BUFSIZ, 0, 1000, errbuf);
 	if(pcap == NULL) {
 		fprintf(stderr, "error reading pcap file: %s\n", errbuf);
 		return NULL;
@@ -106,7 +99,9 @@ void* pcapproducer_thread_routine(void* arg)
 		packet = (unsigned char*)pcap_next(pcap, &header);
 		if(packet != NULL)
 		{
-			framesproducer_callback(device, packet, header.ts, header.caplen);
+			startTime = timerStart();
+			framesproducer_callback(p_ctx->_p_deviceName, packet, header.ts, header.caplen);
+			statsUpdate(p_ctx->_statsKey, timerStop(startTime));
 		}
 	}
 	pcap_close(pcap);
@@ -131,59 +126,54 @@ int main(int argc, char* argv[])
 {
 	DPRINTF("main\n");
 	KSTATUS _status;
+	char *deviceName;
 
-	_status = queuemgr_create(&gpFramesQueue, 1024*1024);
+	if(argc < 2) {
+		printf("Program usage:\n %s interface-name\n", argv[0]);
+		exit(1);
+	}
+	deviceName = argv[1];
+	_status = queuemgr_create(&g_Main._p_framesQueue, 1024*1024);
 	_status = svc_kernel_init();
-	if(!KSUCCESS(_status))
-		goto __exit;
-	_status = psmgr_start();
 	if(!KSUCCESS(_status))
 		goto __exit;
 	_status = database_start();
 	if(!KSUCCESS(_status))
-		goto __psmgr_stop_andexit;
+		goto __exit;
 	_status = schema_sync();
 	if(!KSUCCESS(_status))
-		goto __psmgr_stop_andexit;
+		goto __exit;
 	svc_kernel_status(SVC_KERNEL_STATUS_RUNNING);
-
-	struct ifaddrs *ifaddr, *ifa;
-	int n;
-	if(getifaddrs(&ifaddr) == -1)
-	{
-		perror("getifaddrs");
+	g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
+	_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
+	if(!KSUCCESS(_status)) {
+		printf("Error during allocation StatsKey!\n");
 		goto __database_stop_andexit;
 	}
-
-	for(ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++)
-	{
-		if(ifa->ifa_addr == NULL)
-		{
-		    printf("Prepare listen on device=NULL\n");
-			continue;
-		}
-		printf("%-8s %s (%d)\n", ifa->ifa_name,
-		                      (ifa->ifa_addr->sa_family == AF_PACKET) ? "AF_PACKET" :
-		                      (ifa->ifa_addr->sa_family == AF_INET) ? "AF_INET" :
-		                      (ifa->ifa_addr->sa_family == AF_INET6) ? "AF_INET6" : "???",
-		                      ifa->ifa_addr->sa_family);
-		if(ifa->ifa_addr->sa_family != AF_PACKET)
-			continue;
-	    printf("Prepare listen on device=%s\n", ifa->ifa_name);
-		_status = psmgr_create_thread(pcapproducer_thread_routine, ifa->ifa_name);
-		if(!KSUCCESS(_status))
-			goto __freeaddr_database_stop_andexit;
-		_status = psmgr_create_thread(pcapconsumer_thread_routine, ifa->ifa_name);
-		if(!KSUCCESS(_status))
-			goto __freeaddr_database_stop_andexit;
+	g_Main._threads[MAIN_THREAD_CONSUMER]._p_deviceName = deviceName;
+	_status = statsAlloc("consumerTherad", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
+	if(!KSUCCESS(_status)) {
+		printf("Error during allocation StatsKey!\n");
+		goto __database_stop_andexit;
 	}
-	psmgr_idle();
-__freeaddr_database_stop_andexit:
-	freeifaddrs(ifaddr);
+	printf("Prepare listen on device=%s\n", argv[1]);
+	_status = psmgrCreateThread(pcapproducer_thread_routine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
+	if(!KSUCCESS(_status))
+		goto __database_stop_andexit;
+	_status = psmgrCreateThread(pcapconsumer_thread_routine, &g_Main._threads[MAIN_THREAD_CONSUMER]);
+	if(!KSUCCESS(_status))
+		goto __database_stop_andexit;
+	stats_key statsKeyDBExec = statsFind("db exec time");
+	while(svc_kernel_is_running()) {
+		psmgrIdle(1);
+		printf("producerThread = %llu\n", statsGetValue(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey));
+		printf("consumerTherad = %llu\n", statsGetValue(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey));
+		printf("db exec time = %llu\n", statsGetValue(statsKeyDBExec));
+	}
+	statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
+	statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 __database_stop_andexit:
 	database_stop();
-__psmgr_stop_andexit:
-	psmgr_stop();
 __exit:
 	svc_kernel_exit(0);
 }

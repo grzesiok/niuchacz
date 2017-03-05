@@ -3,8 +3,8 @@
 #include "../svc_kernel/svc_kernel.h"
 #include <pthread.h>
 
-KSTATUS psmgr_start(void);
-void psmgr_stop(void);
-void psmgr_idle(void);
-KSTATUS psmgr_create_thread(void *(*start_routine) (void *), void *arg);
+KSTATUS psmgrStart(void);
+void psmgrStop(void);
+void psmgrIdle(unsigned long long waitTimeInSec);
+KSTATUS psmgrCreateThread(void *(*p_startRoutine) (void *), void *p_arg);
 #endif

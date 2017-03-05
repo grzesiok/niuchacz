@@ -16,14 +16,23 @@ void svc_kernel_sig_handler(int signo)
 
 KSTATUS svc_kernel_init(void)
 {
+	KSTATUS _status;
 	__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_START_PENDING, __ATOMIC_RELEASE);
 	if(signal(SIGINT, svc_kernel_sig_handler) == SIG_ERR)
 		return KSTATUS_UNSUCCESS;
+	_status = statsStart();
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = psmgrStart();
+	if(!KSUCCESS(_status))
+		return _status;
 	return KSTATUS_SUCCESS;
 }
 
 void svc_kernel_exit(int code)
 {
+	psmgrStop();
+	statsStop();
 	signal(SIGINT, SIG_DFL);
 	exit(code);
 }
