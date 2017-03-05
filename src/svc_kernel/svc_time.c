@@ -1,5 +1,17 @@
 #include "svc_time.h"
 
+//internal API
+static unsigned long long i_timerTimespecToLongLongNs(struct timespec currentTime) {
+    return currentTime.tv_sec*1000000000 + currentTime.tv_nsec;
+}
+
+//external API
+unsigned long long timerCurrentTimestamp(void) {
+    struct timespec currentTime;
+    clock_gettime(CLOCK_REALTIME, &currentTime);
+    return i_timerTimespecToLongLongNs(currentTime);
+}
+
 struct timespec timerStart(void) {
     struct timespec startTime;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &startTime);
@@ -17,6 +29,5 @@ unsigned long long timerStop(struct timespec startTime) {
     	resultTime.tv_sec = stopTime.tv_sec - startTime.tv_sec;
     	resultTime.tv_nsec = stopTime.tv_nsec - startTime.tv_nsec;
     }
-    unsigned long long diffInNanos = resultTime.tv_sec*1000000000 + resultTime.tv_nsec;
-    return diffInNanos;
+    return i_timerTimespecToLongLongNs(resultTime);
 }
