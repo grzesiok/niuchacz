@@ -58,3 +58,7 @@ $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
 testqueue.out: $(FILECOBJ_TESTQUEUE)
 	@$(ECHO) [COMPILE] testqueue.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTQUEUE)
+	
+testhashperf.out: $(FILECOBJ_TESTHASHPERF)
+	@$(ECHO) [COMPILE] testhashperf.out
+	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTHASHPERF)

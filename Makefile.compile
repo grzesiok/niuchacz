@@ -14,6 +14,10 @@ FILECOBJ=\
 FILECOBJ_TESTQUEUE=\
     src/tests/testqueue.o\
     src/queuemgr/queuemgr.o
+    
+FILECOBJ_TESTHASHPERF=\
+    src/tests/testhashperf.o\
+    src/svc_kernel/svc_time.o
 
 #plik wynikowy
 OUTFILE=niuchacz.out
