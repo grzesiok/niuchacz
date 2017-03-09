@@ -6,6 +6,7 @@
 #include <openssl/ripemd.h>
 #include "../svc_kernel/svc_time.h"
 #include <stdio.h>
+#include <string.h>
 #include "../algorithms/hash.h"
 
 #define testCryptHASH(NAME, TYPE, LENGTH, INIT, UPDATE, FINAL)\
@@ -24,7 +25,7 @@ unsigned long long testCrypt##NAME(int n, int size) {\
 }
 #define testHASH64(NAME, FUNC)\
 unsigned long long test##NAME(int n, int size) {\
-	char buffer[size];\
+	unsigned char buffer[size];\
 	int i;\
 	struct timespec startTime = timerStart();\
 	for(i = 0;i < n;i++) {\
@@ -67,16 +68,23 @@ void printHashDist##NAME(unsigned long long hashTableSize, unsigned long long n)
 	int i;\
 	memset(hashTable, 0, sizeof(hashTable));\
 	for(i = 0;i < n;i++) {\
-		hashvalue64 hashValue = hash64##NAME(&i, sizeof(int), 0);\
+		hashvalue64 hashValue = hash64##NAME((unsigned char*)&i, sizeof(int), 0);\
 		hashTable[hashValue%hashTableSize]++;\
 		if(hashTable[hashValue%hashTableSize] > 9)\
 			hashTable[hashValue%hashTableSize] = 9;\
 	}\
-	printf("hashTable(%10s, %3d, %6d)=[", #NAME, hashTableSize, n);\
+	double harmonicMean = 0.0f;\
+	printf("hashTable(%6s,%3llu,%5llu)=[", #NAME, hashTableSize, n);\
+	unsigned long long hashTableNonZero = 0;\
 	for(i = 0;i < hashTableSize;i++) {\
-		printf("%d", hashTable[i]);\
+		if(hashTable[i] != 0) {\
+			harmonicMean += (1.0f/(double)hashTable[i]);\
+			hashTableNonZero++;\
+		}\
+		printf("%u", hashTable[i]);\
 	}\
-	printf("]\n");\
+	harmonicMean = 1.0f/(harmonicMean/(double)hashTableNonZero);\
+	printf("]=%.3f(%llu)\n", harmonicMean, hashTableNonZero);\
 }
 
 testDIST64(Murmur)
@@ -85,13 +93,12 @@ testDIST64(FNV1a)
 
 int main(int argc, char* argv[]) {
 	int i, j;
-	unsigned long long timeValue;
 
 	if(strcmp(argv[1], "dist") == 0) {
-		for(i = 1;i <= 10000;i*=3) {
-			printHashDistFNV1(130, i);
-			printHashDistFNV1a(130, i);
-			printHashDistMurmur(130, i);
+		for(i = 1;i <= 10000;i*=2) {
+			printHashDistFNV1(127, i);
+			printHashDistFNV1a(127, i);
+			printHashDistMurmur(127, i);
 		}
 	} else if(strcmp(argv[1], "perf") == 0) {
 		for(i = 1;i <= 10000;i*=10) {
