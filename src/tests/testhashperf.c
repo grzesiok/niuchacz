@@ -6,9 +6,10 @@
 #include <openssl/ripemd.h>
 #include "../svc_kernel/svc_time.h"
 #include <stdio.h>
+#include "../algorithms/hash.h"
 
-#define testHASH(NAME, TYPE, LENGTH, INIT, UPDATE, FINAL)\
-unsigned long long test##NAME(int n, int size) {\
+#define testCryptHASH(NAME, TYPE, LENGTH, INIT, UPDATE, FINAL)\
+unsigned long long testCrypt##NAME(int n, int size) {\
 	char buffer[size];\
 	TYPE c;\
 	unsigned char result[LENGTH];\
@@ -21,45 +22,95 @@ unsigned long long test##NAME(int n, int size) {\
 	}\
 	return timerStop(startTime);\
 }
+#define testHASH64(NAME, FUNC)\
+unsigned long long test##NAME(int n, int size) {\
+	char buffer[size];\
+	int i;\
+	struct timespec startTime = timerStart();\
+	for(i = 0;i < n;i++) {\
+		FUNC((unsigned char*)buffer, size, 0);\
+	}\
+	return timerStop(startTime);\
+}
 
-testHASH(MD2, MD2_CTX, MD2_DIGEST_LENGTH, MD2_Init, MD2_Update, MD2_Final)
-testHASH(MD4, MD4_CTX, MD4_DIGEST_LENGTH, MD4_Init, MD4_Update, MD4_Final)
-testHASH(MD5, MD5_CTX, MD5_DIGEST_LENGTH, MD5_Init, MD5_Update, MD5_Final)
-testHASH(SHA, SHA_CTX, SHA_DIGEST_LENGTH, SHA_Init, SHA_Update, SHA_Final)
-testHASH(SHA1, SHA_CTX, SHA_DIGEST_LENGTH, SHA1_Init, SHA1_Update, SHA1_Final)
-testHASH(SHA224, SHA256_CTX, SHA256_DIGEST_LENGTH, SHA224_Init, SHA224_Update, SHA224_Final)
-testHASH(SHA256, SHA256_CTX, SHA256_DIGEST_LENGTH, SHA256_Init, SHA256_Update, SHA256_Final)
-testHASH(SHA384, SHA512_CTX, SHA512_DIGEST_LENGTH, SHA384_Init, SHA384_Update, SHA384_Final)
-testHASH(SHA512, SHA512_CTX, SHA512_DIGEST_LENGTH, SHA512_Init, SHA512_Update, SHA512_Final)
-testHASH(WHIRLPOOL, WHIRLPOOL_CTX, WHIRLPOOL_DIGEST_LENGTH, WHIRLPOOL_Init, WHIRLPOOL_Update, WHIRLPOOL_Final)
-testHASH(RIPEMD160, RIPEMD160_CTX, RIPEMD160_DIGEST_LENGTH, RIPEMD160_Init, RIPEMD160_Update, RIPEMD160_Final)
+testCryptHASH(MD2, MD2_CTX, MD2_DIGEST_LENGTH, MD2_Init, MD2_Update, MD2_Final)
+testCryptHASH(MD4, MD4_CTX, MD4_DIGEST_LENGTH, MD4_Init, MD4_Update, MD4_Final)
+testCryptHASH(MD5, MD5_CTX, MD5_DIGEST_LENGTH, MD5_Init, MD5_Update, MD5_Final)
+testCryptHASH(SHA, SHA_CTX, SHA_DIGEST_LENGTH, SHA_Init, SHA_Update, SHA_Final)
+testCryptHASH(SHA1, SHA_CTX, SHA_DIGEST_LENGTH, SHA1_Init, SHA1_Update, SHA1_Final)
+testCryptHASH(SHA224, SHA256_CTX, SHA256_DIGEST_LENGTH, SHA224_Init, SHA224_Update, SHA224_Final)
+testCryptHASH(SHA256, SHA256_CTX, SHA256_DIGEST_LENGTH, SHA256_Init, SHA256_Update, SHA256_Final)
+testCryptHASH(SHA384, SHA512_CTX, SHA512_DIGEST_LENGTH, SHA384_Init, SHA384_Update, SHA384_Final)
+testCryptHASH(SHA512, SHA512_CTX, SHA512_DIGEST_LENGTH, SHA512_Init, SHA512_Update, SHA512_Final)
+testCryptHASH(WHIRLPOOL, WHIRLPOOL_CTX, WHIRLPOOL_DIGEST_LENGTH, WHIRLPOOL_Init, WHIRLPOOL_Update, WHIRLPOOL_Final)
+testCryptHASH(RIPEMD160, RIPEMD160_CTX, RIPEMD160_DIGEST_LENGTH, RIPEMD160_Init, RIPEMD160_Update, RIPEMD160_Final)
+testHASH64(FNV1, hash64FNV1)
+testHASH64(FNV1a, hash64FNV1a)
+testHASH64(Murmur, hash64Murmur)
 
-#define doTEST(NAME, SIZE)\
+#define doCryptTEST(NAME, SIZE)\
+		unsigned long long timeValue##NAME = testCrypt##NAME(i, SIZE);\
+		printf("%s;%d;%d;%llu;%f\n", #NAME, i, SIZE, timeValue##NAME, ns_to_s(timeValue##NAME));
+
+#define doTEST64(NAME, SIZE)\
 		unsigned long long timeValue##NAME = test##NAME(i, SIZE);\
-		printf("%s;%d;%d;%llu\n", #NAME, i, SIZE, timeValue##NAME);
+		printf("%s;%d;%d;%llu;%f\n", #NAME, i, SIZE, timeValue##NAME, ns_to_s(timeValue##NAME));
 
 double ns_to_s(unsigned long long nanoseconds) {
 	double ns = (double)nanoseconds;
 	return ns/1.0e9;
 }
 
-int main(void) {
+#define testDIST64(NAME)\
+void printHashDist##NAME(unsigned long long hashTableSize, unsigned long long n) {\
+	unsigned char hashTable[hashTableSize];\
+	int i;\
+	memset(hashTable, 0, sizeof(hashTable));\
+	for(i = 0;i < n;i++) {\
+		hashvalue64 hashValue = hash64##NAME(&i, sizeof(int), 0);\
+		hashTable[hashValue%hashTableSize]++;\
+		if(hashTable[hashValue%hashTableSize] > 9)\
+			hashTable[hashValue%hashTableSize] = 9;\
+	}\
+	printf("hashTable(%10s, %3d, %6d)=[", #NAME, hashTableSize, n);\
+	for(i = 0;i < hashTableSize;i++) {\
+		printf("%d", hashTable[i]);\
+	}\
+	printf("]\n");\
+}
+
+testDIST64(Murmur)
+testDIST64(FNV1)
+testDIST64(FNV1a)
+
+int main(int argc, char* argv[]) {
 	int i, j;
 	unsigned long long timeValue;
 
-	for(i = 1;i <= 10000;i*=10) {
-		for(j = 16;j < 16000;j *= 16) {
-			doTEST(MD2, j);
-			doTEST(MD4, j);
-			doTEST(MD5, j);
-			doTEST(SHA, j);
-			doTEST(SHA1, j);
-			doTEST(SHA224, j);
-			doTEST(SHA256, j);
-			doTEST(SHA384, j);
-			doTEST(SHA512, j);
-			doTEST(WHIRLPOOL, j);
-			doTEST(RIPEMD160, j);
+	if(strcmp(argv[1], "dist") == 0) {
+		for(i = 1;i <= 10000;i*=3) {
+			printHashDistFNV1(130, i);
+			printHashDistFNV1a(130, i);
+			printHashDistMurmur(130, i);
+		}
+	} else if(strcmp(argv[1], "perf") == 0) {
+		for(i = 1;i <= 10000;i*=10) {
+			for(j = 16;j < 16000;j *= 16) {
+				doCryptTEST(MD2, j);
+				doCryptTEST(MD4, j);
+				doCryptTEST(MD5, j);
+				doCryptTEST(SHA, j);
+				doCryptTEST(SHA1, j);
+				doCryptTEST(SHA224, j);
+				doCryptTEST(SHA256, j);
+				doCryptTEST(SHA384, j);
+				doCryptTEST(SHA512, j);
+				doCryptTEST(WHIRLPOOL, j);
+				doCryptTEST(RIPEMD160, j);
+				doTEST64(FNV1, j);
+				doTEST64(FNV1a, j);
+				doTEST64(Murmur, j);
+			}
 		}
 	}
 	return 0;

@@ -1,5 +1,6 @@
 #ifndef _COMPILER_H
 #define _COMPILER_H
+#include <stddef.h>
 
 #ifdef __GNUC__
 #define NORETURN __attribute__((noreturn))
