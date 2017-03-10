@@ -11,7 +11,6 @@
 // 1. It will not work incrementally.
 // 2. It will not produce the same results on little-endian and big-endian
 //    machines.
-#include "../../compiler.h"
 
 unsigned int MurmurHash2_32(const void * key, int len, unsigned int seed)
 {

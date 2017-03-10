@@ -19,24 +19,11 @@ FILEASM32OBJ_=$(FILEASM32OBJ:%=$(OBJDIR)/%)
 FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 
-clean_libalgorithms:
-	@$(MAKE) -C libalgorithms clean
-	
-build_libalgorithms:
-	@$(MAKE) -C libalgorithms all
-
-clean_dependencies: clean_libalgorithms
-	@$(MAKE) -C sqlite clean
-	
-build_dependencies: build_libalgorithms
-	@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
-	@$(MAKE) -C sqlite all
-
 #komendy zewnętrzne
-build: build_dependencies $(OUTFILE)
+build: $(OUTFILE)
 	@$(ECHO) Build Finished
 
-clean: clean_dependencies
+clean:
 	@$(ECHO) Cleanup...
 	@$(ECHO) [RM] $(FILECOBJ_)
 	@rm -f $(FILECOBJ_)
@@ -60,11 +47,3 @@ prepare:
 $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
 	@$(ECHO) [COMPILE] $(OUTFILE)
 	@$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
-	
-testqueue.out: $(FILECOBJ_TESTQUEUE)
-	@$(ECHO) [COMPILE] testqueue.out
-	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTQUEUE)
-	
-testhashperf.out: build_libalgorithms $(FILECOBJ_TESTHASHPERF)
-	@$(ECHO) [COMPILE] testhashperf.out
-	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTHASHPERF)

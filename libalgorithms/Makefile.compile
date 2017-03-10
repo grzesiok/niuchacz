@@ -1,0 +1,9 @@
+#pliki wykorzystywane przy kompilacji
+FILEASM64OBJ=
+FILECOBJ=\
+    src/ext/murmur/MurmurHash2.o\
+    src/ext/murmur/MurmurHash2_64.o\
+    src/algorithms/hash.o
+
+#plik wynikowy
+OUTFILE=libalgorithms.so

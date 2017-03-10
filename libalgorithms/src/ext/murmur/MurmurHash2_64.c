@@ -5,7 +5,6 @@
 // and endian-ness issues if used across multiple platforms.
 
 // 64-bit hash for 64-bit platforms
-#include "../../compiler.h"
 
 unsigned long long MurmurHash2_64(const void * key, int len, unsigned long long seed)
 {

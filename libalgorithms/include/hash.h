@@ -1,5 +1,5 @@
-#ifndef _ALGORITHMS_HASH_H
-#define _ALGORITHMS_HASH_H
+#ifndef _LIBALGORITHMS_ALGORITHMS_HASH_H
+#define _LIBALGORITHMS_ALGORITHMS_HASH_H
 #include <stddef.h>
 
 typedef unsigned long long hashvalue64;

@@ -9,10 +9,7 @@ FILECOBJ=\
     src/svc_kernel/svc_statistics.o\
     src/svc_kernel/svc_time.o\
     src/main.o\
-    src/queuemgr/queuemgr.o\
-    src/ext/murmur/MurmurHash2.o\
-    src/ext/murmur/MurmurHash2_64.o\
-    src/algorithms/hash.o
+    src/queuemgr/queuemgr.o
     
 FILECOBJ_TESTQUEUE=\
     src/tests/testqueue.o\
@@ -20,10 +17,7 @@ FILECOBJ_TESTQUEUE=\
     
 FILECOBJ_TESTHASHPERF=\
     src/tests/testhashperf.o\
-    src/svc_kernel/svc_time.o\
-    src/ext/murmur/MurmurHash2.o\
-    src/ext/murmur/MurmurHash2_64.o\
-    src/algorithms/hash.o
+    src/svc_kernel/svc_time.o
 
 #plik wynikowy
 OUTFILE=niuchacz.out
