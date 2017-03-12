@@ -1,4 +1,4 @@
-#include "../../include/hash.h"
+#include "hash.h"
 
 //internal API
 #define FNV_32_PRIME ((hashvalue32)0x01000193)

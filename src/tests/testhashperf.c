@@ -7,7 +7,7 @@
 #include "../svc_kernel/svc_time.h"
 #include <stdio.h>
 #include <string.h>
-#include "../../libalgorithms/include/hash.h"
+#include "../../libalgorithms/include/algorithms.h"
 
 #define testCryptHASH(NAME, TYPE, LENGTH, INIT, UPDATE, FINAL)\
 unsigned long long testCrypt##NAME(int n, int size) {\

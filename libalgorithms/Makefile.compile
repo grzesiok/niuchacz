@@ -3,7 +3,14 @@ FILEASM64OBJ=
 FILECOBJ=\
     src/ext/murmur/MurmurHash2.o\
     src/ext/murmur/MurmurHash2_64.o\
-    src/algorithms/hash.o
+    src/algorithms/hash/hash.o
 
 #plik wynikowy
 OUTFILE=libalgorithms.so
+    
+FILECOBJ_TESTHLL=\
+    tests/testhll.o\
+    src/algorithms/stream/cardinality/hyperloglog.o\
+    src/ext/murmur/MurmurHash2.o\
+    src/ext/murmur/MurmurHash2_64.o\
+    src/algorithms/hash/hash.o

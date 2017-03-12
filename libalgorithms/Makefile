@@ -25,8 +25,8 @@ build: $(OUTFILE)
 
 clean:
 	@$(ECHO) Cleanup...
-	@$(ECHO) [RM] $(FILECOBJ_)
-	@rm -f $(FILECOBJ_)
+	@$(ECHO) [RM] $(FILECOBJ_) $(FILECOBJ_TESTHLL)
+	@rm -f $(FILECOBJ_) $(FILECOBJ_TESTHLL)
 	@$(ECHO) [RM] $(FILEASM64OBJ_) $(FILEASM32OBJ_)
 	@rm -f $(FILEASM32OBJ_) $(FILEASM64OBJ_)
 	@$(ECHO) [RM] $(OUTFILE)
@@ -47,3 +47,7 @@ prepare:
 $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
 	@$(ECHO) [COMPILE] $(OUTFILE)
 	@$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
+	
+testhll.out: $(FILECOBJ_TESTHLL)
+	@$(ECHO) [COMPILE] testhll.out
+	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTHLL)
