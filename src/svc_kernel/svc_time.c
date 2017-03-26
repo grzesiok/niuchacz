@@ -1,15 +1,16 @@
 #include "svc_time.h"
 
 //internal API
-static unsigned long long i_timerTimespecToLongLongNs(struct timespec currentTime) {
+
+//external API
+unsigned long long timerTimespecToLongLongNs(struct timespec currentTime) {
     return currentTime.tv_sec*1000000000 + currentTime.tv_nsec;
 }
 
-//external API
 unsigned long long timerCurrentTimestamp(void) {
     struct timespec currentTime;
     clock_gettime(CLOCK_REALTIME, &currentTime);
-    return i_timerTimespecToLongLongNs(currentTime);
+    return timerTimespecToLongLongNs(currentTime);
 }
 
 struct timespec timerStart(void) {
@@ -29,5 +30,5 @@ unsigned long long timerStop(struct timespec startTime) {
     	resultTime.tv_sec = stopTime.tv_sec - startTime.tv_sec;
     	resultTime.tv_nsec = stopTime.tv_nsec - startTime.tv_nsec;
     }
-    return i_timerTimespecToLongLongNs(resultTime);
+    return timerTimespecToLongLongNs(resultTime);
 }
