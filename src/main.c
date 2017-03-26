@@ -84,19 +84,45 @@ void* pcapproducer_thread_routine(void* arg)
 {
 	PNIUCHACZ_CTX p_ctx = (PNIUCHACZ_CTX)arg;
 	char errbuf[PCAP_ERRBUF_SIZE];
-	pcap_t *pcap;
+	pcap_t *handle;
 	struct pcap_pkthdr header;
 	unsigned char *packet;
 	struct timespec startTime;
+	char filter_exp[] = "ip"; /* filter expression (only IP packets) */
+	struct bpf_program fp; /* compiled filter program (expression) */
+	bpf_u_int32 net;
+	bpf_u_int32 mask;
 
     printf("Listen on device=%s\n", p_ctx->_p_deviceName);
-	pcap = pcap_open_live(p_ctx->_p_deviceName, BUFSIZ, 0, 1000, errbuf);
-	if(pcap == NULL) {
-		fprintf(stderr, "error reading pcap file: %s\n", errbuf);
+    /* get network number and mask associated with capture device */
+    if (pcap_lookupnet(p_ctx->_p_deviceName, &net, &mask, errbuf) == -1) {
+    	fprintf(stderr, "Couldn't get netmask for device %s: %s\n", p_ctx->_p_deviceName, errbuf);
+    	net = 0;
+    	mask = 0;
+    }
+    /* open capture device */
+    handle = pcap_open_live(p_ctx->_p_deviceName, BUFSIZ, 0, 1000, errbuf);
+	if(handle == NULL) {
+		fprintf(stderr, "Couldn't open device %s: %s\n", p_ctx->_p_deviceName, errbuf);
 		return NULL;
 	}
+	/* make sure we're capturing on an Ethernet device */
+	if(pcap_datalink(handle) != DLT_EN10MB) {
+		fprintf(stderr, "%s is not an Ethernet\n", p_ctx->_p_deviceName);
+		exit(EXIT_FAILURE);
+	}
+	/* compile the filter expression */
+	if(pcap_compile(handle, &fp, filter_exp, 0, net) == -1) {
+		fprintf(stderr, "Couldn't parse filter %s: %s\n", filter_exp, pcap_geterr(handle));
+		exit(EXIT_FAILURE);
+	}
+	/* apply the compiled filter */
+	if (pcap_setfilter(handle, &fp) == -1) {
+		fprintf(stderr, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(handle));
+		exit(EXIT_FAILURE);
+	}
 	while(svc_kernel_is_running()) {
-		packet = (unsigned char*)pcap_next(pcap, &header);
+		packet = (unsigned char*)pcap_next(handle, &header);
 		if(packet != NULL)
 		{
 			startTime = timerStart();
@@ -104,7 +130,9 @@ void* pcapproducer_thread_routine(void* arg)
 			statsUpdate(p_ctx->_statsKey, timerStop(startTime));
 		}
 	}
-	pcap_close(pcap);
+	/* cleanup */
+	pcap_freecode(&fp);
+	pcap_close(handle);
 	return NULL;
 }
 
