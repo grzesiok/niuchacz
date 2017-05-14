@@ -1,0 +1,13 @@
+#!/bin/bash
+# Author: Grzegorz Kasprzyszak
+# Description:
+LOG="/var/log/powerhandler.log"
+case $1 in
+	hibernate|suspend)
+    	;;
+    	thaw|resume)
+        	cpupower frequency-set --max 1200MHz
+    	;;
+    	*)
+    	;;
+esac
