@@ -23,14 +23,11 @@ create or replace TYPE BODY O_ACTION AS
   END p_exec;
 
   final member procedure p_execafter AS
-    pragma autonomous_transaction;
     l_dbop_result clob;
   BEGIN
     dbms_sql_monitor.end_operation(dbop_name => self.dbop_name, dbop_eid => self.dbop_eid);
     l_dbop_result := dbms_sql_monitor.report_sql_monitor(dbop_name => self.dbop_name, type => 'XML', report_level => 'ALL');
-    insert into core_actions_hist(log_time, action, dbop_result)
-      values (systimestamp, self.f_deserialize, l_dbop_result);
-    commit;
+    pkg_actions_internal.p_hist_insert(i_action => self.f_deserialize, i_dbop_result => l_dbop_result);
   END p_execafter;
 
   final static function f_serialize(i_bytecode varchar2) return o_action AS

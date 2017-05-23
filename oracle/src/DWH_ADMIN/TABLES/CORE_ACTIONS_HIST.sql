@@ -1,4 +1,5 @@
 create table core_actions_hist(
+  username varchar2(128),
   log_time timestamp default systimestamp,
   action varchar2(4000),
   dbop_result clob
