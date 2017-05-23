@@ -37,6 +37,7 @@ grant connect, resource to dwh_test;
 alter user dwh_test quota unlimited on TS_LOADER_DATA;
 grant create procedure to dwh_test;
 grant select any dictionary to dwh_test;
+grant create job to dwh_test;
 
 create directory dwh_netdumps_dir as 'ext_tables/netdumps';
 grant read, write on directory dwh_netdumps_dir to dwh_load;
