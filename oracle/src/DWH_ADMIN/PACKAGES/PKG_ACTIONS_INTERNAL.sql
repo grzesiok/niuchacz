@@ -2,6 +2,6 @@ create or replace PACKAGE PKG_ACTIONS_INTERNAL authid definer accessible by (pac
 
   procedure p_hist_insert(i_username varchar2 default sys_context('userenv', 'session_user'),
                           i_action varchar2,
-                          i_dbop_result clob);
+                          i_dbop_result in out nocopy clob);
 END PKG_ACTIONS_INTERNAL;
 /
