@@ -31,9 +31,12 @@ alter user dwh_admin quota unlimited on TS_LOADER_CORE_IDX;
 alter user dwh_admin quota unlimited on TS_LOADER_CORE_HIST;
 grant create procedure to dwh_admin;
 grant select any dictionary to dwh_admin;
+grant execute on dbms_lock to dwh_admin;
+grant execute on dbms_crypto to dwh_admin;
 
 create user dwh_test identified by dwh_test default tablespace TS_LOADER_DATA account unlock;
 grant connect, resource to dwh_test;
+grant create table to dwh_test;
 alter user dwh_test quota unlimited on TS_LOADER_DATA;
 grant create procedure to dwh_test;
 grant select any dictionary to dwh_test;
@@ -66,6 +69,19 @@ begin
     end_date => null);
   DBMS_NETWORK_ACL_ADMIN.ASSIGN_ACL(acl  => 'DWH_CORE_ACL.xml', host => '*');
   commit;
+end;
+/
+begin
+  dbms_network_acl_admin.create_acl(
+        acl         => 'DWH_ADMIN_ACL',
+        description => 'ACL for dwh_loader',
+        principal   => 'DWH_ADMIN',
+        is_grant    =>  true,
+        privilege   => 'connect');
+  dbms_network_acl_admin.assign_acl(
+    acl => 'DWH_ADMIN_ACL',
+    host => 'api.nbp.pl',
+    lower_port => 80);
 end;
 /
 
