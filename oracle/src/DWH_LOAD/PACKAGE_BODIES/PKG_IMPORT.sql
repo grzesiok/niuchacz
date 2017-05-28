@@ -9,8 +9,8 @@ create or replace PACKAGE BODY PKG_IMPORT AS
     execute immediate 'alter table ext_netstatdump location('''||i_filename||''')';
     insert /*+ append */into NETSTATDUMPS(FILENAME,SNAPSHOTTIME,PROTOCOL,LOCALIP,LOCALPORT,FOREIGNIP,FOREIGNPORT,APPPID,APPNAME)
     select i_filename,to_date(SNAPSHOTTIME, 'yyyy-mm-dd hh:mi:ss'),PROTOCOL,
-           substr(LOCALADDR, 1, instr(LOCALADDR, ':')-1), substr(LOCALADDR, instr(LOCALADDR, ':')+1),
-           substr(FOREIGNADDR, 1, instr(FOREIGNADDR, ':')-1), substr(FOREIGNADDR, instr(FOREIGNADDR, ':')+1),
+           substr(LOCALADDR, 1, instr(LOCALADDR, ':')-1), to_number(substr(LOCALADDR, instr(LOCALADDR, ':')+1) default null on conversion error),
+           substr(FOREIGNADDR, 1, instr(FOREIGNADDR, ':')-1), to_number(substr(FOREIGNADDR, instr(FOREIGNADDR, ':')+1) default null on conversion error),
            substr(APPDETAILS, 1, instr(APPDETAILS, '/')-1), substr(APPDETAILS, instr(APPDETAILS, '/')+1)
     from ext_netstatdump
     log errors into err$_netstatdumps(l_error_code) reject limit unlimited;
