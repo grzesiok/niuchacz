@@ -2,7 +2,7 @@ create or replace PACKAGE BODY PKG_ACTIONS AS
 
   procedure p_job_handler as
     pragma autonomous_transaction;
-    l_action dwh_admin.o_action;
+    l_action o_action;
   BEGIN
     loop
       l_action := f_dequeue(i_autocommit => false, i_waittime => 1);
