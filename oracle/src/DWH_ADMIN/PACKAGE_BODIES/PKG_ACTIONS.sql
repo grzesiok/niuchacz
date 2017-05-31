@@ -1,48 +1,26 @@
---------------------------------------------------------
---  DDL for Package Body PKG_ACTIONS
---------------------------------------------------------
+create or replace PACKAGE BODY PKG_ACTIONS AS
 
-  CREATE OR REPLACE EDITIONABLE PACKAGE BODY "DWH_ADMIN"."PKG_ACTIONS" AS
+  procedure p_job_handler as
+    pragma autonomous_transaction;
+    l_action dwh_admin.o_action;
+  BEGIN
+    loop
+      l_action := f_dequeue(i_autocommit => false, i_waittime => 1);
+      exit when (l_action is null);
+      o_action.p_process(l_action);
+      commit;
+    end loop;
+  END;
 
   procedure p_enqueue(i_recipient varchar2 default sys_context('userenv', 'session_user'), i_action o_action) AS
-    l_queue_options dbms_aq.enqueue_options_t;
-    l_message_properties dbms_aq.message_properties_t;
-    l_message_id raw(16);
-    l_recipients dbms_aq.aq$_recipient_list_t;
-    l_cmd t_action;
   begin
-    l_cmd := t_action(i_action.f_deserialize);
-    l_recipients(1) := sys.aq$_agent(name => i_recipient, address => null, protocol => null);
-    l_message_properties.recipient_list := l_recipients;
-    dbms_aq.enqueue(queue_name => 'q_core_actions',
-                    enqueue_options => l_queue_options,
-                    message_properties => l_message_properties,
-                    payload => l_cmd,
-                    msgid => l_message_id);
-    commit;
+    pkg_actions_internal.p_enqueue(i_recipient => i_recipient, i_action => i_action);
   END p_enqueue;
 
-  function f_dequeue(i_consumer varchar2 default sys_context('userenv', 'session_user'), i_autocommit boolean default true) return o_action AS
-    l_queue_options dbms_aq.dequeue_options_t;
-    l_message_properties dbms_aq.message_properties_t;
-    l_message_id raw(16);
-    l_cmd t_action;
-    l_action o_action;
+  function f_dequeue(i_consumer varchar2 default sys_context('userenv', 'session_user'), i_waittime number, i_autocommit boolean default true) return o_action AS
   begin
-    l_queue_options.consumer_name := i_consumer;
-    l_queue_options.visibility := dbms_aq.on_commit;
-    dbms_aq.dequeue(queue_name => 'q_core_actions',
-                    dequeue_options => l_queue_options,
-                    message_properties => l_message_properties,
-                    payload => l_cmd,
-                    msgid => l_message_id);
-    l_action := o_action.f_serialize(l_cmd.cmd#);
-    if(i_autocommit) then
-      commit;
-    end if;
-    return l_action;
+    return pkg_actions_internal.f_dequeue(i_consumer => i_consumer, i_waittime => i_waittime, i_autocommit => i_autocommit);
   END f_dequeue;
 
 END PKG_ACTIONS;
-
 /
