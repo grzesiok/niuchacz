@@ -10,6 +10,8 @@ create or replace PACKAGE BODY PKG_ACTIONS AS
       o_action.p_process(l_action);
       commit;
     end loop;
+  exception
+    when e_dbmsaq_timeout then null;
   END;
 
   procedure p_enqueue(i_recipient varchar2 default sys_context('userenv', 'session_user'), i_action o_action) AS

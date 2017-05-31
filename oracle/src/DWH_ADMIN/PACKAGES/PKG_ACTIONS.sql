@@ -1,4 +1,7 @@
-create or replace PACKAGE PKG_ACTIONS authid current_user AS 
+create or replace PACKAGE PKG_ACTIONS authid current_user AS
+
+  e_dbmsaq_timeout exception;
+  pragma exception_init(e_dbmsaq_timeout, -25228);
 
   procedure p_job_handler;
   procedure p_enqueue(i_recipient varchar2 default sys_context('userenv', 'session_user'), i_action o_action);
