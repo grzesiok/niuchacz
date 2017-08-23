@@ -9,18 +9,29 @@ KSTATUS database_start(void)
 	int  rc;
 	KSTATUS _status;
 
+	printf("[DB] Starting...\n");
 	_status = statsAlloc("db exec time", STATS_TYPE_SUM, &g_statsKey_DbExecTime);
 	if(!KSUCCESS(_status)) {
 		printf("Error during allocation StatsKey!\n");
 		return KSTATUS_UNSUCCESS;
 	}
 	rc = sqlite3_open("test.db", &gDB);
+	_status = (rc) ? KSTATUS_DB_OPEN_ERROR : KSTATUS_SUCCESS;
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = database_exec("PRAGMA journal_mode = WAL;");
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = database_exec("PRAGMA synchronous = NORMAL;");
+	if(!KSUCCESS(_status))
+		return _status;
 	return (rc) ? KSTATUS_DB_OPEN_ERROR : KSTATUS_SUCCESS;
 }
 
 void database_stop(void)
 {
 	DPRINTF("database_stop\n");
+	printf("[DB] Stopping...\n");
 	sqlite3_close(gDB);
 	statsFree(g_statsKey_DbExecTime);
 }

@@ -27,7 +27,6 @@ typedef struct _NIUCHACZ_MAIN {
 
 NIUCHACZ_MAIN g_Main;
 
-const char * cgCreateSchemaPragmaWAL = "PRAGMA journal_mode = WAL;";
 const char * cgCreateSchema =
 		"create table if not exists packets ("
 		"ts int, eth_shost text, eth_dhost text, eth_type int,"
@@ -174,9 +173,6 @@ void* pcap_thread_routine(void* arg)
 KSTATUS schema_sync(void)
 {
 	KSTATUS _status;
-	_status = database_exec(cgCreateSchemaPragmaWAL);
-	if(!KSUCCESS(_status))
-		return _status;
 	_status = database_exec(cgCreateSchema);
 	return _status;
 }
