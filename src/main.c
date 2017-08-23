@@ -1,14 +1,16 @@
 #include "kernel.h"
 #include "svc_kernel/svc_kernel.h"
 #include "database/database.h"
-#include <openssl/md5.h>
 #include <pcap.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <net/ethernet.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
-#include "queuemgr/queuemgr.h"
+#include "mapper.h"
+#include <arpa/inet.h>
+#include <stdbool.h>
+#include <netinet/ether.h>
 
 #define MAIN_THREAD_PRODUCER 0
 #define MAIN_THREAD_CONSUMER 1
@@ -19,68 +21,101 @@ typedef struct _NIUCHACZ_CTX {
 } NIUCHACZ_CTX, *PNIUCHACZ_CTX;
 
 typedef struct _NIUCHACZ_MAIN {
-	PQUEUE _p_framesQueue;
 	NIUCHACZ_CTX _threads[2];
+    sqlite3_stmt *_stmt;
 } NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
 
 NIUCHACZ_MAIN g_Main;
 
-void framesproducer_callback(const char* device, unsigned char *packet, struct timeval ts, unsigned int packet_len) {
+const char * cgCreateSchemaPragmaWAL = "PRAGMA journal_mode = WAL;";
+const char * cgCreateSchema =
+		"create table if not exists packets ("
+		"ts int, eth_shost text, eth_dhost text, eth_type int,"
+		"ip_vhl int,ip_tos int,ip_len int,ip_id int,ip_off int,ip_ttl int,ip_p int,ip_sum int,ip_src text,ip_dst text"
+		");";
+const char * cgStmt =
+		"insert into packets(ts,eth_shost,eth_dhost,eth_type,"
+		"ip_vhl,ip_tos,ip_len,ip_id,ip_off,ip_ttl,ip_p,ip_sum,ip_src,ip_dst)"
+		"values (?,?,?,?,"
+		"?,?,?,?,?,?,?,?,?,?);";
+
+void frames_callback(const char* device, unsigned char *packet, struct timeval ts, unsigned int packet_len) {
+	struct timeval timestampTV;
+	struct timespec timestampTS;
 	KSTATUS _status;
-
-	_status = queuemgr_enqueue(g_Main._p_framesQueue, ts, packet, packet_len);
-	if(!KSUCCESS(_status))
-	{
-		printf("Error in enqueue msg!\n");
-	}
-}
-
-void framesconsumer_callback(const char* device, unsigned char *buffer) {
-	MD5_CTX c;
-	unsigned char packet_md5[MD5_DIGEST_LENGTH];
-	char stmt[512];
-	struct ether_header *eth_header;
-	size_t packet_len;
-	struct timeval timestamp;
-	KSTATUS _status;
-
-	_status = queuemgr_dequeue(g_Main._p_framesQueue, &timestamp, buffer, &packet_len);
-	if(!KSUCCESS(_status))
-	{
-		printf("Error in dequeue msg!\n");
-		return;
-	}
-	MD5_Init(&c);
-    MD5_Update(&c, buffer, packet_len);
-    MD5_Final((unsigned char*)packet_md5, &c);
-    eth_header = (struct ether_header *) buffer;
-    sprintf(stmt, "insert into frames (device, type, ts, len, hash) "
-    			  "values (\"%s\", %u, %d.%06d, %zu, \"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\")",
-				  device,
-				  ntohs(eth_header->ether_type),
-				  (int) timestamp.tv_sec, (int) timestamp.tv_usec, packet_len,
-				  packet_md5[0], packet_md5[1], packet_md5[2], packet_md5[3],
-				  packet_md5[4], packet_md5[5], packet_md5[6], packet_md5[7],
-				  packet_md5[8], packet_md5[9], packet_md5[10], packet_md5[11],
-				  packet_md5[12], packet_md5[13], packet_md5[14], packet_md5[15]);
-    database_exec(stmt);
-}
-
-void* pcapconsumer_thread_routine(void* arg)
-{
-	PNIUCHACZ_CTX p_ctx = (PNIUCHACZ_CTX)arg;
-	unsigned char *buffer = MALLOC(unsigned char, 1024*1024);
+	MAPPER_RESULTS results;
 	struct timespec startTime;
 
-	while(svc_kernel_is_running()) {
-		startTime = timerStart();
-		framesconsumer_callback(p_ctx->_p_deviceName, buffer);
-		statsUpdate(p_ctx->_statsKey, timerStop(startTime));
+    if(!mapFrame(packet, packet_len, &results)) {
+		printf("Error in parsing message!\n");
+		return;
 	}
-	return NULL;
+    //timeval timestamp						  /* Timestamp of packet */
+    TIMEVAL_TO_TIMESPEC(&timestampTV, &timestampTS);
+    if(!database_bind_int64(true, g_Main._stmt, 1, timerTimespecToLongLongNs(timestampTS))) {
+        return;
+    }
+    //u_char  eth_shost[ETHER_ADDR_LEN];      /* source host address */
+    if(!database_bind_text(true, g_Main._stmt, 2, ether_ntoa((struct ether_addr*)&results._ethernet.eth_shost)) != SQLITE_OK) {
+        return;
+    }
+    //u_char  eth_dhost[ETHER_ADDR_LEN];      /* destination host address */
+    if(!database_bind_text(true, g_Main._stmt, 3, ether_ntoa((struct ether_addr*)&results._ethernet.eth_dhost)) != SQLITE_OK) {
+        return;
+    }
+    //u_short eth_type;                       /* IP? ARP? RARP? etc */
+    if(!database_bind_int(true, g_Main._stmt, 4, results._ethernet.eth_type) != SQLITE_OK) {
+        return;
+    }
+    //u_char  ip_vhl;                 		  /* version << 4 | header length >> 2 */
+    if(!database_bind_int(true, g_Main._stmt, 5, results._ip.ip_vhl) != SQLITE_OK) {
+        return;
+    }
+    //u_char  ip_tos;                 		  /* type of service */
+    if(!database_bind_int(true, g_Main._stmt, 6, results._ip.ip_tos) != SQLITE_OK) {
+        return;
+    }
+    //u_short ip_len;                 		  /* total length */
+    if(!database_bind_int(true, g_Main._stmt, 7, results._ip.ip_len) != SQLITE_OK) {
+        return;
+    }
+    //u_short ip_id;                  		  /* identification */
+    if(!database_bind_int(true, g_Main._stmt, 8, results._ip.ip_id) != SQLITE_OK) {
+        return;
+    }
+    //u_short ip_off;                 		  /* fragment offset field */
+    if(!database_bind_int(true, g_Main._stmt, 9, results._ip.ip_off) != SQLITE_OK) {
+        return;
+    }
+    //u_char  ip_ttl;                 		  /* time to live */
+    if(!database_bind_int(true, g_Main._stmt, 10, results._ip.ip_ttl) != SQLITE_OK) {
+        return;
+    }
+    //u_char  ip_p;                   		  /* protocol */
+    if(!database_bind_int(true, g_Main._stmt, 11, results._ip.ip_p) != SQLITE_OK) {
+        return;
+    }
+    //u_short ip_sum;                 		  /* checksum */
+    if(!database_bind_int(true, g_Main._stmt, 12, results._ip.ip_sum) != SQLITE_OK) {
+        return;
+    }
+    //struct  in_addr ip_src;  		  /* source address */
+    if(!database_bind_text(true, g_Main._stmt, 13, inet_ntoa(results._ip.ip_src)) != SQLITE_OK) {
+        return;
+    }
+    //struct  in_addr ip_dst;  		  /* dest address */
+    if(!database_bind_text(true, g_Main._stmt, 14, inet_ntoa(results._ip.ip_dst)) != SQLITE_OK) {
+        return;
+    }
+	startTime = timerStart();
+    if(sqlite3_step(g_Main._stmt) != SQLITE_DONE) {
+        return;
+    }
+    sqlite3_reset(g_Main._stmt);
+	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
 }
 
-void* pcapproducer_thread_routine(void* arg)
+void* pcap_thread_routine(void* arg)
 {
 	PNIUCHACZ_CTX p_ctx = (PNIUCHACZ_CTX)arg;
 	char errbuf[PCAP_ERRBUF_SIZE];
@@ -126,7 +161,7 @@ void* pcapproducer_thread_routine(void* arg)
 		if(packet != NULL)
 		{
 			startTime = timerStart();
-			framesproducer_callback(p_ctx->_p_deviceName, packet, header.ts, header.caplen);
+			frames_callback(p_ctx->_p_deviceName, packet, header.ts, header.caplen);
 			statsUpdate(p_ctx->_statsKey, timerStop(startTime));
 		}
 	}
@@ -139,14 +174,10 @@ void* pcapproducer_thread_routine(void* arg)
 KSTATUS schema_sync(void)
 {
 	KSTATUS _status;
-	_status = database_exec("create table if not exists frames "
-							"("
-							"device text, "
-							"type int, "
-							"ts text, "
-							"len int, "
-							"hash text"
-							");");
+	_status = database_exec(cgCreateSchemaPragmaWAL);
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = database_exec(cgCreateSchema);
 	return _status;
 }
 
@@ -170,7 +201,6 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 	deviceName = argv[1];
-	_status = queuemgr_create(&g_Main._p_framesQueue, 1024*1024);
 	_status = svc_kernel_init();
 	if(!KSUCCESS(_status))
 		goto __exit;
@@ -181,6 +211,10 @@ int main(int argc, char* argv[])
 	if(!KSUCCESS(_status))
 		goto __exit;
 	svc_kernel_status(SVC_KERNEL_STATUS_RUNNING);
+    if(sqlite3_prepare(database_getinstance(), cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
+        printf("\nCould not prepare statement.");
+		goto __database_stop_andexit;
+    }
 	g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
 	_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	if(!KSUCCESS(_status)) {
@@ -194,21 +228,19 @@ int main(int argc, char* argv[])
 		goto __database_stop_andexit;
 	}
 	printf("Prepare listen on device=%s\n", argv[1]);
-	_status = psmgrCreateThread(pcapproducer_thread_routine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
-	if(!KSUCCESS(_status))
-		goto __database_stop_andexit;
-	_status = psmgrCreateThread(pcapconsumer_thread_routine, &g_Main._threads[MAIN_THREAD_CONSUMER]);
+	_status = psmgrCreateThread(pcap_thread_routine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
 	stats_key statsKeyDBExec = statsFind("db exec time");
 	unsigned long long currentTimestamp = timerCurrentTimestamp();
 	while(svc_kernel_is_running()) {
 		psmgrIdle(1);
-		printfTimeStat("producerThread", g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
+		/*printfTimeStat("producerThread", g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 		printfTimeStat("consumerTherad", g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 		printfTimeStat("db exec time", statsKeyDBExec);
-		printf("Current timestamp = %fs\n", ns_to_s(timerCurrentTimestamp()-currentTimestamp));
+		printf("Current timestamp = %fs\n", ns_to_s(timerCurrentTimestamp()-currentTimestamp));*/
 	}
+    sqlite3_finalize(g_Main._stmt);
 	statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 __database_stop_andexit:

@@ -50,3 +50,48 @@ KSTATUS database_exec(const char* stmt, ...)
     }
 	return (ret != SQLITE_OK) ? KSTATUS_DB_EXEC_ERROR : KSTATUS_SUCCESS;
 }
+
+bool database_bind_int64(bool isNotEmpty, sqlite3_stmt *pStmt, int i, sqlite_int64 iValue) {
+	if(!isNotEmpty) {
+		if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
+	        printf("\nError during binding NULL (%d).", i);
+			return false;
+		}
+	} else {
+		if(sqlite3_bind_int64(pStmt, i, iValue) != SQLITE_OK) {
+	        printf("\nError during binding variable (%d).", i);
+			return false;
+		}
+	}
+	return true;
+}
+
+bool database_bind_int(bool isNotEmpty, sqlite3_stmt *pStmt, int i, int iValue) {
+	if(!isNotEmpty) {
+		if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
+	        printf("\nError during binding NULL (%d).", i);
+			return false;
+		}
+	} else {
+		if(sqlite3_bind_int(pStmt, i, iValue) != SQLITE_OK) {
+	        printf("\nError during binding variable (%d).", i);
+			return false;
+		}
+	}
+	return true;
+}
+
+bool database_bind_text(bool isNotEmpty, sqlite3_stmt *pStmt, int i, const char *zData) {
+	if(!isNotEmpty || zData == NULL) {
+		if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
+	        printf("\nError during binding NULL (%d).", i);
+			return false;
+		}
+	} else {
+		if(sqlite3_bind_text(pStmt, i, zData, -1, 0) != SQLITE_OK) {
+	        printf("\nError during binding variable (%d).", i);
+			return false;
+		}
+	}
+	return true;
+}

@@ -72,14 +72,15 @@ begin
 end;
 /
 begin
+  dbms_network_acl_admin.drop_acl(acl=> 'DWH_CORE_ACL_CONNECT.xml');
   dbms_network_acl_admin.create_acl(
-        acl         => 'DWH_ADMIN_ACL',
+        acl         => 'DWH_CORE_ACL_CONNECT.xml',
         description => 'ACL for dwh_loader',
-        principal   => 'DWH_ADMIN',
+        principal   => 'DWH_CORE',
         is_grant    =>  true,
         privilege   => 'connect');
   dbms_network_acl_admin.assign_acl(
-    acl => 'DWH_ADMIN_ACL',
+    acl => 'DWH_CORE_ACL_CONNECT.xml',
     host => 'api.nbp.pl',
     lower_port => 80);
 end;
