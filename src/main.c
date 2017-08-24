@@ -192,15 +192,15 @@ int main(int argc, char* argv[])
 	KSTATUS _status;
 	char *deviceName;
 
-	if(argc < 2) {
-		printf("Program usage:\n %s interface-name\n", argv[0]);
+	if(argc < 3) {
+		printf("Program usage:\n %s interface-name db-path\n", argv[0]);
 		exit(1);
 	}
 	deviceName = argv[1];
 	_status = svc_kernel_init();
 	if(!KSUCCESS(_status))
 		goto __exit;
-	_status = database_start();
+	_status = database_start(argv[2]);
 	if(!KSUCCESS(_status))
 		goto __exit;
 	_status = schema_sync();

@@ -3,7 +3,7 @@
 static sqlite3* gDB;
 stats_key g_statsKey_DbExecTime;
 
-KSTATUS database_start(void)
+KSTATUS database_start(const char* p_path)
 {
 	DPRINTF("database_start\n");
 	int  rc;
@@ -15,7 +15,7 @@ KSTATUS database_start(void)
 		printf("Error during allocation StatsKey!\n");
 		return KSTATUS_UNSUCCESS;
 	}
-	rc = sqlite3_open("test.db", &gDB);
+	rc = sqlite3_open(p_path, &gDB);
 	_status = (rc) ? KSTATUS_DB_OPEN_ERROR : KSTATUS_SUCCESS;
 	if(!KSUCCESS(_status))
 		return _status;
