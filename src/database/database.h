@@ -7,6 +7,7 @@ KSTATUS database_start(const char* p_path);
 void database_stop(void);
 sqlite3* database_getinstance();
 KSTATUS database_exec(const char* stmt, ...);
+const char* database_errmsg(void);
 //bind data
 bool database_bind_int64(bool isNotEmpty, sqlite3_stmt *pStmt, int i, sqlite_int64 iValue);
 bool database_bind_int(bool isNotEmpty, sqlite3_stmt *pStmt, int i, int iValue);
