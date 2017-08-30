@@ -29,86 +29,86 @@ NIUCHACZ_MAIN g_Main;
 
 const char * cgCreateSchema =
 		"create table if not exists packets ("
-		"ts int, eth_shost text, eth_dhost text, eth_type int,"
+		"ts_sec unsigned big int, ts_usec unsigned big int, eth_shost text, eth_dhost text, eth_type int,"
 		"ip_vhl int,ip_tos int,ip_len int,ip_id int,ip_off int,ip_ttl int,ip_p int,ip_sum int,ip_src text,ip_dst text"
 		");";
 const char * cgStmt =
-		"insert into packets(ts,eth_shost,eth_dhost,eth_type,"
+		"insert into packets(ts_sec, ts_usec,eth_shost,eth_dhost,eth_type,"
 		"ip_vhl,ip_tos,ip_len,ip_id,ip_off,ip_ttl,ip_p,ip_sum,ip_src,ip_dst)"
-		"values (?,?,?,?,"
+		"values (?,?,?,?,?,"
 		"?,?,?,?,?,?,?,?,?,?);";
 
 void frames_callback(const char* device, unsigned char *packet, struct timeval ts, unsigned int packet_len) {
-	struct timeval timestampTV;
-	struct timespec timestampTS;
 	KSTATUS _status;
 	MAPPER_RESULTS results;
 	struct timespec startTime;
 
     if(!mapFrame(packet, packet_len, &results)) {
-		printf("Error in parsing message!\n");
+    	fprintf(stderr, "Error in parsing message!\n");
 		return;
 	}
-    //timeval timestamp						  /* Timestamp of packet */
-    TIMEVAL_TO_TIMESPEC(&timestampTV, &timestampTS);
-    if(!database_bind_int64(true, g_Main._stmt, 1, timerTimespecToLongLongNs(timestampTS))) {
+    //ts_sec since Epoch (1970) timestamp						  /* Timestamp of packet */
+    if(!database_bind_int64(true, g_Main._stmt, 1, ts.tv_sec)) {
+        return;
+    }//ts_usec /* Microseconds */
+    if(!database_bind_int64(true, g_Main._stmt, 2, ts.tv_usec)) {
         return;
     }
     //u_char  eth_shost[ETHER_ADDR_LEN];      /* source host address */
-    if(!database_bind_text(true, g_Main._stmt, 2, ether_ntoa((struct ether_addr*)&results._ethernet.eth_shost)) != SQLITE_OK) {
+    if(!database_bind_text(true, g_Main._stmt, 3, ether_ntoa((struct ether_addr*)&results._ethernet.eth_shost)) != SQLITE_OK) {
         return;
     }
     //u_char  eth_dhost[ETHER_ADDR_LEN];      /* destination host address */
-    if(!database_bind_text(true, g_Main._stmt, 3, ether_ntoa((struct ether_addr*)&results._ethernet.eth_dhost)) != SQLITE_OK) {
+    if(!database_bind_text(true, g_Main._stmt, 4, ether_ntoa((struct ether_addr*)&results._ethernet.eth_dhost)) != SQLITE_OK) {
         return;
     }
     //u_short eth_type;                       /* IP? ARP? RARP? etc */
-    if(!database_bind_int(true, g_Main._stmt, 4, results._ethernet.eth_type) != SQLITE_OK) {
+    if(!database_bind_int(true, g_Main._stmt, 5, results._ethernet.eth_type) != SQLITE_OK) {
         return;
     }
     //u_char  ip_vhl;                 		  /* version << 4 | header length >> 2 */
-    if(!database_bind_int(true, g_Main._stmt, 5, results._ip.ip_vhl) != SQLITE_OK) {
+    if(!database_bind_int(true, g_Main._stmt, 6, results._ip.ip_vhl) != SQLITE_OK) {
         return;
     }
     //u_char  ip_tos;                 		  /* type of service */
-    if(!database_bind_int(true, g_Main._stmt, 6, results._ip.ip_tos) != SQLITE_OK) {
+    if(!database_bind_int(true, g_Main._stmt, 7, results._ip.ip_tos) != SQLITE_OK) {
         return;
     }
     //u_short ip_len;                 		  /* total length */
-    if(!database_bind_int(true, g_Main._stmt, 7, results._ip.ip_len) != SQLITE_OK) {
+    if(!database_bind_int(true, g_Main._stmt, 8, results._ip.ip_len) != SQLITE_OK) {
         return;
     }
     //u_short ip_id;                  		  /* identification */
-    if(!database_bind_int(true, g_Main._stmt, 8, results._ip.ip_id) != SQLITE_OK) {
+    if(!database_bind_int(true, g_Main._stmt, 9, results._ip.ip_id) != SQLITE_OK) {
         return;
     }
     //u_short ip_off;                 		  /* fragment offset field */
-    if(!database_bind_int(true, g_Main._stmt, 9, results._ip.ip_off) != SQLITE_OK) {
+    if(!database_bind_int(true, g_Main._stmt, 10, results._ip.ip_off) != SQLITE_OK) {
         return;
     }
     //u_char  ip_ttl;                 		  /* time to live */
-    if(!database_bind_int(true, g_Main._stmt, 10, results._ip.ip_ttl) != SQLITE_OK) {
+    if(!database_bind_int(true, g_Main._stmt, 11, results._ip.ip_ttl) != SQLITE_OK) {
         return;
     }
     //u_char  ip_p;                   		  /* protocol */
-    if(!database_bind_int(true, g_Main._stmt, 11, results._ip.ip_p) != SQLITE_OK) {
+    if(!database_bind_int(true, g_Main._stmt, 12, results._ip.ip_p) != SQLITE_OK) {
         return;
     }
     //u_short ip_sum;                 		  /* checksum */
-    if(!database_bind_int(true, g_Main._stmt, 12, results._ip.ip_sum) != SQLITE_OK) {
+    if(!database_bind_int(true, g_Main._stmt, 13, results._ip.ip_sum) != SQLITE_OK) {
         return;
     }
     //struct  in_addr ip_src;  		  /* source address */
-    if(!database_bind_text(true, g_Main._stmt, 13, inet_ntoa(results._ip.ip_src)) != SQLITE_OK) {
+    if(!database_bind_text(true, g_Main._stmt, 14, inet_ntoa(results._ip.ip_src)) != SQLITE_OK) {
         return;
     }
     //struct  in_addr ip_dst;  		  /* dest address */
-    if(!database_bind_text(true, g_Main._stmt, 14, inet_ntoa(results._ip.ip_dst)) != SQLITE_OK) {
+    if(!database_bind_text(true, g_Main._stmt, 15, inet_ntoa(results._ip.ip_dst)) != SQLITE_OK) {
         return;
     }
 	startTime = timerStart();
     if(sqlite3_step(g_Main._stmt) != SQLITE_DONE) {
-        return;
+    	fprintf(stderr, "%s\n", database_errmsg());
     }
     sqlite3_reset(g_Main._stmt);
 	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
