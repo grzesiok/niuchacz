@@ -5,7 +5,9 @@ FILECOBJ=\
     src/algorithms/stream/membership/bloomfilter.o\
     src/ext/murmur/MurmurHash2.o\
     src/ext/murmur/MurmurHash2_64.o\
-    src/algorithms/hash/hash.o
+    src/algorithms/hash/hash.o\
+    src/algorithms/spinlock/spinlock.o\
+    src/algorithms/doublylinkedlist/doublylinkedlist.o
 
 #plik wynikowy
 OUTFILE=libalgorithms.so
@@ -23,3 +25,8 @@ FILECOBJ_TESTBLOOMFILTER=\
     src/ext/murmur/MurmurHash2.o\
     src/ext/murmur/MurmurHash2_64.o\
     src/algorithms/hash/hash.o
+    
+FILECOBJ_TESTDOUBLYLINKEDLIST=\
+    tests/testdoublylinkedlist.o\
+    src/algorithms/spinlock/spinlock.o\
+    src/algorithms/doublylinkedlist/doublylinkedlist.o
