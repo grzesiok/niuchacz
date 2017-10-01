@@ -22,7 +22,7 @@ int main() {
 	printf("Adding entries...\n");
 	for(i = 0;i < tab_maxsize;i++) {
 		printf("Adding val=%u\n", tab[i]);
-		doublylinkedlistAdd(plist, tab[i], &tab[i], sizeof(tab[i]));
+		doublylinkedlistAdd(plist, tab[i], &tab[i], sizeof(TEST_ENTRY));
 	}
 	printf("Checking values...\n");
 	for(i = 0;i < tab_maxsize;i++) {

@@ -17,8 +17,10 @@ typedef struct _DOUBLYLINKEDLIST_ENTRY {
 } DOUBLYLINKEDLIST_ENTRY, *PDOUBLYLINKEDLIST_ENTRY;
 
 typedef struct _DOUBLYLINKEDLIST {
-	DOUBLYLINKEDLIST_ENTRY_HEADER _entries;
-	bool _isLocked;
+	DOUBLYLINKEDLIST_ENTRY_HEADER _activeEntries;
+	bool _isActiveEntriesLocked;
+	DOUBLYLINKEDLIST_ENTRY_HEADER _deletedEntries;
+	bool _isDeletedEntriesLocked;
 } DOUBLYLINKEDLIST, *PDOUBLYLINKEDLIST;
 
 PDOUBLYLINKEDLIST doublylinkedlistAlloc(void);
