@@ -57,10 +57,10 @@ $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
 	@$(ECHO) [COMPILE] $(OUTFILE)
 	@$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
 	
-testqueue.out: $(FILECOBJ_TESTQUEUE)
-	@$(ECHO) [COMPILE] testqueue.out
-	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTQUEUE)
-	
 testhashperf.out: build_dependencies $(FILECOBJ_TESTHASHPERF)
 	@$(ECHO) [COMPILE] testhashperf.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTHASHPERF)
+	
+testpsmgr.out: $(FILECOBJ_TESTPSMGR)
+	@$(ECHO) [COMPILE] testpsmgr.out
+	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTPSMGR)

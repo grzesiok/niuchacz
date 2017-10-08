@@ -1,259 +1,52 @@
-#include "../queuemgr/queuemgr.h"
+#include "../psmgr/psmgr.h"
 
 typedef struct _TEST_ENTRY
 {
-	int _key;
+	const char* _key;
 	int _value;
-} TEST_ENTRY;
+	psmgr_execRoutine _p_execRoutine;
+	psmgr_cancelRoutine _p_cancelRoutine;
+	void* _p_private_mem;
+} TEST_ENTRY, *PTEST_ENTRY;
 
-void dump_memory(char* ptr, int size)
-{
-	DPRINTF("dump_memory(%p)[", ptr);
-	while(size-- > 0)
-	{
-		DPRINTF("%02x", *ptr++);
-	}
-	DPRINTF("]\n");
+KSTATUS testRoutine(void* p_arg) {
+	PTEST_ENTRY pentry = (PTEST_ENTRY)p_arg;
+	pentry->_p_private_mem = malloc(5);
+	printf("testRoutine START(%s)...\n", pentry->_key);
+	int a = 1/0;
+	sleep(1);
+	printf("testRoutine STOP(%s)...\n", pentry->_key);
+	return 1;
 }
 
-int test1()
-{
-	printf("==================TEST1s\n");
-	PQUEUE mainqueue = NULL;
-	KSTATUS _status;
-	TEST_ENTRY val;
-	unsigned long long size, i;
-	struct timeval timestamp;
-
-	_status = queuemgr_create(&mainqueue, 128);
-	if(!KSUCCESS(_status))
-	{
-		printf("Error during allocate queue = %u\n", _status);
-		return 1;
-	}
-	for(i = 0;i < 3;i++)
-	{
-		val._key = i+'a';
-		val._value = i;
-		dump_memory(&val, sizeof(val));
-		printf("enqueue[%c] = %d\n", val._key, val._value);
-		gettimeofday(&timestamp, NULL);
-		_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
-		if(!KSUCCESS(_status))
-		{
-			printf("Error during enqueue = %u\n", _status);
-			return 1;
-		}
-	}
-	for(i = 0;i < 3;i++)
-	{
-		queuemgr_dequeue(mainqueue, &timestamp, &val, &size);
-		if(size != sizeof(val))
-		{
-			printf("Incorrect size of fetched message = %u\n", size);
-			return 1;
-		}
-		dump_memory(&val, sizeof(val));
-		printf("dequeue[%c] = %d\n", val._key, val._value);
-	}
-	queuemgr_destroy(mainqueue);
-	return 0;
+void cancelRoutine(void* p_arg) {
+	PTEST_ENTRY pentry = (PTEST_ENTRY)p_arg;
+	printf("cancelRoutine START(%s)...\n", pentry->_key);
+	free(pentry->_p_private_mem);
+	printf("cancelRoutine STOP(%s)...\n", pentry->_key);
 }
 
-int test2()
-{
-	printf("==================TEST2\n");
-	PQUEUE mainqueue = NULL;
-	KSTATUS _status;
-	TEST_ENTRY val;
-	unsigned long long size, i;
-	struct timeval timestamp;
-
-	_status = queuemgr_create(&mainqueue, 128);
-	if(!KSUCCESS(_status))
-	{
-		printf("Error during allocate queue = %u\n", _status);
-		return 1;
-	}
-	for(i = 0;i < 4;i++)
-	{
-		val._key = i+'a';
-		val._value = i;
-		dump_memory(&val, sizeof(val));
-		printf("enqueue[%c] = %d\n", val._key, val._value);
-		gettimeofday(&timestamp, NULL);
-		_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
-		if((!KSUCCESS(_status) && i < 3) || (KSUCCESS(_status) && i == 3))
-		{
-			printf("Error during enqueue = %u\n", _status);
-			return 1;
-		}
-	}
-	queuemgr_destroy(mainqueue);
-	return 0;
-}
-
-typedef struct _TEST_ENTRY31
-{
-	char _key;
-	char _value[18];
-} TEST_ENTRY31;
-
-int test3()
-{
-	printf("==================TEST3\n");
-	PQUEUE mainqueue = NULL;
-	KSTATUS _status;
-	TEST_ENTRY31 val;
-	unsigned long long size;
-	struct timeval timestamp;
-
-	_status = queuemgr_create(&mainqueue, 148);
-	if(!KSUCCESS(_status))
-	{
-		printf("Error during allocate queue = %u\n", _status);
-		return 1;
-	}
-	val._key = 'a';
-	strcpy(val._value, "First");
-	printf("enqueue[%c] = %s\n", val._key, val._value);
-	gettimeofday(&timestamp, NULL);
-	_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
-	if(!KSUCCESS(_status))
-	{
-		printf("Error during enqueue = %u\n", _status);
-		return 1;
-	}
-	val._key = 'b';
-	strcpy(val._value, "Second");
-	printf("enqueue[%c] = %s\n", val._key, val._value);
-	gettimeofday(&timestamp, NULL);
-	_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
-	if(!KSUCCESS(_status))
-	{
-		printf("Error during enqueue = %u\n", _status);
-		return 1;
-	}
-
-	queuemgr_dequeue(mainqueue, &timestamp, &val, &size);
-	if(size != sizeof(val))
-	{
-		printf("Incorrect size of fetched message = %u\n", size);
-		return 1;
-	}
-	dump_memory(&val, sizeof(val));
-	printf("dequeue[%c] = %s\n", val._key, val._value);
-	val._key = 'c';
-	strcpy(val._value, "Third");
-	printf("enqueue[%c] = %s\n", val._key, val._value);
-	gettimeofday(&timestamp, NULL);
-	_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
-	int i;
-	for(i = 0;i < 2;i++)
-	{
-		queuemgr_dequeue(mainqueue, &timestamp, &val, &size);
-		if(size != sizeof(val))
-		{
-			printf("Incorrect size of fetched message = %u\n", size);
-			return 1;
-		}
-		dump_memory(&val, sizeof(val));
-		printf("dequeue[%c] = %s\n", val._key, val._value);
-	}
-	queuemgr_destroy(mainqueue);
-	return 0;
-}
-
-typedef struct _TEST_ENTRY41
-{
-	unsigned char _key;
-	char _value[6];
-} TEST_ENTRY41;
-
-void* thread_producer(void* ptr)
-{
-	PQUEUE mainqueue = (PQUEUE)ptr;
-	KSTATUS _status;
-	TEST_ENTRY41 val;
-	int i;
-	struct timeval timestamp;
-
-	for(i = 0;i < 254;i++)
-	{
-		val._key = i+1;
-		strcpy(val._value, "Third");
-		printf("enqueue[%d] = %s\n", val._key, val._value);
-tryagain:
-		gettimeofday(&timestamp, NULL);
-		_status = queuemgr_enqueue(mainqueue, timestamp, &val, sizeof(val));
-		if(!KSUCCESS(_status))
-		{
-			goto tryagain;
-		}
-	}
-}
-
-void* thread_consumer(void* ptr)
-{
-	PQUEUE mainqueue = (PQUEUE)ptr;
-	KSTATUS _status;
-	TEST_ENTRY41 val;
-	unsigned char old_key = 0;
-	unsigned long long size;
-	int i;
-	struct timeval timestamp;
-
-	for(i = 0;i < 254;i++)
-	{
-tryagain:
-		size = 0;
-		queuemgr_dequeue(mainqueue, &timestamp, &val, &size);
-		if(size != sizeof(val))
-		{
-			goto tryagain;
-		}
-		if(val._key != old_key+1)
-		{
-			printf("ERROR IN ORDER\n");
-		} else old_key = val._key;
-		dump_memory(&val, sizeof(val));
-		printf("dequeue[%d] = %s\n", val._key, val._value);
-	}
-}
-
-int test4()
-{
-	printf("==================TEST4\n");
-	PQUEUE mainqueue = NULL;
-	KSTATUS _status;
-	pthread_t thread_cons;
-	pthread_t thread_prod;
-	int ret;
-	void *ret_ptr;
-
-	_status = queuemgr_create(&mainqueue, 148);
-	if(!KSUCCESS(_status))
-	{
-		printf("Error during allocate queue = %u\n", _status);
-		return 1;
-	}
-    ret = pthread_create(&thread_prod, NULL, thread_producer, mainqueue);
-	ret = pthread_create(&thread_cons, NULL, thread_consumer, mainqueue);
-	pthread_join(thread_prod, &ret_ptr);
-	pthread_join(thread_cons, &ret_ptr);
-	queuemgr_destroy(mainqueue);
-	return 0;
-}
+TEST_ENTRY gTab[] = {
+		{"TEST1", 1, testRoutine, cancelRoutine},
+		{"TEST2", 2, testRoutine, cancelRoutine},
+		{"TEST3", 3, testRoutine, cancelRoutine},
+		{"TEST4", 4, testRoutine, cancelRoutine},
+		{"TEST5", 5, testRoutine, cancelRoutine}
+};
 
 int main()
 {
-	if(test1() != 0)
-		return 1;
-	if(test2() != 0)
-		return 1;
-	if(test3() != 0)
-		return 1;
-	if(test4() != 0)
-		return 1;
+	KSTATUS _status;
+	TEST_ENTRY val;
+	unsigned long long size, i;
+	struct timeval timestamp;
+
+	printf("PSMGR Starting...\n");
+	_status = psmgrStart();
+	for(i = 0;i < sizeof(gTab)/sizeof(gTab[0]);i++) {
+		_status = psmgrCreateThread(gTab[i]._key, gTab[i]._p_execRoutine, gTab[i]._p_cancelRoutine, &gTab[i]);
+	}
+	printf("PSMGR Stopping...\n");
+	psmgrStop();
 	return 0;
 }
