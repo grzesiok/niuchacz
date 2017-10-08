@@ -36,7 +36,12 @@ int main() {
 		doublylinkedlistDel(plist, pentry);
 		printf("pentry deleted\n");
 	}
-	printf("LIST empty\n");
+	if(doublylinkedlistIsEmpty(plist)) {
+		printf("LIST empty\n");
+	} else {
+		printf("LIST not empty!\n");
+		return 1;
+	}
 	doublylinkedlistFree(plist);
 	return 0;
 }

@@ -87,10 +87,17 @@ PDOUBLYLINKEDLIST doublylinkedlistAlloc(void) {
 
 void doublylinkedlistFree(PDOUBLYLINKEDLIST pdoublylinkedlist) {
 	spinlockLock(&pdoublylinkedlist->_isActiveEntriesLocked);
+	spinlockLock(&pdoublylinkedlist->_isDeletedEntriesLocked);
+	//releasing memory from active entries
 	PDOUBLYLINKEDLIST_ENTRY pentry = (PDOUBLYLINKEDLIST_ENTRY)i_doublylinkedlistEntryHeaderNext(&pdoublylinkedlist->_activeEntries);
 	while(!i_doublylinkedlistEntryIsEnd(&pdoublylinkedlist->_activeEntries, pentry)) {
 		i_doublylinkedlistEntryDel(pentry);
-		free(pentry);
+		pentry = i_doublylinkedlistEntryNext(pentry);
+	}
+	//releasing memory from inactive entries
+	pentry = (PDOUBLYLINKEDLIST_ENTRY)i_doublylinkedlistEntryHeaderNext(&pdoublylinkedlist->_deletedEntries);
+	while(!i_doublylinkedlistEntryIsEnd(&pdoublylinkedlist->_deletedEntries, pentry)) {
+		i_doublylinkedlistEntryDel(pentry);
 		pentry = i_doublylinkedlistEntryNext(pentry);
 	}
 	// don't need to release lock as structure is freed up
@@ -194,4 +201,8 @@ void doublylinkedlistRelease(void* ptr) {
 	if(new_val == 0 && pentry->_isDeleted) {
 		free(pentry);
 	}
+}
+
+bool doublylinkedlistIsEmpty(PDOUBLYLINKEDLIST pdoublylinkedlist) {
+	return i_doublylinkedlistEntryHeaderIsEmpty(&pdoublylinkedlist->_activeEntries) || i_doublylinkedlistEntryHeaderIsEmpty(&pdoublylinkedlist->_deletedEntries);
 }

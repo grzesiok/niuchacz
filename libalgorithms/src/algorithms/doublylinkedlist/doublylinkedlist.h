@@ -32,4 +32,5 @@ PDOUBLYLINKEDLIST_ENTRY doublylinkedlistFind(PDOUBLYLINKEDLIST pdoublylinkedlist
 PDOUBLYLINKEDLIST_ENTRY doublylinkedlistGetFirst(PDOUBLYLINKEDLIST pdoublylinkedlist);
 PDOUBLYLINKEDLIST_ENTRY doublylinkedlistGetLast(PDOUBLYLINKEDLIST pdoublylinkedlist);
 void doublylinkedlistRelease(void* ptr);
+bool doublylinkedlistIsEmpty(PDOUBLYLINKEDLIST pdoublylinkedlist);
 #endif
