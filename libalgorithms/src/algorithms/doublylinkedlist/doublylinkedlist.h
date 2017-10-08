@@ -14,6 +14,7 @@ typedef struct _DOUBLYLINKEDLIST_ENTRY {
 	uint64_t _key;
 	uint32_t _references;
 	bool _isDeleted;
+	size_t _size;
 } DOUBLYLINKEDLIST_ENTRY, *PDOUBLYLINKEDLIST_ENTRY;
 
 typedef struct _DOUBLYLINKEDLIST {
@@ -26,11 +27,25 @@ typedef struct _DOUBLYLINKEDLIST {
 PDOUBLYLINKEDLIST doublylinkedlistAlloc(void);
 void doublylinkedlistFree(PDOUBLYLINKEDLIST pdoublylinkedlist);
 void doublylinkedlistFreeDeletedEntries(PDOUBLYLINKEDLIST pdoublylinkedlist);
-PDOUBLYLINKEDLIST_ENTRY doublylinkedlistAdd(PDOUBLYLINKEDLIST pdoublylinkedlist, uint64_t key, void* ptr, size_t size);
+void* doublylinkedlistAdd(PDOUBLYLINKEDLIST pdoublylinkedlist, uint64_t key, void* ptr, size_t size);
 void doublylinkedlistDel(PDOUBLYLINKEDLIST pdoublylinkedlist, void* ptr);
-PDOUBLYLINKEDLIST_ENTRY doublylinkedlistFind(PDOUBLYLINKEDLIST pdoublylinkedlist, uint64_t key);
-PDOUBLYLINKEDLIST_ENTRY doublylinkedlistGetFirst(PDOUBLYLINKEDLIST pdoublylinkedlist);
-PDOUBLYLINKEDLIST_ENTRY doublylinkedlistGetLast(PDOUBLYLINKEDLIST pdoublylinkedlist);
+void* doublylinkedlistFind(PDOUBLYLINKEDLIST pdoublylinkedlist, uint64_t key);
+void* doublylinkedlistGetFirst(PDOUBLYLINKEDLIST pdoublylinkedlist);
+void* doublylinkedlistGetLast(PDOUBLYLINKEDLIST pdoublylinkedlist);
 void doublylinkedlistRelease(void* ptr);
 bool doublylinkedlistIsEmpty(PDOUBLYLINKEDLIST pdoublylinkedlist);
+
+//Querying mechanism
+
+typedef struct _DOUBLYLINKEDLIST_QUERY {
+	uint64_t _key;
+	uint32_t _references;
+	bool _isDeleted;
+	size_t _size;
+	void* _p_userData;
+} DOUBLYLINKEDLIST_QUERY, *PDOUBLYLINKEDLIST_QUERY;
+
+bool doublylinkedlistQuery(PDOUBLYLINKEDLIST pdoublylinkedlist, PDOUBLYLINKEDLIST_QUERY pquery, size_t *psize_inout);
+PDOUBLYLINKEDLIST_QUERY doublylinkedlistQueryNext(PDOUBLYLINKEDLIST_QUERY pquery);
+bool doublylinkedlistQueryIsEnd(PDOUBLYLINKEDLIST_QUERY pquery);
 #endif
