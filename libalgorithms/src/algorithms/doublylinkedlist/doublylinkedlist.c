@@ -125,7 +125,7 @@ PDOUBLYLINKEDLIST_ENTRY doublylinkedlistAdd(PDOUBLYLINKEDLIST pdoublylinkedlist,
 	return movePtrToUserData(pentry);
 }
 
-void doublylinkedlistDel(PDOUBLYLINKEDLIST pdoublylinkedlist, PDOUBLYLINKEDLIST_ENTRY ptr){
+void doublylinkedlistDel(PDOUBLYLINKEDLIST pdoublylinkedlist, void* ptr){
 	spinlockLock(&pdoublylinkedlist->_isActiveEntriesLocked);
 	PDOUBLYLINKEDLIST_ENTRY pentry = moveUserDataToPtr(ptr);
 	i_doublylinkedlistEntryDel(pentry);
@@ -188,7 +188,8 @@ PDOUBLYLINKEDLIST_ENTRY doublylinkedlistGetLast(PDOUBLYLINKEDLIST pdoublylinkedl
 	return NULL;
 }
 
-void doublylinkedlistRelease(PDOUBLYLINKEDLIST_ENTRY pentry) {
+void doublylinkedlistRelease(void* ptr) {
+	PDOUBLYLINKEDLIST_ENTRY pentry = moveUserDataToPtr(ptr);
 	uint32_t new_val = __atomic_sub_fetch(&pentry->_references, 1, __ATOMIC_RELEASE);
 	if(new_val == 0 && pentry->_isDeleted) {
 		free(pentry);
