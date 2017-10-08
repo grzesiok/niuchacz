@@ -69,6 +69,9 @@ static bool i_doublylinkedlistEntryIsEnd(PDOUBLYLINKEDLIST_ENTRY_HEADER plist, P
     return i_doublylinkedlistEntryHeaderIsEnd(plist, &pentry->_header);
 }
 
+#define movePtrToUserData(ptr) ((void*)((size_t)ptr+sizeof(DOUBLYLINKEDLIST_ENTRY)))
+#define moveUserDataToPtr(ptr) ((void*)((size_t)ptr-sizeof(DOUBLYLINKEDLIST_ENTRY)))
+
 // external API
 
 PDOUBLYLINKEDLIST doublylinkedlistAlloc(void) {
@@ -107,25 +110,24 @@ void doublylinkedlistFreeDeletedEntries(PDOUBLYLINKEDLIST pdoublylinkedlist) {
 	spinlockUnlock(&pdoublylinkedlist->_isDeletedEntriesLocked);
 }
 
-#define movePtrToUserData(ptr) ((void*)((size_t)ptr+sizeof(DOUBLYLINKEDLIST_ENTRY)))
 PDOUBLYLINKEDLIST_ENTRY doublylinkedlistAdd(PDOUBLYLINKEDLIST pdoublylinkedlist, uint64_t key, void* ptr, size_t size) {
-	size_t userSize = size - sizeof(DOUBLYLINKEDLIST_ENTRY);
-	PDOUBLYLINKEDLIST_ENTRY pentry = (PDOUBLYLINKEDLIST_ENTRY)malloc(sizeof(DOUBLYLINKEDLIST_ENTRY)+userSize);
+	PDOUBLYLINKEDLIST_ENTRY pentry = (PDOUBLYLINKEDLIST_ENTRY)malloc(sizeof(DOUBLYLINKEDLIST_ENTRY)+size);
 	if(pentry == NULL)
 		return NULL;
 	i_doublylinkedlistEntryInit(pentry);
 	pentry->_references = 1;
 	pentry->_isDeleted = false;
 	pentry->_key = key;
-	memcpy(movePtrToUserData(pentry), movePtrToUserData(ptr), userSize);
+	memcpy(movePtrToUserData(pentry), ptr, size);
 	spinlockLock(&pdoublylinkedlist->_isActiveEntriesLocked);
 	i_doublylinkedlistEntryAdd(&pdoublylinkedlist->_activeEntries, pentry);
 	spinlockUnlock(&pdoublylinkedlist->_isActiveEntriesLocked);
-	return pentry;
+	return movePtrToUserData(pentry);
 }
 
-void doublylinkedlistDel(PDOUBLYLINKEDLIST pdoublylinkedlist, PDOUBLYLINKEDLIST_ENTRY pentry){
+void doublylinkedlistDel(PDOUBLYLINKEDLIST pdoublylinkedlist, PDOUBLYLINKEDLIST_ENTRY ptr){
 	spinlockLock(&pdoublylinkedlist->_isActiveEntriesLocked);
+	PDOUBLYLINKEDLIST_ENTRY pentry = moveUserDataToPtr(ptr);
 	i_doublylinkedlistEntryDel(pentry);
 	if(pentry->_references > 0) {
 		pentry->_isDeleted = true;
@@ -146,7 +148,7 @@ PDOUBLYLINKEDLIST_ENTRY doublylinkedlistFind(PDOUBLYLINKEDLIST pdoublylinkedlist
 		if(pentry->_key == key) {
 			__atomic_add_fetch(&pentry->_references, 1, __ATOMIC_ACQUIRE);
 			spinlockUnlock(&pdoublylinkedlist->_isActiveEntriesLocked);
-			return pentry;
+			return movePtrToUserData(pentry);
 		}
 		pentry = i_doublylinkedlistEntryNext(pentry);
 	}
@@ -161,7 +163,7 @@ PDOUBLYLINKEDLIST_ENTRY doublylinkedlistGetFirst(PDOUBLYLINKEDLIST pdoublylinked
 		if(!pentry->_isDeleted) {
 			__atomic_add_fetch(&pentry->_references, 1, __ATOMIC_ACQUIRE);
 			spinlockUnlock(&pdoublylinkedlist->_isActiveEntriesLocked);
-			return pentry;
+			return movePtrToUserData(pentry);
 		}
 		pentry = i_doublylinkedlistEntryNext(pentry);
 	}
@@ -177,7 +179,7 @@ PDOUBLYLINKEDLIST_ENTRY doublylinkedlistGetLast(PDOUBLYLINKEDLIST pdoublylinkedl
 		if(!pentry->_isDeleted) {
 			__atomic_add_fetch(&pentry->_references, 1, __ATOMIC_ACQUIRE);
 			spinlockUnlock(&pdoublylinkedlist->_isActiveEntriesLocked);
-			return pentry;
+			return movePtrToUserData(pentry);
 		}
 		pentry = i_doublylinkedlistEntryPrev(pentry);
 	}

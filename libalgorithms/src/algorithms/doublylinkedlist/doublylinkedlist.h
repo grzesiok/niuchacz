@@ -27,7 +27,7 @@ PDOUBLYLINKEDLIST doublylinkedlistAlloc(void);
 void doublylinkedlistFree(PDOUBLYLINKEDLIST pdoublylinkedlist);
 void doublylinkedlistFreeDeletedEntries(PDOUBLYLINKEDLIST pdoublylinkedlist);
 PDOUBLYLINKEDLIST_ENTRY doublylinkedlistAdd(PDOUBLYLINKEDLIST pdoublylinkedlist, uint64_t key, void* ptr, size_t size);
-void doublylinkedlistDel(PDOUBLYLINKEDLIST pdoublylinkedlist, PDOUBLYLINKEDLIST_ENTRY pentry);
+void doublylinkedlistDel(PDOUBLYLINKEDLIST pdoublylinkedlist, PDOUBLYLINKEDLIST_ENTRY ptr);
 PDOUBLYLINKEDLIST_ENTRY doublylinkedlistFind(PDOUBLYLINKEDLIST pdoublylinkedlist, uint64_t key);
 PDOUBLYLINKEDLIST_ENTRY doublylinkedlistGetFirst(PDOUBLYLINKEDLIST pdoublylinkedlist);
 PDOUBLYLINKEDLIST_ENTRY doublylinkedlistGetLast(PDOUBLYLINKEDLIST pdoublylinkedlist);
