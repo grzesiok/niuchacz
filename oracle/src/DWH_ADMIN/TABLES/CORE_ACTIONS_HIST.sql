@@ -1,7 +1,7 @@
 create table core_actions_hist(
   username varchar2(128),
   log_time timestamp default systimestamp,
-  action varchar2(4000),
+  action xmltype,
   dbop_result clob
 )
 PCTFREE 0
