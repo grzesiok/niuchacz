@@ -17,6 +17,7 @@ grant create synonym to dwh_core;
 grant select any table to dwh_core;
 grant create view to dwh_core;
 grant create job to dwh_core;
+grant select_catalog_role to dwh_core;
 
 create user dwh_logging identified by dwh_logging default tablespace TS_LOADER_DATA account unlock;
 grant connect, resource to dwh_logging;
@@ -33,6 +34,8 @@ grant create procedure to dwh_admin;
 grant select any dictionary to dwh_admin;
 grant execute on dbms_lock to dwh_admin;
 grant execute on dbms_crypto to dwh_admin;
+grant select_catalog_role to dwh_admin;
+grant execute on dbms_aqadm to dwh_admin;
 
 create user dwh_test identified by dwh_test default tablespace TS_LOADER_DATA account unlock;
 grant connect, resource to dwh_test;

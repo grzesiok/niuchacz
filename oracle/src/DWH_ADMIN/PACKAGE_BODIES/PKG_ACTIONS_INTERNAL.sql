@@ -1,5 +1,43 @@
 create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
 
+  procedure p_heartbeat_queue(i_queue_name varchar2,
+                              i_exception_queue_name varchar2 default null) as
+    l_queue_is_active varchar2(1);
+    l_upp_queue_name user_queues.name%type;
+    l_upp_exception_queue_name user_queues.name%type;
+  begin
+    l_upp_queue_name := upper(i_queue_name);
+    /* checking if queue is in correct state (base queue must have possibility to enqueue and dequeue) */
+    select case when exists(select 1 from user_queues
+                            where name = l_upp_queue_name
+                              and (trim(enqueue_enabled) = 'NO' or trim(dequeue_enabled) = 'NO'))
+        then 'N' else 'Y' end into l_queue_is_active
+    from dual;
+    /* starting/restarting queue if it is needed */
+    if(l_queue_is_active = 'N') then
+      dbms_aqadm.stop_queue(queue_name => l_upp_queue_name);
+      dbms_aqadm.start_queue(queue_name => l_upp_queue_name,
+                             enqueue => true,
+                             dequeue => true);
+    end if;
+    if(i_exception_queue_name is not null) then
+      l_upp_exception_queue_name := upper(i_exception_queue_name);
+      /* checking if queue is in correct state (exception queue must have possibility only to enqueue elements) */
+      select case when exists(select 1 from user_queues
+                              where name = l_upp_exception_queue_name
+                                and (trim(enqueue_enabled) = 'YES' or trim(dequeue_enabled) = 'NO'))
+          then 'Y' else 'N' end into l_queue_is_active
+      from dual;
+      /* starting/restarting queue if it is needed */
+      if(l_queue_is_active = 'N') then
+        dbms_aqadm.stop_queue(queue_name => l_upp_exception_queue_name);
+        dbms_aqadm.start_queue(queue_name => l_upp_exception_queue_name,
+                               enqueue => false,
+                               dequeue => true);
+      end if;
+    end if;
+  end;
+
   procedure p_enqueue(i_recipient varchar2 default sys_context('userenv', 'session_user'), i_action o_action) AS
     l_queue_options dbms_aq.enqueue_options_t;
     l_message_properties dbms_aq.message_properties_t;
@@ -7,6 +45,8 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
     l_recipients dbms_aq.aq$_recipient_list_t;
     l_cmd xmltype;
   begin
+    p_heartbeat_queue(i_queue_name => 'q_core_actions',
+                      i_exception_queue_name => 'aq$_core_actions_queue_e');
     l_cmd := o_action.f_deserialize(i_action);
     l_recipients(1) := sys.aq$_agent(name => i_recipient, address => null, protocol => null);
     l_message_properties.recipient_list := l_recipients;
