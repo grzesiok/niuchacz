@@ -1,8 +1,4 @@
---------------------------------------------------------
---  DDL for Package Body PKG_IMPORT
---------------------------------------------------------
-
-  CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PKG_IMPORT" AS
+create or replace PACKAGE BODY PKG_IMPORT AS
 
   function f_get_list_of_imports(l_import_timestamp timestamp) return t_import is
     l_import_types t_string;
@@ -55,7 +51,9 @@
       from all_directories where directory_name = l_all_imports(i).f_get_directory_histname;
       for c in c_filelist(l_dir_current, l_all_imports(i).f_get_filterpath)
       loop
+        pkg_logging.log_file_start(i_job_name => 'IMPORT', i_file_name => c.filename);
         l_all_imports(i).p_import_file(c.filename);
+        pkg_logging.log_file_end(i_status => pkg_logging.C_SUCCESS);
         utl_file.frename(l_all_imports(i).f_get_directory_name, c.filename, l_all_imports(i).f_get_directory_histname, c.filename);
       end loop;
       for c in c_filelist(l_dir_archive, l_all_imports(i).f_get_filterpath)
@@ -71,5 +69,4 @@
   end;
 
 END PKG_IMPORT;
-
 /
