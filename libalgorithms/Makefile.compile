@@ -2,7 +2,6 @@
 FILEASM64OBJ=
 FILECOBJ=\
     src/algorithms/stream/cardinality/hyperloglog.o\
-    src/algorithms/stream/membership/bloomfilter.o\
     src/ext/murmur/MurmurHash2.o\
     src/ext/murmur/MurmurHash2_64.o\
     src/algorithms/hash/hash.o\

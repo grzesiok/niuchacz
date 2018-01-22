@@ -39,7 +39,6 @@ const char * cgStmt =
 		"?,?,?,?,?,?,?,?,?,?);";
 
 void frames_callback(const char* device, unsigned char *packet, struct timeval ts, unsigned int packet_len) {
-	KSTATUS _status;
 	MAPPER_RESULTS results;
 	struct timespec startTime;
 
@@ -227,14 +226,8 @@ int main(int argc, char* argv[])
 	_status = psmgrCreateThread(pcap_thread_routine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
-	stats_key statsKeyDBExec = statsFind("db exec time");
-	unsigned long long currentTimestamp = timerCurrentTimestamp();
 	while(svc_kernel_is_running()) {
 		psmgrIdle(1);
-		/*printfTimeStat("producerThread", g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
-		printfTimeStat("consumerTherad", g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
-		printfTimeStat("db exec time", statsKeyDBExec);
-		printf("Current timestamp = %fs\n", ns_to_s(timerCurrentTimestamp()-currentTimestamp));*/
 	}
     sqlite3_finalize(g_Main._stmt);
 	statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);

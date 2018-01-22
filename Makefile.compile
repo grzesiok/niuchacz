@@ -9,8 +9,7 @@ FILECOBJ=\
     src/svc_kernel/svc_statistics.o\
     src/svc_kernel/svc_time.o\
     src/main.o\
-    src/mapper.o\
-    src/ifmonitor/ifmonitor.o
+    src/mapper.o
     
 FILECOBJ_TESTHASHPERF=\
     src/tests/testhashperf.o\
