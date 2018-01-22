@@ -2836,11 +2836,12 @@ static int sessionChangesetNext(
   p->in.iCurrent = p->in.iNext;
 
   op = p->in.aData[p->in.iNext++];
-  if( op=='T' || op=='P' ){
+  while( op=='T' || op=='P' ){
     p->bPatchset = (op=='P');
     if( sessionChangesetReadTblhdr(p) ) return p->rc;
     if( (p->rc = sessionInputBuffer(&p->in, 2)) ) return p->rc;
     p->in.iCurrent = p->in.iNext;
+    if( p->in.iNext>=p->in.nData ) return SQLITE_DONE;
     op = p->in.aData[p->in.iNext++];
   }
 
@@ -3028,7 +3029,7 @@ int sqlite3changeset_conflict(
   if( !pIter->pConflict ){
     return SQLITE_MISUSE;
   }
-  if( iVal<0 || iVal>=sqlite3_column_count(pIter->pConflict) ){
+  if( iVal<0 || iVal>=pIter->nCol ){
     return SQLITE_RANGE;
   }
   *ppValue = sqlite3_column_value(pIter->pConflict, iVal);
@@ -3495,7 +3496,13 @@ static int sessionInsertRow(
 
   sessionAppendStr(&buf, "INSERT INTO main.", &rc);
   sessionAppendIdent(&buf, zTab, &rc);
-  sessionAppendStr(&buf, " VALUES(?", &rc);
+  sessionAppendStr(&buf, "(", &rc);
+  for(i=0; i<p->nCol; i++){
+    if( i!=0 ) sessionAppendStr(&buf, ", ", &rc);
+    sessionAppendIdent(&buf, p->azCol[i], &rc);
+  }
+
+  sessionAppendStr(&buf, ") VALUES(?", &rc);
   for(i=1; i<p->nCol; i++){
     sessionAppendStr(&buf, ", ?", &rc);
   }
@@ -4041,11 +4048,17 @@ static int sessionChangesetApply(
         nTab = (int)strlen(zTab);
         sApply.azCol = (const char **)zTab;
       }else{
+        int nMinCol = 0;
+        int i;
+
         sqlite3changeset_pk(pIter, &abPK, 0);
         rc = sessionTableInfo(
             db, "main", zNew, &sApply.nCol, &zTab, &sApply.azCol, &sApply.abPK
         );
         if( rc!=SQLITE_OK ) break;
+        for(i=0; i<sApply.nCol; i++){
+          if( sApply.abPK[i] ) nMinCol = i+1;
+        }
   
         if( sApply.nCol==0 ){
           schemaMismatch = 1;
@@ -4053,26 +4066,29 @@ static int sessionChangesetApply(
               "sqlite3changeset_apply(): no such table: %s", zTab
           );
         }
-        else if( sApply.nCol!=nCol ){
+        else if( sApply.nCol<nCol ){
           schemaMismatch = 1;
           sqlite3_log(SQLITE_SCHEMA, 
-              "sqlite3changeset_apply(): table %s has %d columns, expected %d", 
+              "sqlite3changeset_apply(): table %s has %d columns, "
+              "expected %d or more", 
               zTab, sApply.nCol, nCol
           );
         }
-        else if( memcmp(sApply.abPK, abPK, nCol)!=0 ){
+        else if( nCol<nMinCol || memcmp(sApply.abPK, abPK, nCol)!=0 ){
           schemaMismatch = 1;
           sqlite3_log(SQLITE_SCHEMA, "sqlite3changeset_apply(): "
               "primary key mismatch for table %s", zTab
           );
         }
-        else if( 
-            (rc = sessionSelectRow(db, zTab, &sApply))
-         || (rc = sessionUpdateRow(db, zTab, &sApply))
-         || (rc = sessionDeleteRow(db, zTab, &sApply))
-         || (rc = sessionInsertRow(db, zTab, &sApply))
-        ){
-          break;
+        else{
+          sApply.nCol = nCol;
+          if((rc = sessionSelectRow(db, zTab, &sApply))
+          || (rc = sessionUpdateRow(db, zTab, &sApply))
+          || (rc = sessionDeleteRow(db, zTab, &sApply))
+          || (rc = sessionInsertRow(db, zTab, &sApply))
+          ){
+            break;
+          }
         }
         nTab = sqlite3Strlen30(zTab);
       }

@@ -1,8 +1,0 @@
-#pliki wykorzystywane przy kompilacji
-FILEASM32OBJ=
-FILEASM64OBJ=
-FILECOBJ=\
-    main.o
-
-#plik wynikowy
-OUTFILE=../niuchacz.out
