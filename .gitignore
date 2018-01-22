@@ -55,3 +55,6 @@ sqlite/parse.h.temp
 sqlite/parse.y
 sqlite/sqlite3.h
 sqlite/sqlite3.pc
+
+# Hidden files and directories
+.*
