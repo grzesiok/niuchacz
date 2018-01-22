@@ -9,10 +9,10 @@ KSTATUS database_start(const char* p_path)
 	int  rc;
 	KSTATUS _status;
 
-	printf("[DB] Starting...\n");
+	syslog(LOG_INFO, "[DB] Starting...\n");
 	_status = statsAlloc("db exec time", STATS_TYPE_SUM, &g_statsKey_DbExecTime);
 	if(!KSUCCESS(_status)) {
-		fprintf(stderr, "Error during allocation StatsKey!\n");
+		syslog(LOG_ERR, "Error during allocation StatsKey!\n");
 		return KSTATUS_UNSUCCESS;
 	}
 	rc = sqlite3_open(p_path, &gDB);
@@ -31,7 +31,7 @@ KSTATUS database_start(const char* p_path)
 void database_stop(void)
 {
 	DPRINTF("database_stop\n");
-	printf("[DB] Stopping...\n");
+	syslog(LOG_INFO, "[DB] Stopping...\n");
 	sqlite3_close(gDB);
 	statsFree(g_statsKey_DbExecTime);
 }
@@ -57,7 +57,7 @@ KSTATUS database_exec(const char* stmt, ...)
 	ret = sqlite3_exec(gDB, stmt, 0, 0, &errmsg);
 	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
     if(ret != SQLITE_OK) {
-    	fprintf(stderr, "Error during insert data(%s)!\n", errmsg);
+    	syslog(LOG_ERR, "Error during insert data(%s)!\n", errmsg);
     }
 	return (ret != SQLITE_OK) ? KSTATUS_DB_EXEC_ERROR : KSTATUS_SUCCESS;
 }
@@ -69,12 +69,12 @@ const char* database_errmsg(void) {
 bool database_bind_int64(bool isNotEmpty, sqlite3_stmt *pStmt, int i, sqlite_int64 iValue) {
 	if(!isNotEmpty) {
 		if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
-	        fprintf(stderr, "\nError during binding NULL (%d).", i);
+			syslog(LOG_ERR, "\nError during binding NULL (%d).", i);
 			return false;
 		}
 	} else {
 		if(sqlite3_bind_int64(pStmt, i, iValue) != SQLITE_OK) {
-			fprintf(stderr, "\nError during binding variable (%d).", i);
+			syslog(LOG_ERR, "\nError during binding variable (%d).", i);
 			return false;
 		}
 	}
@@ -84,12 +84,12 @@ bool database_bind_int64(bool isNotEmpty, sqlite3_stmt *pStmt, int i, sqlite_int
 bool database_bind_int(bool isNotEmpty, sqlite3_stmt *pStmt, int i, int iValue) {
 	if(!isNotEmpty) {
 		if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
-			fprintf(stderr, "\nError during binding NULL (%d).", i);
+			syslog(LOG_ERR, "\nError during binding NULL (%d).", i);
 			return false;
 		}
 	} else {
 		if(sqlite3_bind_int(pStmt, i, iValue) != SQLITE_OK) {
-			fprintf(stderr, "\nError during binding variable (%d).", i);
+			syslog(LOG_ERR, "\nError during binding variable (%d).", i);
 			return false;
 		}
 	}
@@ -99,12 +99,12 @@ bool database_bind_int(bool isNotEmpty, sqlite3_stmt *pStmt, int i, int iValue) 
 bool database_bind_text(bool isNotEmpty, sqlite3_stmt *pStmt, int i, const char *zData) {
 	if(!isNotEmpty || zData == NULL) {
 		if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
-			fprintf(stderr, "\nError during binding NULL (%d).", i);
+			syslog(LOG_ERR, "\nError during binding NULL (%d).", i);
 			return false;
 		}
 	} else {
 		if(sqlite3_bind_text(pStmt, i, zData, -1, 0) != SQLITE_OK) {
-			fprintf(stderr, "\nError during binding variable (%d).", i);
+			syslog(LOG_ERR, "\nError during binding variable (%d).", i);
 			return false;
 		}
 	}

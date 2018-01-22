@@ -3,7 +3,6 @@
 #include "../kernel.h"
 #include "svc_status.h"
 #include "svc_lock.h"
-#include "svc_log.h"
 #include "svc_statistics.h"
 #include "svc_time.h"
 #include "../psmgr/psmgr.h"

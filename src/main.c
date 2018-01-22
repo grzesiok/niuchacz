@@ -43,7 +43,7 @@ void frames_callback(const char* device, unsigned char *packet, struct timeval t
 	struct timespec startTime;
 
     if(!mapFrame(packet, packet_len, &results)) {
-    	fprintf(stderr, "Error in parsing message!\n");
+    	syslog(LOG_ERR, "Error in parsing message!\n");
 		return;
 	}
     //ts_sec since Epoch (1970) timestamp						  /* Timestamp of packet */
@@ -107,7 +107,7 @@ void frames_callback(const char* device, unsigned char *packet, struct timeval t
     }
 	startTime = timerStart();
     if(sqlite3_step(g_Main._stmt) != SQLITE_DONE) {
-    	fprintf(stderr, "%s\n", database_errmsg());
+    	syslog(LOG_ERR, "%s\n", database_errmsg());
     }
     sqlite3_reset(g_Main._stmt);
 	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
@@ -126,32 +126,32 @@ void* pcap_thread_routine(void* arg)
 	bpf_u_int32 net;
 	bpf_u_int32 mask;
 
-    printf("Listen on device=%s\n", p_ctx->_p_deviceName);
+	syslog(LOG_INFO, "Listen on device=%s\n", p_ctx->_p_deviceName);
     /* get network number and mask associated with capture device */
     if (pcap_lookupnet(p_ctx->_p_deviceName, &net, &mask, errbuf) == -1) {
-    	fprintf(stderr, "Couldn't get netmask for device %s: %s\n", p_ctx->_p_deviceName, errbuf);
+    	syslog(LOG_ERR, "Couldn't get netmask for device %s: %s\n", p_ctx->_p_deviceName, errbuf);
     	net = 0;
     	mask = 0;
     }
     /* open capture device */
     handle = pcap_open_live(p_ctx->_p_deviceName, BUFSIZ, 0, 1000, errbuf);
 	if(handle == NULL) {
-		fprintf(stderr, "Couldn't open device %s: %s\n", p_ctx->_p_deviceName, errbuf);
+		syslog(LOG_ERR, "Couldn't open device %s: %s\n", p_ctx->_p_deviceName, errbuf);
 		return NULL;
 	}
 	/* make sure we're capturing on an Ethernet device */
 	if(pcap_datalink(handle) != DLT_EN10MB) {
-		fprintf(stderr, "%s is not an Ethernet\n", p_ctx->_p_deviceName);
+		syslog(LOG_ERR, "%s is not an Ethernet\n", p_ctx->_p_deviceName);
 		exit(EXIT_FAILURE);
 	}
 	/* compile the filter expression */
 	if(pcap_compile(handle, &fp, filter_exp, 0, net) == -1) {
-		fprintf(stderr, "Couldn't parse filter %s: %s\n", filter_exp, pcap_geterr(handle));
+		syslog(LOG_ERR, "Couldn't parse filter %s: %s\n", filter_exp, pcap_geterr(handle));
 		exit(EXIT_FAILURE);
 	}
 	/* apply the compiled filter */
 	if (pcap_setfilter(handle, &fp) == -1) {
-		fprintf(stderr, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(handle));
+		syslog(LOG_ERR, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(handle));
 		exit(EXIT_FAILURE);
 	}
 	while(svc_kernel_is_running()) {
@@ -176,15 +176,6 @@ KSTATUS schema_sync(void)
 	return _status;
 }
 
-double ns_to_s(unsigned long long nanoseconds) {
-	double ns = (double)nanoseconds;
-	return ns/1.0e9;
-}
-
-void printfTimeStat(const char* statsName, stats_key statsKey) {
-	printf("%s = %fs\n", statsName, ns_to_s(statsGetValue(statsKey)));
-}
-
 int main(int argc, char* argv[])
 {
 	DPRINTF("main\n");
@@ -192,7 +183,7 @@ int main(int argc, char* argv[])
 	char *deviceName;
 
 	if(argc < 3) {
-		printf("Program usage:\n %s interface-name db-path\n", argv[0]);
+		syslog(LOG_INFO, "Program usage:\n %s interface-name db-path\n", argv[0]);
 		exit(1);
 	}
 	deviceName = argv[1];
@@ -207,22 +198,22 @@ int main(int argc, char* argv[])
 		goto __exit;
 	svc_kernel_status(SVC_KERNEL_STATUS_RUNNING);
     if(sqlite3_prepare(database_getinstance(), cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
-        printf("\nCould not prepare statement.");
+    	syslog(LOG_ERR, "\nCould not prepare statement.");
 		goto __database_stop_andexit;
     }
 	g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
 	_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	if(!KSUCCESS(_status)) {
-		printf("Error during allocation StatsKey!\n");
+		syslog(LOG_ERR, "Error during allocation StatsKey!\n");
 		goto __database_stop_andexit;
 	}
 	g_Main._threads[MAIN_THREAD_CONSUMER]._p_deviceName = deviceName;
 	_status = statsAlloc("consumerTherad", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 	if(!KSUCCESS(_status)) {
-		printf("Error during allocation StatsKey!\n");
+		syslog(LOG_ERR, "Error during allocation StatsKey!\n");
 		goto __database_stop_andexit;
 	}
-	printf("Prepare listen on device=%s\n", argv[1]);
+	syslog(LOG_INFO, "Prepare listen on device=%s\n", argv[1]);
 	_status = psmgrCreateThread(pcap_thread_routine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;

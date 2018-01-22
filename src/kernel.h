@@ -1,6 +1,8 @@
 #ifndef _KERNEL_H
 #define _KERNEL_H
 
+#include <syslog.h>
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,8 +16,7 @@
 #define FREE(var) free(var)
 
 #ifdef DEBUG_MODE
-#define DPRINTF(...) printf(__VA_ARGS__)
-//printf("<%u>:"##msg, gettid(), __VA_ARGS__)
+#define DPRINTF(...) syslog(LOG_DEBUG, __VA_ARGS__)
 #define ASSERT(expression) if(!(expression)) {DPRINTF("ASSERT FAIL:%s(%u): %s\n", __FILE__, __LINE__, __FUNCSIG__);}
 #else
 #define DPRINTF(...)

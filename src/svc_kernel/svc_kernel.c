@@ -17,7 +17,11 @@ void svc_kernel_sig_handler(int signo)
 KSTATUS svc_kernel_init(void)
 {
 	KSTATUS _status;
-	printf("[KERNEL] Starting...\n");
+
+	/* Open system log and write message to it */
+	openlog("NIUCHACZ", LOG_PID|LOG_CONS, LOG_DAEMON);
+	syslog(LOG_INFO, "Starting...");
+
 	__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_START_PENDING, __ATOMIC_RELEASE);
 	if(signal(SIGINT, svc_kernel_sig_handler) == SIG_ERR)
 		return KSTATUS_UNSUCCESS;
@@ -27,15 +31,22 @@ KSTATUS svc_kernel_init(void)
 	_status = psmgrStart();
 	if(!KSUCCESS(_status))
 		return _status;
+
+	syslog(LOG_INFO, "Started");
 	return KSTATUS_SUCCESS;
 }
 
 void svc_kernel_exit(int code)
 {
-	printf("[KERNEL] Stopping...\n");
+	syslog(LOG_INFO, "Stopping...");
 	psmgrStop();
 	statsStop();
 	signal(SIGINT, SIG_DFL);
+
+	/* Write system log and close it. */
+	syslog(LOG_INFO, "Stopped");
+	closelog();
+
 	exit(code);
 }
 

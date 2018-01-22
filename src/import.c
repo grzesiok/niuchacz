@@ -9,10 +9,10 @@ int import_file(const char* pfile_name, import_callback_t *pcallback_list, int l
 	const unsigned char *packet;
 	int i;
 
-	printf("pcap_open_offline\n");
+	syslog(LOG_INFO, "pcap_open_offline\n");
 	pcap = pcap_open_offline(pfile_name, errbuf);
 	if (pcap == NULL) {
-		fprintf(stderr, "error reading pcap file: %s\n", errbuf);
+		syslog(LOG_ERR, "error reading pcap file: %s\n", errbuf);
 		return -1;
 	}
 	while ((packet = pcap_next(pcap, &header)) != NULL) {
@@ -20,7 +20,7 @@ int import_file(const char* pfile_name, import_callback_t *pcallback_list, int l
 			pcallback_list[i](packet, header.ts, header.caplen);
 		}
 	}
-	printf("pcap_close");
+	syslog(LOG_INFO, "pcap_close");
 	pcap_close(pcap);
 	return 0;
 }

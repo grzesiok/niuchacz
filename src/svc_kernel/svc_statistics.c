@@ -68,7 +68,6 @@ KSTATUS statsAlloc(const char* statsName, int type, stats_key *p_key) {
 		if(p_entry != NULL) {
 			strncpy(p_entry->_statsName, statsName, STATS_ENTRY_NAME_MAXSIZE);
 			p_entry->_type = type;
-			printf("%s -> %d\n", p_entry->_statsName, p_entry->_type);
 			p_entry->_value = 0;
 			statsKey = p_entry;
 			_status = KSTATUS_SUCCESS;
