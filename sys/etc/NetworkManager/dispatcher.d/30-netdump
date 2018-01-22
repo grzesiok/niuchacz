@@ -1,0 +1,32 @@
+#!/bin/sh
+
+DATE=$(date +"%Y%m%d%H%M%S")
+ERRFILENAME="/root/netdumps/error.log"
+INFOFILENAME="/root/netdumps/info.txt"
+PIDFILENAME="/root/netdumps/tshark.pid"
+
+if [ "$1" != "wlp6s0" ]
+then
+	echo "Avoid monitoring interface $1" >> $INFOFILENAME
+	exit 0
+fi
+
+if [ -f "/root/netdumps/tshark.pid" ]; then 
+	kill -9 $(cat $PIDFILENAME)
+	rm -f $PIDFILENAME
+fi
+
+if [ "$2" = "down" ]; then
+        echo "Stop monitoring interface $1 at $DATE" >> $INFOFILENAME
+        exit 0
+fi
+echo "Start monitoring interface $1 at $DATE" >> $INFOFILENAME
+
+FILENAME="/root/netdumps/netdump"$DATE".csv"
+export G_SLICE=always-malloc evolution
+
+#tshark -l -B 128 -t ad -i $1 -E header=y -E separator=, -E quote=d -f "((src net 192.168.2 and not dst net 192.168.2) or (not src net 192.168.2 and dst net 192.168.2)) and ip"  -T fields -e frame.len -e frame.packet_flags -e frame.packet_flags_crc_error -e frame.packet_flags_direction -e frame.packet_flags_fcs_length -e frame.packet_flags_packet_too_error -e frame.packet_flags_packet_too_short_error -e frame.packet_flags_preamble_error -e frame.packet_flags_reception_type -e frame.packet_flags_reserved -e frame.packet_flags_start_frame_delimiter_error -e frame.packet_flags_symbol_error -e frame.packet_flags_unaligned_frame_error -e frame.packet_flags_wrong_inter_frame_gap_error -e frame.protocols -e frame.time -e eth.dst -e eth.src -e eth.type -e ip.checksum -e ip.dst -e ip.flags.df -e ip.flags.mf -e ip.flags.rb -e ip.flags.sf -e ip.frag_offset -e ip.fragment.count -e ip.fragment.multipletails -e ip.fragment.overlap -e ip.fragment.overlap.conflict -e ip.fragment.toolongfragment -e ip.fragments -e ip.hdr_len -e ip.len -e ip.proto -e ip.src -e ip.tos -e ip.ttl -e ip.version -e icmp.checksum -e icmp.code -e icmp.ext -e icmp.ext.checksum -e icmp.ext.class -e icmp.ext.ctype -e icmp.ext.data -e icmp.ext.length -e icmp.ext.res -e icmp.ext.version -e icmp.length -e icmp.lifetime -e icmp.mtu -e icmp.no_resp -e icmp.num_addrs -e icmp.pointer -e icmp.pref_level -e icmp.receive_timestamp -e icmp.redir_gw -e icmp.reserved -e icmp.resptime -e icmp.seq -e icmp.seq_le -e icmp.type -e tcp.ack -e tcp.checksum -e tcp.connection.fin -e tcp.connection.rst -e tcp.connection.sack -e tcp.connection.syn -e tcp.dstport -e tcp.flags.ack -e tcp.flags.cwr -e tcp.flags.ecn -e tcp.flags.fin -e tcp.flags.ns -e tcp.flags.push -e tcp.flags.res -e tcp.flags.reset -e tcp.flags.syn -e tcp.flags.urg -e tcp.hdr_len -e tcp.len -e tcp.options -e tcp.srcport -e tcp.window_size -e udp.checksum -e udp.dstport -e udp.length -e udp.srcport -e dns.length -e dns.openpgpkey -e dns.opt -e dns.qry.class -e dns.qry.name -e dns.qry.name.len -e dns.qry.qu -e dns.qry.type -e http.accept -e http.accept_encoding -e http.accept_language -e http.cache_control -e http.content_encoding -e http.content_length -e http.content_length_header -e http.content_type -e http.file_data -e http.last_modified -e http.leading_crlf -e http.location -e http.notification -e http.request -e http.request.full_uri -e http.request.line -e http.request.method -e http.request.uri -e http.request.uri.path -e http.request.uri.query -e http.request.uri.query.parameter -e http.request.version -e http.response -e http.response.code -e http.response.line -e http.response.phrase -e http.server -e http.ssl_port -e http.transfer_encoding -e http.user_agent -e http.www_authenticate -e http.set_cookie 1>> $FILENAME &
+
+tshark -B 128 -t ad -i $1 -E header=y -E separator=, -E quote=d -f "((src net 192.168.2 and not dst net 192.168.2) or (not src net 192.168.2 and dst net 192.168.2)) and ip" -T fields -e frame.len -e frame.packet_flags -e frame.protocols -e frame.time -e eth.dst -e eth.src -e eth.type -e ip.checksum -e ip.dst -e ip.flags.df -e ip.flags.mf -e ip.flags.rb -e ip.flags.sf -e ip.len -e ip.proto -e ip.src -e ip.tos -e ip.ttl -e ip.version -e icmp.checksum -e icmp.code -e icmp.ext -e icmp.ext.checksum -e icmp.ext.class -e icmp.ext.ctype -e icmp.ext.data -e icmp.ext.length -e icmp.ext.res -e icmp.ext.version -e icmp.length -e icmp.lifetime -e icmp.mtu -e icmp.no_resp -e icmp.num_addrs -e icmp.pointer -e icmp.pref_level -e icmp.receive_timestamp -e icmp.redir_gw -e icmp.reserved -e icmp.resptime -e icmp.seq -e icmp.seq_le -e icmp.transmit_timestamp -e icmp.type -e tcp.ack -e tcp.checksum -e tcp.dstport -e tcp.flags.ack -e tcp.flags.cwr -e tcp.flags.ecn -e tcp.flags.fin -e tcp.flags.ns -e tcp.flags.push -e tcp.flags.res -e tcp.flags.reset -e tcp.flags.syn -e tcp.flags.urg -e tcp.len -e tcp.options -e tcp.seq -e tcp.nxtseq -e tcp.srcport -e tcp.window_size -e udp.checksum -e udp.dstport -e udp.length -e udp.srcport -e dns.length -e dns.openpgpkey -e dns.opt -e dns.qry.class -e dns.qry.name -e dns.qry.name.len -e dns.qry.qu -e dns.qry.type 1>>$FILENAME 2>>$ERRFILENAME &
+
+echo $! > $PIDFILENAME
