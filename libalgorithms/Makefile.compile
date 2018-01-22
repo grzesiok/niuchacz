@@ -1,0 +1,31 @@
+#pliki wykorzystywane przy kompilacji
+FILEASM64OBJ=
+FILECOBJ=\
+    src/algorithms/stream/cardinality/hyperloglog.o\
+    src/ext/murmur/MurmurHash2.o\
+    src/ext/murmur/MurmurHash2_64.o\
+    src/algorithms/hash/hash.o\
+    src/algorithms/spinlock/spinlock.o\
+    src/algorithms/doublylinkedlist/doublylinkedlist.o
+
+#plik wynikowy
+OUTFILE=libalgorithms.so
+    
+FILECOBJ_TESTHLL=\
+    tests/testhll.o\
+    src/algorithms/stream/cardinality/hyperloglog.o\
+    src/ext/murmur/MurmurHash2.o\
+    src/ext/murmur/MurmurHash2_64.o\
+    src/algorithms/hash/hash.o
+    
+FILECOBJ_TESTBLOOMFILTER=\
+    tests/testbloomfilter.o\
+    src/algorithms/stream/membership/bloomfilter.o\
+    src/ext/murmur/MurmurHash2.o\
+    src/ext/murmur/MurmurHash2_64.o\
+    src/algorithms/hash/hash.o
+    
+FILECOBJ_TESTDOUBLYLINKEDLIST=\
+    tests/testdoublylinkedlist.o\
+    src/algorithms/spinlock/spinlock.o\
+    src/algorithms/doublylinkedlist/doublylinkedlist.o
