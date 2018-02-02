@@ -25,6 +25,7 @@ KSTATUS database_start(const char* p_path)
 	_status = database_exec("PRAGMA synchronous = NORMAL;");
 	if(!KSUCCESS(_status))
 		return _status;
+	syslog(LOG_INFO, "[DB] Version: %s\n", sqlite3_libversion());
 	return (rc) ? KSTATUS_DB_OPEN_ERROR : KSTATUS_SUCCESS;
 }
 
