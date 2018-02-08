@@ -7,6 +7,7 @@ FILECOBJ=\
     src/svc_kernel/svc_kernel.o\
     src/svc_kernel/svc_statistics.o\
     src/svc_kernel/svc_time.o\
+    src/svc_kernel/execute_unit/cmd_manager.o\
     src/main.o\
     src/mapper.o
     

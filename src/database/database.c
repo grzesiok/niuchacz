@@ -1,11 +1,12 @@
 #include "database.h"
 
-static sqlite3* gDB;
+static sqlite3* gFileDB;
+static sqlite3* gMemoryDB;
 stats_key g_statsKey_DbExecTime;
 
-KSTATUS database_start(const char* p_path)
+KSTATUS dbStart(const char* p_path)
 {
-	DPRINTF("database_start\n");
+	DPRINTF("dbStart\n");
 	int  rc;
 	KSTATUS _status;
 
@@ -15,36 +16,44 @@ KSTATUS database_start(const char* p_path)
 		syslog(LOG_ERR, "Error during allocation StatsKey!\n");
 		return KSTATUS_UNSUCCESS;
 	}
-	rc = sqlite3_open(p_path, &gDB);
+	rc = sqlite3_open(":memory:", &gMemoryDB);
 	_status = (rc) ? KSTATUS_DB_OPEN_ERROR : KSTATUS_SUCCESS;
 	if(!KSUCCESS(_status))
 		return _status;
-	_status = database_exec("PRAGMA journal_mode = WAL;");
+	rc = sqlite3_open(p_path, &gFileDB);
+	_status = (rc) ? KSTATUS_DB_OPEN_ERROR : KSTATUS_SUCCESS;
 	if(!KSUCCESS(_status))
 		return _status;
-	_status = database_exec("PRAGMA synchronous = NORMAL;");
+	_status = dbExec(dbGetFileInstance(), "PRAGMA journal_mode = WAL;");
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = dbExec(dbGetFileInstance(), "PRAGMA synchronous = NORMAL;");
 	if(!KSUCCESS(_status))
 		return _status;
 	syslog(LOG_INFO, "[DB] Version: %s\n", sqlite3_libversion());
 	return (rc) ? KSTATUS_DB_OPEN_ERROR : KSTATUS_SUCCESS;
 }
 
-void database_stop(void)
+void dbStop(void)
 {
-	DPRINTF("database_stop\n");
+	DPRINTF("dbStop\n");
 	syslog(LOG_INFO, "[DB] Stopping...\n");
-	sqlite3_close(gDB);
+	sqlite3_close(gFileDB);
+	sqlite3_close(gMemoryDB);
 	statsFree(g_statsKey_DbExecTime);
 }
 
-sqlite3* database_getinstance()
-{
-	return gDB;
+sqlite3* dbGetFileInstance() {
+	return gFileDB;
 }
 
-KSTATUS database_exec(const char* stmt, ...)
+sqlite3* dbGetMemoryInstance() {
+	return gMemoryDB;
+}
+
+KSTATUS dbExec(sqlite3* db, const char* stmt, ...)
 {
-	DPRINTF("database_exec(%s)\n", stmt);
+	DPRINTF("dbExec(%s)\n", stmt);
 	int ret;
 	va_list args;
 	char buff[512];
@@ -55,7 +64,7 @@ KSTATUS database_exec(const char* stmt, ...)
 	ret = vsnprintf(buff, 512, stmt, args);
 	va_end(args);
 	startTime = timerStart();
-	ret = sqlite3_exec(gDB, stmt, 0, 0, &errmsg);
+	ret = sqlite3_exec(db, stmt, 0, 0, &errmsg);
 	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
     if(ret != SQLITE_OK) {
     	syslog(LOG_ERR, "Error during insert data(%s)!\n", errmsg);
@@ -63,11 +72,11 @@ KSTATUS database_exec(const char* stmt, ...)
 	return (ret != SQLITE_OK) ? KSTATUS_DB_EXEC_ERROR : KSTATUS_SUCCESS;
 }
 
-const char* database_errmsg(void) {
-	return sqlite3_errmsg(gDB);
+const char* dbGetErrmsg(sqlite3* db) {
+	return sqlite3_errmsg(db);
 }
 
-bool database_bind_int64(bool isNotEmpty, sqlite3_stmt *pStmt, int i, sqlite_int64 iValue) {
+bool dbBind_int64(bool isNotEmpty, sqlite3_stmt *pStmt, int i, sqlite_int64 iValue) {
 	if(!isNotEmpty) {
 		if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
 			syslog(LOG_ERR, "\nError during binding NULL (%d).", i);
@@ -82,7 +91,7 @@ bool database_bind_int64(bool isNotEmpty, sqlite3_stmt *pStmt, int i, sqlite_int
 	return true;
 }
 
-bool database_bind_int(bool isNotEmpty, sqlite3_stmt *pStmt, int i, int iValue) {
+bool dbBind_int(bool isNotEmpty, sqlite3_stmt *pStmt, int i, int iValue) {
 	if(!isNotEmpty) {
 		if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
 			syslog(LOG_ERR, "\nError during binding NULL (%d).", i);
@@ -97,14 +106,14 @@ bool database_bind_int(bool isNotEmpty, sqlite3_stmt *pStmt, int i, int iValue) 
 	return true;
 }
 
-bool database_bind_text(bool isNotEmpty, sqlite3_stmt *pStmt, int i, const char *zData) {
+bool dbBind_text(bool isNotEmpty, sqlite3_stmt *pStmt, int i, const char *zData) {
 	if(!isNotEmpty || zData == NULL) {
 		if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
 			syslog(LOG_ERR, "\nError during binding NULL (%d).", i);
 			return false;
 		}
 	} else {
-		if(sqlite3_bind_text(pStmt, i, zData, -1, 0) != SQLITE_OK) {
+		if(sqlite3_bind_text(pStmt, i, zData, -1, SQLITE_STATIC) != SQLITE_OK) {
 			syslog(LOG_ERR, "\nError during binding variable (%d).", i);
 			return false;
 		}

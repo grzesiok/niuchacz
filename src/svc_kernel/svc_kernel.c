@@ -31,6 +31,9 @@ KSTATUS svc_kernel_init(void)
 	_status = psmgrStart();
 	if(!KSUCCESS(_status))
 		return _status;
+	_status = cmdmgrStart();
+	if(!KSUCCESS(_status))
+		return _status;
 
 	syslog(LOG_INFO, "Started");
 	return KSTATUS_SUCCESS;
@@ -39,6 +42,7 @@ KSTATUS svc_kernel_init(void)
 void svc_kernel_exit(int code)
 {
 	syslog(LOG_INFO, "Stopping...");
+	cmdmgrStop();
 	psmgrStop();
 	statsStop();
 	signal(SIGINT, SIG_DFL);

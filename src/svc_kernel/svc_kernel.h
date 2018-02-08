@@ -6,6 +6,7 @@
 #include "svc_statistics.h"
 #include "svc_time.h"
 #include "../psmgr/psmgr.h"
+#include "execute_unit/cmd_manager.h"
 
 #define SVC_KERNEL_STATUS_START_PENDING 1
 #define SVC_KERNEL_STATUS_RUNNING 2
