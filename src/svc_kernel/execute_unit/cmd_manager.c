@@ -1,5 +1,4 @@
 #include "cmd_manager.h"
-#include "../../database/database.h"
 
 static const char * cgCreateSchema =
 		"create table if not exists cmdmgr_cmdlist ("
@@ -8,7 +7,7 @@ static const char * cgCreateSchema =
 
 KSTATUS cmdmgrStart(void) {
 	KSTATUS _status;
-	_status = dbExec(dbGetMemoryInstance(), cgCreateSchema);
+	_status = dbExec(svcKernelGetDb(), cgCreateSchema);
 	return _status;
 }
 
@@ -20,15 +19,15 @@ PCMD_ROUTINE cmdmgrFindRoutine(const char* pcmdText) {
 	sqlite3_stmt *stmt;
 	PCMD_ROUTINE proutine;
 
-	rc = sqlite3_prepare_v2(dbGetMemoryInstance(), "select routine from cmdmgr_cmdlist where code = ?", -1, &stmt, 0);
+	rc = sqlite3_prepare_v2(svcKernelGetDb(), "select routine from cmdmgr_cmdlist where code = ?", -1, &stmt, 0);
     if(rc != SQLITE_OK) {
-    	syslog(LOG_ERR, "Failed to prepare cursor: %s\n", dbGetErrmsg(dbGetMemoryInstance()));
+    	syslog(LOG_ERR, "Failed to prepare cursor: %s", dbGetErrmsg(svcKernelGetDb()));
         return NULL;
     }
 
 	rc = sqlite3_bind_text(stmt, 1, pcmdText, -1, SQLITE_STATIC);
     if(rc != SQLITE_OK) {
-    	syslog(LOG_ERR, "Failed to bind text(%s): %s\n", pcmdText, dbGetErrmsg(dbGetMemoryInstance()));
+    	syslog(LOG_ERR, "Failed to bind text(%s): %s\n", pcmdText, dbGetErrmsg(svcKernelGetDb()));
         return NULL;
     }
 
@@ -37,7 +36,7 @@ PCMD_ROUTINE cmdmgrFindRoutine(const char* pcmdText) {
     	proutine = (PCMD_ROUTINE)sqlite3_column_int64(stmt, 0);
         rc = sqlite3_finalize(stmt);
         if(rc != SQLITE_OK) {
-        	syslog(LOG_ERR, "Failed to clear cursor: %s\n", dbGetErrmsg(dbGetMemoryInstance()));
+        	syslog(LOG_ERR, "Failed to clear cursor: %s\n", dbGetErrmsg(svcKernelGetDb()));
             return NULL;
         }
         return proutine;

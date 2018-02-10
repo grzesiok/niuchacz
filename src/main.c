@@ -1,6 +1,5 @@
 #include "kernel.h"
 #include "svc_kernel/svc_kernel.h"
-#include "database/database.h"
 #include <pcap.h>
 #include <unistd.h>
 #include <netinet/in.h>
@@ -11,6 +10,7 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <netinet/ether.h>
+#include "svc_kernel/database/database.h"
 
 #define MAIN_THREAD_PRODUCER 0
 #define MAIN_THREAD_CONSUMER 1
@@ -23,6 +23,7 @@ typedef struct _NIUCHACZ_CTX {
 typedef struct _NIUCHACZ_MAIN {
 	NIUCHACZ_CTX _threads[2];
     sqlite3_stmt *_stmt;
+    sqlite3 *_db;
 } NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
 
 NIUCHACZ_MAIN g_Main;
@@ -107,7 +108,7 @@ void frames_callback(const char* device, unsigned char *packet, struct timeval t
     }
 	startTime = timerStart();
     if(sqlite3_step(g_Main._stmt) != SQLITE_DONE) {
-    	syslog(LOG_ERR, "%s\n", dbGetErrmsg(dbGetFileInstance()));
+    	syslog(LOG_ERR, "%s\n", dbGetErrmsg(g_Main._db));
     }
     sqlite3_reset(g_Main._stmt);
 	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
@@ -154,7 +155,7 @@ void* pcap_thread_routine(void* arg)
 		syslog(LOG_ERR, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(handle));
 		exit(EXIT_FAILURE);
 	}
-	while(svc_kernel_is_running()) {
+	while(svcKernelIsRunning()) {
 		packet = (unsigned char*)pcap_next(handle, &header);
 		if(packet != NULL)
 		{
@@ -172,7 +173,7 @@ void* pcap_thread_routine(void* arg)
 KSTATUS schema_sync(void)
 {
 	KSTATUS _status;
-	_status = dbExec(dbGetFileInstance(), cgCreateSchema);
+	_status = dbExec(g_Main._db, cgCreateSchema);
 	return _status;
 }
 
@@ -186,17 +187,17 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 	deviceName = argv[1];
-	_status = svc_kernel_init();
+	_status = svcKernelInit();
 	if(!KSUCCESS(_status))
 		goto __exit;
-	_status = dbStart(argv[2]);
+	_status = dbStart(argv[2], &g_Main._db);
 	if(!KSUCCESS(_status))
 		goto __exit;
 	_status = schema_sync();
 	if(!KSUCCESS(_status))
 		goto __exit;
-	svc_kernel_status(SVC_KERNEL_STATUS_RUNNING);
-    if(sqlite3_prepare(dbGetFileInstance(), cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
+	svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);
+    if(sqlite3_prepare(g_Main._db, cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
     	syslog(LOG_ERR, "\nCould not prepare statement.");
 		goto __database_stop_andexit;
     }
@@ -216,14 +217,14 @@ int main(int argc, char* argv[])
 	_status = psmgrCreateThread(pcap_thread_routine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
-	while(svc_kernel_is_running()) {
+	while(svcKernelIsRunning()) {
 		psmgrIdle(1);
 	}
     sqlite3_finalize(g_Main._stmt);
 	statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 __database_stop_andexit:
-	dbStop();
+	dbStop(g_Main._db);
 __exit:
-	svc_kernel_exit(0);
+	svcKernelExit(0);
 }

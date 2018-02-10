@@ -2,7 +2,7 @@
 FILEASM64OBJ=
 FILECOBJ=\
     src/psmgr/psmgr.o\
-    src/database/database.o\
+    src/svc_kernel/database/database.o\
     src/svc_kernel/svc_lock.o\
     src/svc_kernel/svc_kernel.o\
     src/svc_kernel/svc_statistics.o\

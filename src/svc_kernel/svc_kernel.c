@@ -1,21 +1,21 @@
 #include "svc_kernel.h"
 #include <signal.h>
+#include "database/database.h"
 
 typedef struct _KERNEL
 {
 	volatile int _status;
+	sqlite3* _db;
 } KERNEL, *PKERNEL;
 
 static KERNEL gKernelCfg;
 
-void svc_kernel_sig_handler(int signo)
-{
+void svcKernelSigHandler(int signo) {
 	if(signo == SIGINT)
-		svc_kernel_status(SVC_KERNEL_STATUS_STOP_PENDING);
+		svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
 }
 
-KSTATUS svc_kernel_init(void)
-{
+KSTATUS svcKernelInit(void) {
 	KSTATUS _status;
 
 	/* Open system log and write message to it */
@@ -23,9 +23,12 @@ KSTATUS svc_kernel_init(void)
 	syslog(LOG_INFO, "Starting...");
 
 	__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_START_PENDING, __ATOMIC_RELEASE);
-	if(signal(SIGINT, svc_kernel_sig_handler) == SIG_ERR)
+	if(signal(SIGINT, svcKernelSigHandler) == SIG_ERR)
 		return KSTATUS_UNSUCCESS;
 	_status = statsStart();
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = dbStart(":memory:", &gKernelCfg._db);
 	if(!KSUCCESS(_status))
 		return _status;
 	_status = psmgrStart();
@@ -39,11 +42,11 @@ KSTATUS svc_kernel_init(void)
 	return KSTATUS_SUCCESS;
 }
 
-void svc_kernel_exit(int code)
-{
+void svcKernelExit(int code) {
 	syslog(LOG_INFO, "Stopping...");
 	cmdmgrStop();
 	psmgrStop();
+	dbStop(gKernelCfg._db);
 	statsStop();
 	signal(SIGINT, SIG_DFL);
 
@@ -54,8 +57,7 @@ void svc_kernel_exit(int code)
 	exit(code);
 }
 
-KSTATUS svc_kernel_status(int requested_status)
-{
+KSTATUS svcKernelStatus(int requested_status) {
 	int old_status = __atomic_load_n(&gKernelCfg._status, __ATOMIC_ACQUIRE);
 	if(requested_status == SVC_KERNEL_STATUS_STOP_PENDING
 			&& (old_status == SVC_KERNEL_STATUS_START_PENDING || old_status == SVC_KERNEL_STATUS_RUNNING))
@@ -69,7 +71,10 @@ KSTATUS svc_kernel_status(int requested_status)
 	return KSTATUS_SUCCESS;
 }
 
-int svc_kernel_get_current_status(void)
-{
+int svcKernelGetCurrentStatus(void) {
 	return __atomic_load_n(&gKernelCfg._status, __ATOMIC_ACQUIRE);
+}
+
+sqlite3* svcKernelGetDb(void) {
+	return gKernelCfg._db;
 }

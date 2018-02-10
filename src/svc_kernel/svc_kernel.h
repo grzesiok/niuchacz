@@ -7,14 +7,16 @@
 #include "svc_time.h"
 #include "../psmgr/psmgr.h"
 #include "execute_unit/cmd_manager.h"
+#include "database/database.h"
 
 #define SVC_KERNEL_STATUS_START_PENDING 1
 #define SVC_KERNEL_STATUS_RUNNING 2
 #define SVC_KERNEL_STATUS_STOP_PENDING 3
 
-KSTATUS svc_kernel_init(void);
-void svc_kernel_exit(int code) NORETURN;
-KSTATUS svc_kernel_status(int requested_status);
-int svc_kernel_get_current_status(void);
-#define svc_kernel_is_running() (svc_kernel_get_current_status() == SVC_KERNEL_STATUS_RUNNING)
+KSTATUS svcKernelInit(void);
+void svcKernelExit(int code) NORETURN;
+KSTATUS svcKernelStatus(int requested_status);
+int svcKernelGetCurrentStatus(void);
+sqlite3* svcKernelGetDb(void);
+#define svcKernelIsRunning() (svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_RUNNING)
 #endif
