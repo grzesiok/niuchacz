@@ -8,7 +8,7 @@ KSTATUS lock_init(PLOCKER locker, const char *name)
 {
 #ifdef DEBUG_MODE
     locker->_name = name;
-    DPRINTF("LOCK_INIT(%s)\n", locker->_name);
+    DPRINTF("LOCK_INIT(%s)", locker->_name);
 #endif
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
@@ -19,7 +19,7 @@ KSTATUS lock_init(PLOCKER locker, const char *name)
 void lock_destroy(PLOCKER locker)
 {
 #ifdef DEBUG_MODE
-    DPRINTF("LOCK_DESTROY(%s)\n", locker->_name);
+    DPRINTF("LOCK_DESTROY(%s)", locker->_name);
 #endif
     pthread_mutex_destroy(&locker->_mutex);
 }
@@ -28,7 +28,7 @@ KSTATUS lock(PLOCKER locker)
 {
     pthread_mutex_lock(&locker->_mutex);
 #ifdef DEBUG_MODE
-    DPRINTF("LOCK(%s)\n", locker->_name);
+    DPRINTF("LOCK(%s)", locker->_name);
 #endif
     return KSTATUS_SUCCESS;
 };
@@ -36,7 +36,7 @@ KSTATUS lock(PLOCKER locker)
 KSTATUS unlock(PLOCKER locker)
 {
 #ifdef DEBUG_MODE
-    DPRINTF("UNLOCK(%s)\n", locker->_name);
+    DPRINTF("UNLOCK(%s)", locker->_name);
 #endif
     pthread_mutex_unlock(&locker->_mutex);
     return KSTATUS_SUCCESS;

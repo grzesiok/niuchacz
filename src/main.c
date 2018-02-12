@@ -44,7 +44,7 @@ void frames_callback(const char* device, unsigned char *packet, struct timeval t
 	struct timespec startTime;
 
     if(!mapFrame(packet, packet_len, &results)) {
-    	syslog(LOG_ERR, "Error in parsing message!\n");
+    	SYSLOG(LOG_ERR, "Error in parsing message!");
 		return;
 	}
     //ts_sec since Epoch (1970) timestamp						  /* Timestamp of packet */
@@ -108,7 +108,7 @@ void frames_callback(const char* device, unsigned char *packet, struct timeval t
     }
 	startTime = timerStart();
     if(sqlite3_step(g_Main._stmt) != SQLITE_DONE) {
-    	syslog(LOG_ERR, "%s\n", dbGetErrmsg(g_Main._db));
+    	SYSLOG(LOG_ERR, "%s", dbGetErrmsg(g_Main._db));
     }
     sqlite3_reset(g_Main._stmt);
 	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
@@ -127,32 +127,32 @@ void* pcap_thread_routine(void* arg)
 	bpf_u_int32 net;
 	bpf_u_int32 mask;
 
-	syslog(LOG_INFO, "Listen on device=%s\n", p_ctx->_p_deviceName);
+	SYSLOG(LOG_INFO, "Listen on device=%s", p_ctx->_p_deviceName);
     /* get network number and mask associated with capture device */
     if (pcap_lookupnet(p_ctx->_p_deviceName, &net, &mask, errbuf) == -1) {
-    	syslog(LOG_ERR, "Couldn't get netmask for device %s: %s\n", p_ctx->_p_deviceName, errbuf);
+    	SYSLOG(LOG_ERR, "Couldn't get netmask for device %s: %s", p_ctx->_p_deviceName, errbuf);
     	net = 0;
     	mask = 0;
     }
     /* open capture device */
     handle = pcap_open_live(p_ctx->_p_deviceName, BUFSIZ, 0, 1000, errbuf);
 	if(handle == NULL) {
-		syslog(LOG_ERR, "Couldn't open device %s: %s\n", p_ctx->_p_deviceName, errbuf);
+		SYSLOG(LOG_ERR, "Couldn't open device %s: %s", p_ctx->_p_deviceName, errbuf);
 		return NULL;
 	}
 	/* make sure we're capturing on an Ethernet device */
 	if(pcap_datalink(handle) != DLT_EN10MB) {
-		syslog(LOG_ERR, "%s is not an Ethernet\n", p_ctx->_p_deviceName);
+		SYSLOG(LOG_ERR, "%s is not an Ethernet", p_ctx->_p_deviceName);
 		exit(EXIT_FAILURE);
 	}
 	/* compile the filter expression */
 	if(pcap_compile(handle, &fp, filter_exp, 0, net) == -1) {
-		syslog(LOG_ERR, "Couldn't parse filter %s: %s\n", filter_exp, pcap_geterr(handle));
+		SYSLOG(LOG_ERR, "Couldn't parse filter %s: %s", filter_exp, pcap_geterr(handle));
 		exit(EXIT_FAILURE);
 	}
 	/* apply the compiled filter */
 	if (pcap_setfilter(handle, &fp) == -1) {
-		syslog(LOG_ERR, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(handle));
+		SYSLOG(LOG_ERR, "Couldn't install filter %s: %s", filter_exp, pcap_geterr(handle));
 		exit(EXIT_FAILURE);
 	}
 	while(svcKernelIsRunning()) {
@@ -183,7 +183,7 @@ int main(int argc, char* argv[])
 	char *deviceName;
 
 	if(argc != 3) {
-		perror("Usage: niuchacz [devname] [dbfile]\n");
+		perror("Usage: niuchacz [devname] [dbfile]");
 		exit(1);
 	}
 	deviceName = argv[1];
@@ -198,22 +198,22 @@ int main(int argc, char* argv[])
 		goto __exit;
 	svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);
     if(sqlite3_prepare(g_Main._db, cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
-    	syslog(LOG_ERR, "\nCould not prepare statement.");
+    	SYSLOG(LOG_ERR, "Could not prepare statement.");
 		goto __database_stop_andexit;
     }
 	g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
 	_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	if(!KSUCCESS(_status)) {
-		syslog(LOG_ERR, "Error during allocation StatsKey!\n");
+		SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
 		goto __database_stop_andexit;
 	}
 	g_Main._threads[MAIN_THREAD_CONSUMER]._p_deviceName = deviceName;
 	_status = statsAlloc("consumerTherad", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 	if(!KSUCCESS(_status)) {
-		syslog(LOG_ERR, "Error during allocation StatsKey!\n");
+		SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
 		goto __database_stop_andexit;
 	}
-	syslog(LOG_INFO, "Prepare listen on device=%s\n", argv[1]);
+	SYSLOG(LOG_INFO, "Prepare listen on device=%s", argv[1]);
 	_status = psmgrCreateThread(pcap_thread_routine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;

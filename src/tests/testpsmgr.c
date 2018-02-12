@@ -12,18 +12,18 @@ typedef struct _TEST_ENTRY
 KSTATUS testRoutine(void* p_arg) {
 	PTEST_ENTRY pentry = (PTEST_ENTRY)p_arg;
 	pentry->_p_private_mem = malloc(5);
-	printf("testRoutine START(%s)...\n", pentry->_key);
+	DPRINTF("testRoutine START(%s)...", pentry->_key);
 	int a = 1/0;
 	sleep(1);
-	printf("testRoutine STOP(%s)...\n", pentry->_key);
+	DPRINTF("testRoutine STOP(%s)...", pentry->_key);
 	return 1;
 }
 
 void cancelRoutine(void* p_arg) {
 	PTEST_ENTRY pentry = (PTEST_ENTRY)p_arg;
-	printf("cancelRoutine START(%s)...\n", pentry->_key);
+	DPRINTF("cancelRoutine START(%s)...", pentry->_key);
 	free(pentry->_p_private_mem);
-	printf("cancelRoutine STOP(%s)...\n", pentry->_key);
+	DPRINTF("cancelRoutine STOP(%s)...", pentry->_key);
 }
 
 TEST_ENTRY gTab[] = {
@@ -41,12 +41,12 @@ int main()
 	unsigned long long size, i;
 	struct timeval timestamp;
 
-	printf("PSMGR Starting...\n");
+	DPRINTF("PSMGR Starting...");
 	_status = psmgrStart();
 	for(i = 0;i < sizeof(gTab)/sizeof(gTab[0]);i++) {
 		_status = psmgrCreateThread(gTab[i]._key, gTab[i]._p_execRoutine, gTab[i]._p_cancelRoutine, &gTab[i]);
 	}
-	printf("PSMGR Stopping...\n");
+	DPRINTF("PSMGR Stopping...");
 	psmgrStop();
 	return 0;
 }

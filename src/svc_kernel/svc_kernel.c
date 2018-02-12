@@ -20,7 +20,7 @@ KSTATUS svcKernelInit(void) {
 
 	/* Open system log and write message to it */
 	openlog("NIUCHACZ", LOG_PID|LOG_CONS, LOG_DAEMON);
-	syslog(LOG_INFO, "Starting...");
+	SYSLOG(LOG_INFO, "Starting...");
 
 	__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_START_PENDING, __ATOMIC_RELEASE);
 	if(signal(SIGINT, svcKernelSigHandler) == SIG_ERR)
@@ -38,12 +38,12 @@ KSTATUS svcKernelInit(void) {
 	if(!KSUCCESS(_status))
 		return _status;
 
-	syslog(LOG_INFO, "Started");
+	SYSLOG(LOG_INFO, "Started");
 	return KSTATUS_SUCCESS;
 }
 
 void svcKernelExit(int code) {
-	syslog(LOG_INFO, "Stopping...");
+	SYSLOG(LOG_INFO, "Stopping...");
 	cmdmgrStop();
 	psmgrStop();
 	dbStop(gKernelCfg._db);
@@ -51,7 +51,7 @@ void svcKernelExit(int code) {
 	signal(SIGINT, SIG_DFL);
 
 	/* Write system log and close it. */
-	syslog(LOG_INFO, "Stopped");
+	SYSLOG(LOG_INFO, "Stopped");
 	closelog();
 
 	exit(code);
