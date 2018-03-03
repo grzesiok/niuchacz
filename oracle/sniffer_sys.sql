@@ -1,8 +1,48 @@
 alter session set container = pdbdwh;
 
-create user dwh_load identified by dwh_load default tablespace TS_LOADER_LOAD  account unlock;
+--Create tablespaces
+create tablespace ts_loader_core
+    datafile '&&PATH/ts_loader_core_1.dbf'
+    size 500M
+    autoextend on next 50M maxsize unlimited
+    extent management local
+    segment space management auto;
+create tablespace ts_loader_core_hist
+    datafile '&&PATH/ts_loader_core_hist_1.dbf'
+    size 500M
+    autoextend on next 50M maxsize unlimited
+    extent management local
+    segment space management auto;
+create tablespace ts_loader_core_idx
+    datafile '&&PATH/ts_loader_core_idx_1.dbf'
+    size 100M
+    autoextend on next 10M maxsize unlimited
+    extent management local
+    segment space management auto;
+create tablespace ts_loader_data_idx
+    datafile '&&PATH/ts_loader_data_idx_1.dbf'
+    size 1G
+    autoextend on next 100M maxsize unlimited
+    extent management local
+    segment space management auto;
+create tablespace ts_loader_data
+    datafile '&&PATH/ts_loader_data_1.dbf'
+    size 10G
+    autoextend on next 1G maxsize unlimited
+    extent management local
+    segment space management auto;
+create tablespace ts_loader_files
+    datafile '&&PATH/ts_loader_files_1.dbf'
+    size 3G
+    autoextend on next 100M maxsize unlimited
+    extent management local
+    segment space management auto;
+
+
+create user dwh_load identified by dwh_load default tablespace TS_LOADER_DATA  account unlock;
 grant connect, resource to dwh_load;
-alter user dwh_load quota unlimited on TS_LOADER_LOAD;
+alter user dwh_load quota unlimited on TS_LOADER_DATA;
+alter user dwh_load quota unlimited on TS_LOADER_DATA_IDX;
 grant create materialized view to dwh_load;
 grant create synonym to dwh_load;
 
