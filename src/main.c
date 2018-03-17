@@ -199,7 +199,7 @@ int main(int argc, char* argv[])
 		goto __exit;
 	_status = schema_sync();
 	if(!KSUCCESS(_status))
-		goto __exit;
+		goto __database_stop_andexit;
 	svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);
     if(sqlite3_prepare(g_Main._db, cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
     	SYSLOG(LOG_ERR, "Could not prepare statement.");
