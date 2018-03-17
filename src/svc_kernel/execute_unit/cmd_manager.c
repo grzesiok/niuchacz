@@ -46,11 +46,13 @@ static PJOB_ROUTINE i_cmdmgrFindRoutine(const char* cmd) {
 
 KSTATUS cmdmgrStart(void) {
 	KSTATUS _status;
+	SYSLOG(LOG_INFO, "[CMDMGR] Starting...");
 	_status = dbExec(svcKernelGetDb(), cgCreateSchema);
 	return _status;
 }
 
 void cmdmgrStop(void) {
+	SYSLOG(LOG_INFO, "[CMDMGR] Stopping...");
 }
 
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_ROUTINE proutine, int version) {

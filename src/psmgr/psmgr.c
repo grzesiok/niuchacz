@@ -23,11 +23,13 @@ static void* psmgrRoutine(void* p_arg) {
 
 KSTATUS psmgrStart(void) {
 	DPRINTF("psmgr_start");
+	SYSLOG(LOG_INFO, "[PSMGR] Starting...");
 	return KSTATUS_SUCCESS;
 }
 
 void psmgrStop(void) {
 	DPRINTF("psmgr_stop");
+	SYSLOG(LOG_INFO, "[PSMGR] Stopping...");
 }
 
 void psmgrIdle(unsigned long long waitTimeInSec) {
