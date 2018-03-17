@@ -32,10 +32,9 @@ static void svcKernelInitService(void) {
 	chdir("/");
 
 	/* Close all open file descriptors */
-	//for(fd = sysconf(_SC_OPEN_MAX);fd > 0;fd--) {
-	//	close(fd);
-	//}
-
+	for(fd = sysconf(_SC_OPEN_MAX);fd > 0;fd--) {
+		close(fd);
+	}
 	/* Reopen stdin (fd = 0), stdout (fd = 1), stderr (fd = 2) */
 	stdin = fopen("/dev/null", "r");
 	stdout = fopen("/dev/null", "w+");
