@@ -1,3 +1,5 @@
+.PHONY: all prepare clean_dependencies build_dependencies build clean run install
+
 include Makefile.config
 include Makefile.compile
 #Dodatkowe polecenia
@@ -19,9 +21,6 @@ FILEASM32OBJ_=$(FILEASM32OBJ:%=$(OBJDIR)/%)
 FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 DEFINES=_GNU_SOURCE
-	
-enable_debug:
-DEFINES+= DEBUG_MODE
 
 prepare:
 	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
@@ -55,6 +54,11 @@ all: clean build
 
 run: all
 	./$(OUTFILE)
+	
+install:
+	cp niuchacz.service /etc/systemd/system/niuchacz.service
+	cp niuchacz.out /usr/bin/niuchacz
+	cp libalgorithms/libalgorithms.so /lib64/libalgorithms.so
 
 #kompilacja
 $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
@@ -69,6 +73,6 @@ testpsmgr.out: enable_debug build_dependencies $(FILECOBJ_TESTPSMGR)
 	@$(ECHO) [COMPILE] testpsmgr.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTPSMGR)
 	
-testcmdmgr.out: enable_debug build_dependencies $(FILECOBJ_TESTCMDMGR)
+testcmdmgr.out: build_dependencies $(FILECOBJ_TESTCMDMGR)
 	@$(ECHO) [COMPILE] testcmdmgr.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTCMDMGR)
