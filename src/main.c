@@ -182,15 +182,19 @@ int main(int argc, char* argv[])
 	KSTATUS _status;
 	char *deviceName;
 
-	if(argc != 3) {
-		perror("Usage: niuchacz [devname] [dbfile]");
-		exit(1);
-	}
-	deviceName = argv[1];
+	//if(argc < 3) {
+		/* TODO:
+		 * implement read configuration
+		 * implement read parameters
+		 */
+	//	perror("Usage: niuchacz [devname] [dbfile]");
+	//	exit(1);
+	//}
+	deviceName = argv[2];
 	_status = svcKernelInit();
 	if(!KSUCCESS(_status))
 		goto __exit;
-	_status = dbStart(argv[2], &g_Main._db);
+	_status = dbStart(argv[4], &g_Main._db);
 	if(!KSUCCESS(_status))
 		goto __exit;
 	_status = schema_sync();

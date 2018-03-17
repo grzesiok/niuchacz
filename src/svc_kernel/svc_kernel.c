@@ -1,6 +1,10 @@
 #include "svc_kernel.h"
 #include <signal.h>
 #include "database/database.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 typedef struct _KERNEL
 {
@@ -10,20 +14,45 @@ typedef struct _KERNEL
 
 static KERNEL gKernelCfg;
 
-void svcKernelSigHandler(int signo) {
-	if(signo == SIGINT)
+static void svcKernelSigHandler(int signo) {
+	if(signo == SIGTERM || signo == SIGINT)
 		svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
+	/*if(signo == SIGHUP)
+	 * TODO: reload configuration file */
+}
+
+static void svcKernelInitService(void) {
+	int fd;
+
+	/* Set new file permissions */
+	umask(0);
+
+	/* Change the working directory to the root directory */
+	/* or another appropriated directory */
+	chdir("/");
+
+	/* Close all open file descriptors */
+	//for(fd = sysconf(_SC_OPEN_MAX);fd > 0;fd--) {
+	//	close(fd);
+	//}
+
+	/* Reopen stdin (fd = 0), stdout (fd = 1), stderr (fd = 2) */
+	stdin = fopen("/dev/null", "r");
+	stdout = fopen("/dev/null", "w+");
+	stderr = fopen("/dev/null", "w+");
 }
 
 KSTATUS svcKernelInit(void) {
 	KSTATUS _status;
 
+	__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_START_PENDING, __ATOMIC_RELEASE);
+	svcKernelInitService();
 	/* Open system log and write message to it */
 	openlog("NIUCHACZ", LOG_PID|LOG_CONS, LOG_DAEMON);
 	SYSLOG(LOG_INFO, "Starting...");
-
-	__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_START_PENDING, __ATOMIC_RELEASE);
 	if(signal(SIGINT, svcKernelSigHandler) == SIG_ERR)
+		return KSTATUS_UNSUCCESS;
+	if(signal(SIGTERM, svcKernelSigHandler) == SIG_ERR)
 		return KSTATUS_UNSUCCESS;
 	_status = statsStart();
 	if(!KSUCCESS(_status))
@@ -49,6 +78,7 @@ void svcKernelExit(int code) {
 	dbStop(gKernelCfg._db);
 	statsStop();
 	signal(SIGINT, SIG_DFL);
+	signal(SIGTERM, SIG_DFL);
 
 	/* Write system log and close it. */
 	SYSLOG(LOG_INFO, "Stopped");
