@@ -52,7 +52,7 @@ void statsStop(void) {
 }
 
 KSTATUS statsAlloc(const char* statsName, int type, stats_key *p_key) {
-	DPRINTF("statsAlloc(%s[%zd], %d, %p)", statsName, strlen(statsName), type, p_key);
+	SYSLOG(LOG_INFO, "statsAlloc(%s[%zd], %d, %p)", statsName, strlen(statsName), type, p_key);
 	if(strlen(statsName) >= STATS_ENTRY_NAME_MAXSIZE)
 		return KSTATUS_UNSUCCESS;
 	stats_key statsKey = statsFind(statsName);
@@ -85,8 +85,8 @@ KSTATUS statsAlloc(const char* statsName, int type, stats_key *p_key) {
 }
 
 void statsFree(stats_key key) {
-	DPRINTF("statsFree(%p)", key);
 	PSTATS_ENTRY p_entry = (PSTATS_ENTRY)key;
+	SYSLOG(LOG_INFO, "statsFree(%s)", p_entry->_statsName);
 	p_entry->_flags = STATS_ENTRY_FLAGS_FREE;
 }
 
