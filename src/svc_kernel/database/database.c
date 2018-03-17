@@ -37,7 +37,7 @@ KSTATUS dbStart(const char* p_path, sqlite3** p_db)
 void dbStop(sqlite3* db)
 {
 	DPRINTF("dbStop");
-	SYSLOG(LOG_INFO, "[DB] Stopping...");
+	SYSLOG(LOG_INFO, "[DB] Stopping(%s)...", sqlite3_db_filename(db, "main"));
 	sqlite3_close(db);
 	statsFree(g_statsKey_DbExecTime);
 }
