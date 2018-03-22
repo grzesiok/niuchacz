@@ -24,6 +24,9 @@ typedef struct _NIUCHACZ_MAIN {
 	NIUCHACZ_CTX _threads[2];
     sqlite3_stmt *_stmt;
     sqlite3 *_db;
+    const char* _pid_file;
+    const char* _conf_file;
+    const char* _net_interface;
 } NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
 
 NIUCHACZ_MAIN g_Main;
@@ -180,21 +183,21 @@ KSTATUS schema_sync(void)
 int main(int argc, char* argv[])
 {
 	KSTATUS _status;
-	char *deviceName;
+	const char *dbFileName, *deviceName;
+	PKERNEL pKernelCfg = svcKernelGetCfg();
 
-	//if(argc < 3) {
-		/* TODO:
-		 * implement read configuration
-		 * implement read parameters
-		 */
-	//	perror("Usage: niuchacz [devname] [dbfile]");
-	//	exit(1);
-	//}
-	deviceName = argv[2];
 	_status = svcKernelInit();
 	if(!KSUCCESS(_status))
 		goto __exit;
-	_status = dbStart(argv[4], &g_Main._db);
+	if(!config_lookup_string(&pKernelCfg->_cfg, "DB.fileName", &dbFileName)) {
+		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(&pKernelCfg->_cfg), config_error_line(&pKernelCfg->_cfg), config_error_text(&pKernelCfg->_cfg));
+		goto __exit;
+	}
+	if(!config_lookup_string(&pKernelCfg->_cfg, "NIUCHACZ.deviceName", &deviceName)) {
+		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(&pKernelCfg->_cfg), config_error_line(&pKernelCfg->_cfg), config_error_text(&pKernelCfg->_cfg));
+		goto __exit;
+	}
+	_status = dbStart(dbFileName, &g_Main._db);
 	if(!KSUCCESS(_status))
 		goto __exit;
 	_status = schema_sync();
@@ -212,12 +215,12 @@ int main(int argc, char* argv[])
 		goto __database_stop_andexit;
 	}
 	g_Main._threads[MAIN_THREAD_CONSUMER]._p_deviceName = deviceName;
-	_status = statsAlloc("consumerTherad", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
+	_status = statsAlloc("consumerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 	if(!KSUCCESS(_status)) {
 		SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
 		goto __database_stop_andexit;
 	}
-	SYSLOG(LOG_INFO, "Prepare listen on device=%s", argv[1]);
+	SYSLOG(LOG_INFO, "Prepare listen on device=%s", deviceName);
 	_status = psmgrCreateThread(pcap_thread_routine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;

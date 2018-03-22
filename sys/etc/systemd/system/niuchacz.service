@@ -1,0 +1,13 @@
+[Unit]
+Description=Niuchacz service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/niuchacz
+User=root
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

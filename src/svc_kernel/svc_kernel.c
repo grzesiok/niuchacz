@@ -6,12 +6,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-typedef struct _KERNEL
-{
-	volatile int _status;
-	sqlite3* _db;
-} KERNEL, *PKERNEL;
-
 static KERNEL gKernelCfg;
 
 static void svcKernelSigHandler(int signo) {
@@ -53,6 +47,13 @@ KSTATUS svcKernelInit(void) {
 		return KSTATUS_UNSUCCESS;
 	if(signal(SIGTERM, svcKernelSigHandler) == SIG_ERR)
 		return KSTATUS_UNSUCCESS;
+	/* Initialize config filesystem */
+	config_init(&gKernelCfg._cfg);
+	if(!config_read_file(&gKernelCfg._cfg, "/etc/niuchacz/niuchacz.conf")) {
+		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(&gKernelCfg._cfg), config_error_line(&gKernelCfg._cfg), config_error_text(&gKernelCfg._cfg));
+		config_destroy(&gKernelCfg._cfg);
+		return KSTATUS_UNSUCCESS;
+	}
 	_status = statsStart();
 	if(!KSUCCESS(_status))
 		return _status;
@@ -76,6 +77,7 @@ void svcKernelExit(int code) {
 	psmgrStop();
 	dbStop(gKernelCfg._db);
 	statsStop();
+	config_destroy(&gKernelCfg._cfg);
 	signal(SIGINT, SIG_DFL);
 	signal(SIGTERM, SIG_DFL);
 
@@ -106,4 +108,8 @@ int svcKernelGetCurrentStatus(void) {
 
 sqlite3* svcKernelGetDb(void) {
 	return gKernelCfg._db;
+}
+
+PKERNEL svcKernelGetCfg(void) {
+	return &gKernelCfg;
 }

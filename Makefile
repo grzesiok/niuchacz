@@ -56,9 +56,13 @@ run: all
 	./$(OUTFILE)
 	
 install:
-	cp niuchacz.service /etc/systemd/system/niuchacz.service
+	systemctl stop niuchacz.service
 	cp niuchacz.out /usr/bin/niuchacz
 	cp libalgorithms/libalgorithms.so /lib64/libalgorithms.so
+	cp sys/etc/systemd/system/niuchacz.service /etc/systemd/system/niuchacz.service
+	cp sys/etc/niuchacz/* /etc/niuchacz
+	systemctl daemon-reload
+	systemctl start niuchacz.service
 
 #kompilacja
 $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
