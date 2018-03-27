@@ -9,7 +9,7 @@ KSTATUS dbStart(const char* p_path, sqlite3** p_db)
 	KSTATUS _status;
 	sqlite3* db;
 
-	SYSLOG(LOG_INFO, "[DB] Starting(%s)...", p_path);
+	SYSLOG(LOG_INFO, "[DB] Starting FileName(%s) Version(%s)...", p_path, sqlite3_libversion());
 	_status = statsAlloc("db exec time", STATS_TYPE_SUM, &g_statsKey_DbExecTime);
 	if(!KSUCCESS(_status)) {
 		SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
@@ -25,7 +25,6 @@ KSTATUS dbStart(const char* p_path, sqlite3** p_db)
 	_status = dbExec(db, "PRAGMA synchronous = NORMAL;");
 	if(!KSUCCESS(_status))
 		return _status;
-	SYSLOG(LOG_INFO, "[DB] Version: %s", sqlite3_libversion());
 	if(rc) {
 		*p_db = NULL;
 		return KSTATUS_DB_OPEN_ERROR;

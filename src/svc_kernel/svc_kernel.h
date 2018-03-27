@@ -21,7 +21,7 @@ typedef struct _KERNEL
 #define SVC_KERNEL_STATUS_RUNNING 2
 #define SVC_KERNEL_STATUS_STOP_PENDING 3
 
-KSTATUS svcKernelInit(void);
+KSTATUS svcKernelInit(const char* confFileName);
 void svcKernelExit(int code) NORETURN;
 KSTATUS svcKernelStatus(int requested_status);
 int svcKernelGetCurrentStatus(void);

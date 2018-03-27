@@ -126,7 +126,7 @@ KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode) {
 		return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
 	//if mode == JobModeAsynchronous then function should back immediatelly and schedule job to future
 	//if mode == JobModeSynchronous then function should wait until execution is done
-	ret = proutine(pjob->_data, pjob->_dataSize);
+	ret = proutine(pjob->_ts, pjob->_data, pjob->_dataSize);
 	if(ret != 0)
 		//job should be rescheduled again
 		//or job should be freed if rescheduled is not an option

@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/niuchacz
+ExecStart=/usr/bin/niuchacz /etc/niuchacz/niuchacz.conf
 User=root
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-abort

@@ -2,7 +2,7 @@
 #define _CMD_MANAGER_H
 #include "../svc_kernel.h"
 
-typedef int (*PJOB_ROUTINE)(void* pdata, size_t dataSize);
+typedef int (*PJOB_ROUTINE)(struct timeval ts, void* pdata, size_t dataSize);
 
 typedef struct _JOB_T {
 	char* _cmd;

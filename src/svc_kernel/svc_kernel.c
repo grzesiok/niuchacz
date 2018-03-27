@@ -35,7 +35,7 @@ static void svcKernelInitService(void) {
 	stderr = fopen("/dev/null", "w+");
 }
 
-KSTATUS svcKernelInit(void) {
+KSTATUS svcKernelInit(const char* confFileName) {
 	KSTATUS _status;
 
 	__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_START_PENDING, __ATOMIC_RELEASE);
@@ -49,7 +49,7 @@ KSTATUS svcKernelInit(void) {
 		return KSTATUS_UNSUCCESS;
 	/* Initialize config filesystem */
 	config_init(&gKernelCfg._cfg);
-	if(!config_read_file(&gKernelCfg._cfg, "/etc/niuchacz/niuchacz.conf")) {
+	if(!config_read_file(&gKernelCfg._cfg, confFileName)) {
 		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(&gKernelCfg._cfg), config_error_line(&gKernelCfg._cfg), config_error_text(&gKernelCfg._cfg));
 		config_destroy(&gKernelCfg._cfg);
 		return KSTATUS_UNSUCCESS;

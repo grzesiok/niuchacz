@@ -16,7 +16,7 @@
 #define MAIN_THREAD_CONSUMER 1
 
 typedef struct _NIUCHACZ_CTX {
-	char* _p_deviceName;
+	const char* _p_deviceName;
 	stats_key _statsKey;
 } NIUCHACZ_CTX, *PNIUCHACZ_CTX;
 
@@ -24,9 +24,6 @@ typedef struct _NIUCHACZ_MAIN {
 	NIUCHACZ_CTX _threads[2];
     sqlite3_stmt *_stmt;
     sqlite3 *_db;
-    const char* _pid_file;
-    const char* _conf_file;
-    const char* _net_interface;
 } NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
 
 NIUCHACZ_MAIN g_Main;
@@ -42,72 +39,72 @@ static const char * cgStmt =
 		"values (?,?,?,?,?,"
 		"?,?,?,?,?,?,?,?,?,?);";
 
-void frames_callback(const char* device, unsigned char *packet, struct timeval ts, unsigned int packet_len) {
+int packet_analyze(struct timeval ts, void* packet, size_t packet_len) {
 	MAPPER_RESULTS results;
 	struct timespec startTime;
 
-    if(!mapFrame(packet, packet_len, &results)) {
+    if(!mapFrame((unsigned char *)packet, packet_len, &results)) {
     	SYSLOG(LOG_ERR, "Error in parsing message!");
-		return;
+		return -1;
 	}
     //ts_sec since Epoch (1970) timestamp						  /* Timestamp of packet */
     if(!dbBind_int64(true, g_Main._stmt, 1, ts.tv_sec)) {
-        return;
+        return -1;
     }//ts_usec /* Microseconds */
     if(!dbBind_int64(true, g_Main._stmt, 2, ts.tv_usec)) {
-        return;
+        return -1;
     }
     //u_char  eth_shost[ETHER_ADDR_LEN];      /* source host address */
     if(!dbBind_text(true, g_Main._stmt, 3, ether_ntoa((struct ether_addr*)&results._ethernet.eth_shost)) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_char  eth_dhost[ETHER_ADDR_LEN];      /* destination host address */
     if(!dbBind_text(true, g_Main._stmt, 4, ether_ntoa((struct ether_addr*)&results._ethernet.eth_dhost)) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_short eth_type;                       /* IP? ARP? RARP? etc */
     if(!dbBind_int(true, g_Main._stmt, 5, results._ethernet.eth_type) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_char  ip_vhl;                 		  /* version << 4 | header length >> 2 */
     if(!dbBind_int(true, g_Main._stmt, 6, results._ip.ip_vhl) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_char  ip_tos;                 		  /* type of service */
     if(!dbBind_int(true, g_Main._stmt, 7, results._ip.ip_tos) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_short ip_len;                 		  /* total length */
     if(!dbBind_int(true, g_Main._stmt, 8, results._ip.ip_len) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_short ip_id;                  		  /* identification */
     if(!dbBind_int(true, g_Main._stmt, 9, results._ip.ip_id) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_short ip_off;                 		  /* fragment offset field */
     if(!dbBind_int(true, g_Main._stmt, 10, results._ip.ip_off) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_char  ip_ttl;                 		  /* time to live */
     if(!dbBind_int(true, g_Main._stmt, 11, results._ip.ip_ttl) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_char  ip_p;                   		  /* protocol */
     if(!dbBind_int(true, g_Main._stmt, 12, results._ip.ip_p) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //u_short ip_sum;                 		  /* checksum */
     if(!dbBind_int(true, g_Main._stmt, 13, results._ip.ip_sum) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //struct  in_addr ip_src;  		  /* source address */
     if(!dbBind_text(true, g_Main._stmt, 14, inet_ntoa(results._ip.ip_src)) != SQLITE_OK) {
-        return;
+        return -1;
     }
     //struct  in_addr ip_dst;  		  /* dest address */
     if(!dbBind_text(true, g_Main._stmt, 15, inet_ntoa(results._ip.ip_dst)) != SQLITE_OK) {
-        return;
+        return -1;
     }
 	startTime = timerStart();
     if(sqlite3_step(g_Main._stmt) != SQLITE_DONE) {
@@ -115,6 +112,7 @@ void frames_callback(const char* device, unsigned char *packet, struct timeval t
     }
     sqlite3_reset(g_Main._stmt);
 	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
+	return 0;
 }
 
 void* pcap_thread_routine(void* arg)
@@ -123,12 +121,14 @@ void* pcap_thread_routine(void* arg)
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t *handle;
 	struct pcap_pkthdr header;
-	unsigned char *packet;
+	void* packet;
 	struct timespec startTime;
 	char filter_exp[] = "ip"; /* filter expression (only IP packets) */
 	struct bpf_program fp; /* compiled filter program (expression) */
 	bpf_u_int32 net;
 	bpf_u_int32 mask;
+	KSTATUS _status;
+	PJOB pjob;
 
 	SYSLOG(LOG_INFO, "Listen on device=%s", p_ctx->_p_deviceName);
     /* get network number and mask associated with capture device */
@@ -159,11 +159,20 @@ void* pcap_thread_routine(void* arg)
 		exit(EXIT_FAILURE);
 	}
 	while(svcKernelIsRunning()) {
-		packet = (unsigned char*)pcap_next(handle, &header);
+		packet = (void*)pcap_next(handle, &header);
 		if(packet != NULL)
 		{
 			startTime = timerStart();
-			frames_callback(p_ctx->_p_deviceName, packet, header.ts, header.caplen);
+			_status = cmdmgrJobPrepare("PACKET_ANALYZE", packet, header.caplen, header.ts, &pjob);
+			if(!KSUCCESS(_status)) {
+				SYSLOG(LOG_ERR, "Couldn't prepare packet to analyze");
+				continue;
+			}
+			_status = cmdmgrJobExec(pjob, JobModeSynchronous);
+			if(!KSUCCESS(_status)) {
+				SYSLOG(LOG_ERR, "Couldn't execute job");
+				continue;
+			}
 			statsUpdate(p_ctx->_statsKey, timerStop(startTime));
 		}
 	}
@@ -186,7 +195,9 @@ int main(int argc, char* argv[])
 	const char *dbFileName, *deviceName;
 	PKERNEL pKernelCfg = svcKernelGetCfg();
 
-	_status = svcKernelInit();
+	if(argc != 2)
+		return -1;
+	_status = svcKernelInit(argv[1]);
 	if(!KSUCCESS(_status))
 		goto __exit;
 	if(!config_lookup_string(&pKernelCfg->_cfg, "DB.fileName", &dbFileName)) {
@@ -204,6 +215,9 @@ int main(int argc, char* argv[])
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
 	svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);
+	_status = cmdmgrAddCommand("PACKET_ANALYZE", "Analyze network packets and store it in DB file", packet_analyze, 1);
+	if(!KSUCCESS(_status))
+		goto __database_stop_andexit;
     if(sqlite3_prepare(g_Main._db, cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
     	SYSLOG(LOG_ERR, "Could not prepare statement.");
 		goto __database_stop_andexit;
