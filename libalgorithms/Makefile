@@ -59,3 +59,7 @@ testbloomfilter.out: $(FILECOBJ_TESTBLOOMFILTER)
 testdoublylinkedlist.out: $(FILECOBJ_TESTDOUBLYLINKEDLIST)
 	@$(ECHO) [COMPILE] testdoublylinkedlist.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTDOUBLYLINKEDLIST)
+	
+testqueue.out: $(FILECOBJ_TESTQUEUE)
+	@$(ECHO) [COMPILE] testqueue.out
+	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTQUEUE)
