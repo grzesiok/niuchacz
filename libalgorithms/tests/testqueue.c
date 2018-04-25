@@ -6,10 +6,12 @@
 #include <errno.h>
 
 queue_t *gpQueue;
-size_t numElements = 1000000000;
-size_t numThreads = 4;
-size_t readArray[1000000000];
-pthread_t threadReadArray[4];
+size_t numElements = 50000000;
+size_t readArray[50000000];
+size_t writeArray[50000000];
+size_t numReadThreads = 1;
+pthread_t threadReadArray[1];
+size_t numWriteThreads = 4;
 pthread_t threadWriteArray[4];
 volatile size_t actualReadI;
 volatile size_t actualWriteI;
@@ -41,14 +43,21 @@ size_t timerTimespecToLongLongNs(struct timespec currentTime) {
 }
 
 void* routineWrite(void* arg) {
+	char buffer[1000];
 	size_t i = 0;
+	size_t ret, size;
 	struct timespec writeTimeStart, writeTimeEnd, writeTime;
 	clock_gettime(CLOCK_REALTIME, &writeTimeStart);
 	while(1) {
 		i = __atomic_fetch_add(&actualWriteI, 1, __ATOMIC_RELEASE);
 		if(i >= numElements)
 			break;
-		queue_write(gpQueue, &i, sizeof(i), NULL);
+		size = randomGet(1, 100);
+		ret = queue_write(gpQueue, buffer, size, NULL);
+		if(ret != size){
+			printf("WrongSize[WRITE, i=%zu, orig=%zu, curr=%zu]\n", i, size, ret);
+		}
+		writeArray[i] = ret;
 	}
 	clock_gettime(CLOCK_REALTIME, &writeTimeEnd);
 	timerTimespecDiff(&writeTimeStart, &writeTimeEnd, &writeTime);
@@ -66,8 +75,8 @@ void* routineRead(void* arg) {
 		if(readedI >= numElements) {
 			printf("readedI=%zu\n", readedI);
 		}
-		if(readedSizeI != sizeof(size_t)) {
-			printf("WrongSize[%zu]=%zu\n", readedI, readedSizeI);
+		if(readedSizeI != writeArray[readedI]) {
+			printf("WrongSize[READ, i=%zu, orig=%zu, curr=%zu]\n", readedI, writeArray[readedI], readedSizeI);
 		}
 		__atomic_fetch_add(&readArray[readedI], 1, __ATOMIC_RELEASE);
 	}
@@ -86,11 +95,13 @@ int main() {
 	size_t i;
 	printf("Queue:CREATE\n");
 	gpQueue = queue_create(1000000);
-	for(i = 0;i < numThreads;i++) {
+	for(i = 0;i < numWriteThreads;i++) {
 		if(pthread_create(&threadWriteArray[i], NULL, routineWrite, NULL)) {
 			perror("Error creating thread\n");
 			return 1;
 		}
+	}
+	for(i = 0;i < numReadThreads;i++) {
 		if(pthread_create(&threadReadArray[i], NULL, routineRead, NULL)) {
 			perror("Error creating thread\n");
 			return 1;
@@ -100,18 +111,18 @@ int main() {
 	int ret;
 	size_t cumulativeReadTime = 0, cumulativeWriteTime = 0;
 	size_t readTime = 0, writeTime = 0;
-	for(i = 0;i < numThreads;i++) {
+	for(i = 0;i < numReadThreads;i++) {
 		do {
 			if(ret == ETIMEDOUT) {
-				printf("actualReadI=%zu\n", actualReadI);
-				printf("actualWriteI=%zu\n", actualWriteI);
+				//printf("actualReadI=%zu\n", actualReadI);
+				//printf("actualWriteI=%zu\n", actualWriteI);
 			}
 			clock_gettime(CLOCK_REALTIME, &ts);
 			ts.tv_sec += 1;
 		} while((ret = pthread_timedjoin_np(threadReadArray[i], (void**)&readTime, &ts)) == ETIMEDOUT);
 		cumulativeReadTime += readTime;
 	}
-	for(i = 0;i < numThreads;i++) {
+	for(i = 0;i < numWriteThreads;i++) {
 		pthread_tryjoin_np(threadWriteArray[i], (void**)&writeTime);
 		cumulativeWriteTime += writeTime;
 	}
@@ -123,9 +134,9 @@ int main() {
 	}
 	//timerTimespecDiff(&readTimeStart, &ReadTimeEnd, &ReadTime);
 	//timerTimespecDiff(&writeTimeStart, &writeTimeEnd, &WriteTime);
-	printf("WRITE[TIME in s]: %f\n", (float)cumulativeWriteTime/1000000000.0f/(float)numThreads);
+	printf("WRITE[TIME in s]: %f\n", (float)cumulativeWriteTime/1000000000.0f/(float)numWriteThreads);
 	printf("WRITE[THROUPGHPUT in item/s]: %zu\n", (size_t)((float)numElements/((float)cumulativeWriteTime/1000000000.0f)));
-	printf("READ[TIME in s]: %f\n", (float)cumulativeReadTime/1000000000.0f/(float)numThreads);
+	printf("READ[TIME in s]: %f\n", (float)cumulativeReadTime/1000000000.0f/(float)numReadThreads);
 	printf("READ[THROUPGHPUT in item/s]: %zu\n", (size_t)((float)numElements/((float)cumulativeReadTime/1000000000.0f)));
 	return 0;
 }
