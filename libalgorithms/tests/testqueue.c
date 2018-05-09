@@ -7,10 +7,10 @@
 
 queue_t *gpQueue;
 size_t numElements = 50000000;
-size_t readArray[50000000];
-size_t writeArray[50000000];
-size_t numReadThreads = 1;
-pthread_t threadReadArray[1];
+volatile size_t readArray[50000000];
+volatile size_t writeArray[50000000];
+size_t numReadThreads = 3;
+pthread_t threadReadArray[3];
 size_t numWriteThreads = 4;
 pthread_t threadWriteArray[4];
 volatile size_t actualReadI;
@@ -49,15 +49,16 @@ void* routineWrite(void* arg) {
 	struct timespec writeTimeStart, writeTimeEnd, writeTime;
 	clock_gettime(CLOCK_REALTIME, &writeTimeStart);
 	while(1) {
-		i = __atomic_fetch_add(&actualWriteI, 1, __ATOMIC_RELEASE);
+		i = __atomic_add_fetch(&actualWriteI, 1, __ATOMIC_RELEASE);
 		if(i >= numElements)
 			break;
-		size = randomGet(1, 100);
+		size = randomGet(sizeof(i), 1000);
+		*((size_t*)buffer) = i;
+		writeArray[i] = size;
 		ret = queue_write(gpQueue, buffer, size, NULL);
 		if(ret != size){
 			printf("WrongSize[WRITE, i=%zu, orig=%zu, curr=%zu]\n", i, size, ret);
 		}
-		writeArray[i] = ret;
 	}
 	clock_gettime(CLOCK_REALTIME, &writeTimeEnd);
 	timerTimespecDiff(&writeTimeStart, &writeTimeEnd, &writeTime);
@@ -65,20 +66,26 @@ void* routineWrite(void* arg) {
 }
 
 void* routineRead(void* arg) {
+	char buffer[1000];
 	size_t readedI, readedSizeI;
 	struct timespec readTimeStart, readTimeEnd, readTime;
 	clock_gettime(CLOCK_REALTIME, &readTimeStart);
 	while(1) {
-		if(__atomic_fetch_add(&actualReadI, 1, __ATOMIC_RELEASE) >= numElements)
+		if(__atomic_add_fetch(&actualReadI, 1, __ATOMIC_RELEASE) >= numElements)
 			break;
-		readedSizeI = queue_read(gpQueue, &readedI, NULL);
+		readedSizeI = queue_read(gpQueue, buffer, NULL);
+		if(readedSizeI == -1) {
+			printf("readedSizeI=%zu\n", readedSizeI);
+			continue;
+		}
+		readedI = *((size_t*)buffer);
 		if(readedI >= numElements) {
 			printf("readedI=%zu\n", readedI);
 		}
 		if(readedSizeI != writeArray[readedI]) {
 			printf("WrongSize[READ, i=%zu, orig=%zu, curr=%zu]\n", readedI, writeArray[readedI], readedSizeI);
 		}
-		__atomic_fetch_add(&readArray[readedI], 1, __ATOMIC_RELEASE);
+		__atomic_add_fetch(&readArray[readedI], 1, __ATOMIC_RELEASE);
 	}
 	clock_gettime(CLOCK_REALTIME, &readTimeEnd);
 	timerTimespecDiff(&readTimeStart, &readTimeEnd, &readTime);

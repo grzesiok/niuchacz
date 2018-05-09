@@ -6,10 +6,10 @@
 #include "../../../include/memory.h"
 
 typedef struct {
-	void* _head;
-	void* _tail;
+	volatile void* _head;
+	volatile void* _tail;
     size_t _maxsize;
-    size_t _leftsize;
+    volatile size_t _leftsize;
     void* _leftborder;
     void* _rightborder;
     pthread_mutex_t _readMutex;
