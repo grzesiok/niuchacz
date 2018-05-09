@@ -1,12 +1,18 @@
 #include "cmd_manager.h"
 
-static const char* cgCreateSchema =
+static const char* cgCreateSchemaCmdList =
 		"create table if not exists cmdmgr_cmdlist ("
 		"code text, description text, version integer, routine integer"
 		");";
 static const char* cgInsertCommand =
 		"insert into cmdmgr_cmdlist(code, description, version, routine)"
 		"values (?, ?, ?, ?);";
+
+typedef struct {
+	queue_t *_pjobQueue;
+} CMD_MANAGER, *PCMD_MANAGER;
+
+CMD_MANAGER gCmdManager;
 
 /* Internal API */
 
@@ -42,17 +48,52 @@ static PJOB_ROUTINE i_cmdmgrFindRoutine(const char* cmd) {
     return NULL;
 }
 
+KSTATUS i_cmdmgrJobExec(PJOB pjob) {
+	int ret;
+	PJOB_ROUTINE proutine;
+	printf("i_cmdmgrJobExec\n");
+	proutine = i_cmdmgrFindRoutine(pjob->_cmd);
+	if(proutine == NULL)
+		return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
+	ret = proutine(pjob->_ts, pjob->_data, pjob->_dataSize);
+	if(ret != 0)
+		//job should be rescheduled again
+		//or job should be freed if rescheduled is not an option
+		return KSTATUS_UNSUCCESS;
+	return KSTATUS_SUCCESS;
+}
+
+void* i_cmdmgrExecutor(void* arg) {
+	char buffer[100000];
+	PJOB pjob = (PJOB)buffer;
+
+	SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
+	while(svcKernelIsRunning()) {
+		queue_read(gCmdManager._pjobQueue, pjob, NULL);
+		i_cmdmgrJobExec(pjob);
+	}
+	SYSLOG(LOG_INFO, "[CMDMGR] Stopping Job Executor");
+	return NULL;
+}
+
 /* External API */
 
 KSTATUS cmdmgrStart(void) {
 	KSTATUS _status;
 	SYSLOG(LOG_INFO, "[CMDMGR] Starting...");
-	_status = dbExec(svcKernelGetDb(), cgCreateSchema);
+	_status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList);
+    if(!KSUCCESS(_status))
+    	return _status;
+	gCmdManager._pjobQueue = queue_create(1000000);
+	if(gCmdManager._pjobQueue == NULL)
+		return KSTATUS_UNSUCCESS;
+	_status = psmgrCreateThread(i_cmdmgrExecutor, NULL);
 	return _status;
 }
 
 void cmdmgrStop(void) {
 	SYSLOG(LOG_INFO, "[CMDMGR] Stopping...");
+	queue_destroy(gCmdManager._pjobQueue);
 }
 
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_ROUTINE proutine, int version) {
@@ -117,20 +158,18 @@ KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct t
 }
 
 KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode) {
-	PJOB_ROUTINE proutine;
-	int ret;
+	KSTATUS _status = KSTATUS_UNSUCCESS;
 
 	DPRINTF("Execute job");
-	proutine = i_cmdmgrFindRoutine(pjob->_cmd);
-	if(proutine == NULL)
-		return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
+	switch(mode) {
 	//if mode == JobModeAsynchronous then function should back immediatelly and schedule job to future
+	case JobModeAsynchronous:
+		queue_write(gCmdManager._pjobQueue, pjob, pjob->_dataSize+sizeof(JOB), NULL);
+		return KSTATUS_SUCCESS;
 	//if mode == JobModeSynchronous then function should wait until execution is done
-	ret = proutine(pjob->_ts, pjob->_data, pjob->_dataSize);
-	if(ret != 0)
-		//job should be rescheduled again
-		//or job should be freed if rescheduled is not an option
-		return KSTATUS_UNSUCCESS;
-	FREE(pjob);
-	return KSTATUS_SUCCESS;
+	case JobModeSynchronous:
+		_status = i_cmdmgrJobExec(pjob);
+		FREE(pjob);
+	}
+	return _status;
 }

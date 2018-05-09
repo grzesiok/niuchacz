@@ -39,7 +39,9 @@ KSTATUS svcKernelInit(const char* confFileName) {
 	KSTATUS _status;
 
 	__atomic_store_n(&gKernelCfg._status, SVC_KERNEL_STATUS_START_PENDING, __ATOMIC_RELEASE);
+#ifndef DEBUG_MODE
 	svcKernelInitService();
+#endif
 	/* Open system log and write message to it */
 	openlog("NIUCHACZ", LOG_PID|LOG_CONS, LOG_DAEMON);
 	SYSLOG(LOG_INFO, "Starting...");

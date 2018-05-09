@@ -168,7 +168,7 @@ void* pcap_thread_routine(void* arg)
 				SYSLOG(LOG_ERR, "Couldn't prepare packet to analyze");
 				continue;
 			}
-			_status = cmdmgrJobExec(pjob, JobModeSynchronous);
+			_status = cmdmgrJobExec(pjob, JobModeAsynchronous);
 			if(!KSUCCESS(_status)) {
 				SYSLOG(LOG_ERR, "Couldn't execute job");
 				continue;

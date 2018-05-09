@@ -27,5 +27,5 @@ KSTATUS svcKernelStatus(int requested_status);
 int svcKernelGetCurrentStatus(void);
 sqlite3* svcKernelGetDb(void);
 PKERNEL svcKernelGetCfg(void);
-#define svcKernelIsRunning() (svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_RUNNING)
+#define svcKernelIsRunning() (svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_RUNNING || svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_START_PENDING)
 #endif
