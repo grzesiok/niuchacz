@@ -2,11 +2,12 @@
 FILEASM64OBJ=
 FILECOBJ=\
     src/psmgr/psmgr.o\
-    src/database/database.o\
+    src/svc_kernel/database/database.o\
     src/svc_kernel/svc_lock.o\
     src/svc_kernel/svc_kernel.o\
     src/svc_kernel/svc_statistics.o\
     src/svc_kernel/svc_time.o\
+    src/svc_kernel/execute_unit/cmd_manager.o\
     src/main.o\
     src/mapper.o
     
@@ -17,6 +18,16 @@ FILECOBJ_TESTHASHPERF=\
 FILECOBJ_TESTPSMGR=\
     src/tests/testpsmgr.o\
     src/psmgr/psmgr.o
+    
+FILECOBJ_TESTCMDMGR=\
+    src/psmgr/psmgr.o\
+    src/svc_kernel/database/database.o\
+    src/svc_kernel/svc_lock.o\
+    src/svc_kernel/svc_kernel.o\
+    src/svc_kernel/svc_statistics.o\
+    src/svc_kernel/svc_time.o\
+    src/svc_kernel/execute_unit/cmd_manager.o\
+    src/tests/testcmdmgr.o
 
 #plik wynikowy
 OUTFILE=niuchacz.out

@@ -1,3 +1,5 @@
+.PHONY: all prepare clean_dependencies build_dependencies build clean run install
+
 include Makefile.config
 include Makefile.compile
 #Dodatkowe polecenia
@@ -9,7 +11,7 @@ ECHO=echo
 	@$(ASM) $(ASMFLAGS) -o $(OBJDIR)/$@ $<
 
 %.o:%.c
-	@$(ECHO) [C] $@
+	@$(ECHO) [C] $(CC) $(CFLAGS) -o $(OBJDIR)/$@
 	@$(CC) $(CFLAGS) -o $(OBJDIR)/$@ $<
 
 FILEASMOBJ=$(FILEASM64OBJ)
@@ -18,12 +20,18 @@ FILEASM64OBJ_=$(FILEASM64OBJ:%=$(OBJDIR)/%)
 FILEASM32OBJ_=$(FILEASM32OBJ:%=$(OBJDIR)/%)
 FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
+DEFINES=_GNU_SOURCE
+
+prepare:
+	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
+	@$(ECHO) CC=$(CC) CFLAGS=$(CFLAGS)
+	@$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
 
 clean_dependencies:
 	#@$(MAKE) -C libalgorithms clean
 	#@$(MAKE) -C sqlite clean
 	
-build_dependencies:
+build_dependencies: prepare
 	#@$(MAKE) -C libalgorithms all
 	#@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
 	#@$(MAKE) -C sqlite all
@@ -46,21 +54,29 @@ all: clean build
 
 run: all
 	./$(OUTFILE)
-
-prepare:
-	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
-	@$(ECHO) CC=$(CC) CFLAGS=$(CFLAGS)
-	@$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
+	
+install:
+	systemctl stop niuchacz.service
+	cp niuchacz.out /usr/bin/niuchacz
+	cp libalgorithms/libalgorithms.so /lib64/libalgorithms.so
+	cp sys/etc/systemd/system/niuchacz.service /etc/systemd/system/niuchacz.service
+	cp sys/etc/niuchacz/* /etc/niuchacz
+	systemctl daemon-reload
+	systemctl start niuchacz.service
 
 #kompilacja
 $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
 	@$(ECHO) [COMPILE] $(OUTFILE)
 	@$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
 	
-testhashperf.out: build_dependencies $(FILECOBJ_TESTHASHPERF)
+testhashperf.out: enable_debug build_dependencies $(FILECOBJ_TESTHASHPERF)
 	@$(ECHO) [COMPILE] testhashperf.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTHASHPERF)
 	
-testpsmgr.out: $(FILECOBJ_TESTPSMGR)
+testpsmgr.out: enable_debug build_dependencies $(FILECOBJ_TESTPSMGR)
 	@$(ECHO) [COMPILE] testpsmgr.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTPSMGR)
+	
+testcmdmgr.out: build_dependencies $(FILECOBJ_TESTCMDMGR)
+	@$(ECHO) [COMPILE] testcmdmgr.out
+	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTCMDMGR)

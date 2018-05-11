@@ -51,11 +51,11 @@ testHASH64(Murmur, hash64Murmur)
 
 #define doCryptTEST(NAME, SIZE)\
 		unsigned long long timeValue##NAME = testCrypt##NAME(i, SIZE);\
-		printf("%s;%d;%d;%llu;%f\n", #NAME, i, SIZE, timeValue##NAME, ns_to_s(timeValue##NAME));
+		DPRINTF("%s;%d;%d;%llu;%f", #NAME, i, SIZE, timeValue##NAME, ns_to_s(timeValue##NAME));
 
 #define doTEST64(NAME, SIZE)\
 		unsigned long long timeValue##NAME = test##NAME(i, SIZE);\
-		printf("%s;%d;%d;%llu;%f\n", #NAME, i, SIZE, timeValue##NAME, ns_to_s(timeValue##NAME));
+		DPRINTF("%s;%d;%d;%llu;%f", #NAME, i, SIZE, timeValue##NAME, ns_to_s(timeValue##NAME));
 
 double ns_to_s(unsigned long long nanoseconds) {
 	double ns = (double)nanoseconds;
@@ -74,17 +74,17 @@ void printHashDist##NAME(unsigned long long hashTableSize, unsigned long long n)
 			hashTable[hashValue%hashTableSize] = 9;\
 	}\
 	double harmonicMean = 0.0f;\
-	printf("hashTable(%6s,%3llu,%5llu)=[", #NAME, hashTableSize, n);\
+	DPRINTF("hashTable(%6s,%3llu,%5llu)=[", #NAME, hashTableSize, n);\
 	unsigned long long hashTableNonZero = 0;\
 	for(i = 0;i < hashTableSize;i++) {\
 		if(hashTable[i] != 0) {\
 			harmonicMean += (1.0f/(double)hashTable[i]);\
 			hashTableNonZero++;\
 		}\
-		printf("%u", hashTable[i]);\
+		DPRINTF("%u", hashTable[i]);\
 	}\
 	harmonicMean = 1.0f/(harmonicMean/(double)hashTableNonZero);\
-	printf("]=%.3f(%llu)\n", harmonicMean, hashTableNonZero);\
+	DPRINTF("]=%.3f(%llu)", harmonicMean, hashTableNonZero);\
 }
 
 testDIST64(Murmur)

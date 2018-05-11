@@ -126,6 +126,13 @@ begin
 end;
 /
 
+CREATE OR REPLACE TRIGGER open_pdbs 
+  AFTER STARTUP ON DATABASE 
+BEGIN 
+   EXECUTE IMMEDIATE 'ALTER PLUGGABLE DATABASE ALL OPEN'; 
+END open_pdbs;
+/
+
 --privileges
 grant select on dwh_load.netdumps to dwh_core;
 grant execute on dwh_logging.pkg_logging to dwh_core;

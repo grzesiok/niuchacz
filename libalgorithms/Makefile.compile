@@ -6,7 +6,8 @@ FILECOBJ=\
     src/ext/murmur/MurmurHash2_64.o\
     src/algorithms/hash/hash.o\
     src/algorithms/spinlock/spinlock.o\
-    src/algorithms/doublylinkedlist/doublylinkedlist.o
+    src/algorithms/doublylinkedlist/doublylinkedlist.o\
+    src/algorithms/queue/queue.o
 
 #plik wynikowy
 OUTFILE=libalgorithms.so
@@ -29,3 +30,7 @@ FILECOBJ_TESTDOUBLYLINKEDLIST=\
     tests/testdoublylinkedlist.o\
     src/algorithms/spinlock/spinlock.o\
     src/algorithms/doublylinkedlist/doublylinkedlist.o
+    
+FILECOBJ_TESTQUEUE=\
+    tests/testqueue.o\
+    src/algorithms/queue/queue.o

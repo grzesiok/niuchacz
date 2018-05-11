@@ -22,16 +22,18 @@ static void* psmgrRoutine(void* p_arg) {
 }
 
 KSTATUS psmgrStart(void) {
-	DPRINTF("psmgr_start\n");
+	DPRINTF("psmgr_start");
+	SYSLOG(LOG_INFO, "[PSMGR] Starting...");
 	return KSTATUS_SUCCESS;
 }
 
 void psmgrStop(void) {
-	DPRINTF("psmgr_stop\n");
+	DPRINTF("psmgr_stop");
+	SYSLOG(LOG_INFO, "[PSMGR] Stopping...");
 }
 
 void psmgrIdle(unsigned long long waitTimeInSec) {
-	DPRINTF("psmgr_idle\n");
+	DPRINTF("psmgr_idle");
 	void *p_ret;
 	int i;
 	struct timespec ts;
@@ -47,7 +49,7 @@ void psmgrIdle(unsigned long long waitTimeInSec) {
 }
 
 KSTATUS psmgrCreateThread(void *(*p_startRoutine) (void *), void *p_arg) {
-	DPRINTF("psmgr_create_thread\n");
+	DPRINTF("psmgr_create_thread");
 	KSTATUS _status = KSTATUS_SUCCESS;
 	PPSMGR_THREAD_CTX p_threadCtx;
 
