@@ -237,20 +237,25 @@ bool i_doublylinkedlistQuerySingleList(PDOUBLYLINKEDLIST_ENTRY_HEADER plist_base
 
 bool doublylinkedlistQuery(PDOUBLYLINKEDLIST pdoublylinkedlist, PDOUBLYLINKEDLIST_QUERY pquery, size_t *psize_inout) {
 	size_t size_out = 0;
-	bool allRecordsArePulled = false;
+	bool activeRecordsArePulled = false, deletedRecordsArePulled = false;
 	spinlockLock(&pdoublylinkedlist->_isActiveEntriesLocked);
-	spinlockLock(&pdoublylinkedlist->_isDeletedEntriesLocked);
 	if(!i_doublylinkedlistQuerySingleList(&pdoublylinkedlist->_activeEntries, &pquery, psize_inout, &size_out))
-		goto __cleanup;
+		goto __cleanup1;
+	activeRecordsArePulled = true;
+__cleanup1:
+	spinlockUnlock(&pdoublylinkedlist->_isActiveEntriesLocked);
+	if(!activeRecordsArePulled)
+		goto __end;
+	spinlockLock(&pdoublylinkedlist->_isDeletedEntriesLocked);
 	if(!i_doublylinkedlistQuerySingleList(&pdoublylinkedlist->_deletedEntries, &pquery, psize_inout, &size_out))
-		goto __cleanup;
-	allRecordsArePulled = true;
-__cleanup:
+		goto __cleanup2;
+	deletedRecordsArePulled = true;
+__cleanup2:
+	spinlockUnlock(&pdoublylinkedlist->_isDeletedEntriesLocked);
+__end:
 	memset(pquery, 0, sizeof(void*));
 	*psize_inout = size_out;
-	spinlockUnlock(&pdoublylinkedlist->_isDeletedEntriesLocked);
-	spinlockUnlock(&pdoublylinkedlist->_isActiveEntriesLocked);
-	return allRecordsArePulled;
+	return activeRecordsArePulled && deletedRecordsArePulled;
 }
 
 PDOUBLYLINKEDLIST_QUERY doublylinkedlistQueryNext(PDOUBLYLINKEDLIST_QUERY pquery) {
