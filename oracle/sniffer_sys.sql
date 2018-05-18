@@ -1,3 +1,6 @@
+alter system set local_listener='(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=localhost)(PORT=1521)))';
+alter system register;
+
 alter session set container = pdbdwh;
 
 --Create tablespaces
