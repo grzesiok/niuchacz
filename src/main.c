@@ -195,6 +195,8 @@ int main(int argc, char* argv[])
 	const char *dbFileName, *deviceName;
 	PKERNEL pKernelCfg = svcKernelGetCfg();
 
+	return import_db("/root/live.db", "PDBDWH", "dwh_load", "dwh_load");
+
 	if(argc != 2)
 		return -1;
 	_status = svcKernelInit(argv[1]);

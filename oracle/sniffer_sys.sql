@@ -40,12 +40,19 @@ create tablespace ts_loader_files
     autoextend on next 100M maxsize unlimited
     extent management local
     segment space management auto;
+create tablespace ts_loader_load
+    datafile '&&PATH/ts_loader_load_1.dbf'
+    size 3G
+    autoextend on next 100M maxsize unlimited
+    extent management local
+    segment space management auto;
 
 
 create user dwh_load identified by dwh_load default tablespace TS_LOADER_DATA  account unlock;
 grant connect, resource to dwh_load;
 alter user dwh_load quota unlimited on TS_LOADER_DATA;
 alter user dwh_load quota unlimited on TS_LOADER_DATA_IDX;
+alter user dwh_load quota unlimited on TS_LOADER_LOAD;
 grant create materialized view to dwh_load;
 grant create synonym to dwh_load;
 
