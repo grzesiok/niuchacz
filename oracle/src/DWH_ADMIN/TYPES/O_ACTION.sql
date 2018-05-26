@@ -1,4 +1,4 @@
-create or replace TYPE O_ACTION authid current_user AS OBJECT(
+create or replace TYPE O_ACTION force authid current_user AS OBJECT(
   key# varchar2(30),
   dbop_eid number,
   dbop_name varchar2(4000),
@@ -11,8 +11,8 @@ create or replace TYPE O_ACTION authid current_user AS OBJECT(
   final member procedure p_execafter,
   final static procedure p_process(i_action in out nocopy o_action),
   --object serialization
-  final static function f_serialize(i_bytecode varchar2) return o_action,
-  member function f_deserialize return varchar2
+  final static function f_serialize(i_bytecode xmltype) return o_action,
+  final static function f_deserialize(i_object o_action) return xmltype
 ) not final not instantiable;
 /
 create or replace TYPE BODY O_ACTION AS
@@ -21,7 +21,7 @@ create or replace TYPE BODY O_ACTION AS
   begin
     null;
   end;
-  
+
   member procedure p_destroy as
   begin
     null;
@@ -44,9 +44,9 @@ create or replace TYPE BODY O_ACTION AS
   BEGIN
     dbms_sql_monitor.end_operation(dbop_name => self.dbop_name, dbop_eid => self.dbop_eid);
     l_dbop_result := dbms_sql_monitor.report_sql_monitor(dbop_name => self.dbop_name, type => 'XML', report_level => 'ALL');
-    pkg_actions_internal.p_hist_insert(i_action => self.f_deserialize, i_dbop_result => l_dbop_result);
+    pkg_actions_internal.p_hist_insert(i_action => self, i_dbop_result => l_dbop_result);
   END p_execafter;
-  
+
   final static procedure p_process(i_action in out nocopy o_action) as
   begin
     i_action.p_create;
@@ -57,23 +57,22 @@ create or replace TYPE BODY O_ACTION AS
   exception
     when others then
       if(i_action.dbop_eid is not null) then
-        dbms_sql_monitor.end_operation(dbop_name => i_action.dbop_name, dbop_eid => i_action.dbop_eid);
+        null;--dbms_sql_monitor.end_operation(dbop_name => i_action.dbop_name, dbop_eid => i_action.dbop_eid);
       end if;
       rollback;
       raise_application_error(-20000, 'Error during processing action.', true);
   end;
 
-  final static function f_serialize(i_bytecode varchar2) return o_action AS
+  final static function f_serialize(i_bytecode xmltype) return o_action AS
     l_cmd o_action;
   BEGIN
-    execute immediate 'begin :1 := '||i_bytecode||' end;' using in out l_cmd;
+    i_bytecode.toobject(l_cmd);
     RETURN l_cmd;
   END f_serialize;
 
-  member function f_deserialize return varchar2 AS
+  final static function f_deserialize(i_object o_action) return xmltype AS
   BEGIN
-    raise_application_error(-20000, 'Unimplemented feature');
-    RETURN NULL;
+    return xmltype(i_object);
   END f_deserialize;
 
 END;
