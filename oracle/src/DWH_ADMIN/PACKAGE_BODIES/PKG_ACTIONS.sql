@@ -7,11 +7,21 @@ create or replace PACKAGE BODY PKG_ACTIONS AS
     loop
       l_action := f_dequeue(i_autocommit => false, i_waittime => 1);
       exit when (l_action is null);
-      o_action.p_process(l_action);
+      l_action.p_create;
+      l_action.p_execbefore;
+      l_action.p_exec;
+      l_action.p_execafter;
+      l_action.p_destroy;
       commit;
     end loop;
   exception
     when e_dbmsaq_timeout then null;
+    when others then
+      if(l_action.dbop_eid is not null) then
+        null;--dbms_sql_monitor.end_operation(dbop_name => i_action.dbop_name, dbop_eid => i_action.dbop_eid);
+      end if;
+      rollback;
+      raise_application_error(-20000, 'Error during processing action.', true);
   END;
 
   procedure p_enqueue(i_recipient varchar2 default sys_context('userenv', 'session_user'), i_action o_action) AS

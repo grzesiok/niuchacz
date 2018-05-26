@@ -73,7 +73,14 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
                     message_properties => l_message_properties,
                     payload => l_cmd,
                     msgid => l_message_id);
-    l_action := o_action.f_serialize(l_cmd);
+    execute immediate 'declare
+                         l_cmd xmltype;
+                         l_action '||l_cmd.getrootelement()||';
+                       begin
+                         l_cmd := :1;
+                         l_cmd.toobject(l_action);
+                         :2 := l_action;
+                       end;' using in l_cmd, in out l_action;
     if(i_autocommit) then
       commit;
     end if;

@@ -9,7 +9,6 @@ create or replace TYPE O_ACTION force authid current_user AS OBJECT(
   final member procedure p_execbefore,
   member procedure p_exec,
   final member procedure p_execafter,
-  final static procedure p_process(i_action in out nocopy o_action),
   --object serialization
   final static function f_serialize(i_bytecode xmltype) return o_action,
   final static function f_deserialize(i_object o_action) return xmltype
@@ -31,9 +30,9 @@ create or replace TYPE BODY O_ACTION AS
   BEGIN
     --dbms_output.put_line('self.dbop_name='||self.dbop_name||' self.dbop_eid='||self.dbop_eid);
     self.dbop_name := self.key#||to_char(systimestamp, 'yyyymmddhh24missff');
-    self.dbop_eid := dbms_sql_monitor.begin_operation(dbop_name => self.dbop_name, forced_tracking => dbms_sql_monitor.force_tracking);
+    --self.dbop_eid := dbms_sql_monitor.begin_operation(dbop_name => self.dbop_name, forced_tracking => dbms_sql_monitor.force_tracking);
   END p_execbefore;
-
+  
   member procedure p_exec AS
   BEGIN
     raise_application_error(-20000, 'Unimplemented feature');
@@ -42,26 +41,10 @@ create or replace TYPE BODY O_ACTION AS
   final member procedure p_execafter AS
     l_dbop_result clob;
   BEGIN
-    dbms_sql_monitor.end_operation(dbop_name => self.dbop_name, dbop_eid => self.dbop_eid);
-    l_dbop_result := dbms_sql_monitor.report_sql_monitor(dbop_name => self.dbop_name, type => 'XML', report_level => 'ALL');
+    --dbms_sql_monitor.end_operation(dbop_name => self.dbop_name, dbop_eid => self.dbop_eid);
+    --l_dbop_result := dbms_sql_monitor.report_sql_monitor(dbop_name => self.dbop_name, type => 'XML', report_level => 'ALL');
     pkg_actions_internal.p_hist_insert(i_action => self, i_dbop_result => l_dbop_result);
   END p_execafter;
-
-  final static procedure p_process(i_action in out nocopy o_action) as
-  begin
-    i_action.p_create;
-    i_action.p_execbefore;
-    i_action.p_exec;
-    i_action.p_execafter;
-    i_action.p_destroy;
-  exception
-    when others then
-      if(i_action.dbop_eid is not null) then
-        null;--dbms_sql_monitor.end_operation(dbop_name => i_action.dbop_name, dbop_eid => i_action.dbop_eid);
-      end if;
-      rollback;
-      raise_application_error(-20000, 'Error during processing action.', true);
-  end;
 
   final static function f_serialize(i_bytecode xmltype) return o_action AS
     l_cmd o_action;
