@@ -7,11 +7,11 @@ create or replace PACKAGE BODY PKG_ACTIONS AS
     loop
       l_action := f_dequeue(i_autocommit => false, i_waittime => 1);
       exit when (l_action is null);
-      --l_action.p_create;
-      --l_action.p_execbefore;
-      --l_action.p_exec;
-      --l_action.p_execafter;
-      --l_action.p_destroy;
+      l_action.p_create;
+      l_action.p_execbefore;
+      l_action.p_exec;
+      l_action.p_execafter;
+      l_action.p_destroy;
       commit;
     end loop;
   exception
