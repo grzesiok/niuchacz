@@ -38,7 +38,9 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
     end if;
   end;
 
-  procedure p_enqueue(i_recipient varchar2 default sys_context('userenv', 'session_user'), i_action o_action) AS
+  procedure p_enqueue(i_recipient varchar2 default sys_context('userenv', 'session_user'),
+                      i_autocommit boolean default true,
+                      i_action o_action) AS
     l_queue_options dbms_aq.enqueue_options_t;
     l_message_properties dbms_aq.message_properties_t;
     l_message_id raw(16);
@@ -55,10 +57,14 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
                     message_properties => l_message_properties,
                     payload => l_cmd,
                     msgid => l_message_id);
-    commit;
+    if(i_autocommit) then
+      commit;
+    end if;
   END p_enqueue;
 
-  function f_dequeue(i_consumer varchar2 default sys_context('userenv', 'session_user'), i_waittime number default dbms_aq.forever, i_autocommit boolean default true) return o_action AS
+  function f_dequeue(i_consumer varchar2 default sys_context('userenv', 'session_user'),
+                     i_waittime number default dbms_aq.forever,
+                     i_autocommit boolean default true) return o_action AS
     l_queue_options dbms_aq.dequeue_options_t;
     l_message_properties dbms_aq.message_properties_t;
     l_message_id raw(16);

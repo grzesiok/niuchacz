@@ -9,3 +9,13 @@ begin
   dbms_aqadm.start_queue(queue_name => 'aq$_core_actions_queue_e', enqueue => false, dequeue => true);
 end;
 /
+BEGIN
+  DBMS_SCHEDULER.CREATE_JOB(job_name => 'j_download_files_schedule',
+                            job_type => 'PLSQL_BLOCK',
+                            job_action => 'BEGIN pkg_download_files.p_job_handler; END;',
+                            --start_date => /* As soon as job is enabled */,
+                            repeat_interval => 'FREQ=HOURLY',
+                            enabled =>  TRUE,
+                            comments => 'Automatic schedule download fresh files');
+END;
+/

@@ -1,21 +1,22 @@
-create or replace TYPE o_download_action under o_action(
+create or replace TYPE o_download_files_action under o_action(
   url# varchar2(4000),
   hash_md5# raw(16),
-  constructor function o_download_action(i_url varchar2, i_hash_md5 raw) return self as result,
+  constructor function o_download_files_action(i_url varchar2, i_hash_md5 raw) return self as result,
   overriding member procedure p_exec
 );
 /
-create or replace TYPE BODY o_download_action AS
+create or replace TYPE BODY o_download_files_action AS
 
-  constructor function o_download_action(i_url varchar2, i_hash_md5 raw) return self as result AS
+  constructor function o_download_files_action(i_url varchar2, i_hash_md5 raw) return self as result AS
   BEGIN
-    self.key# := 'oda';
+    self.key# := 'odfa';
     self.url# := i_url;
     self.hash_md5# := i_hash_md5;
     RETURN;
-  END O_DOWNLOAD_ACTION;
+  END o_download_files_action;
 
   overriding member procedure p_exec as
+    l_url_already_downloaded number;
     l_blob blob;
     l_max_retries number;
     l_wait_time number;
@@ -55,6 +56,12 @@ create or replace TYPE BODY o_download_action AS
       end;
     end;
   begin
+    select count(*) into l_url_already_downloaded
+    from download_files
+    where url# = self.url#;
+    if(l_url_already_downloaded > 0) then
+      return;
+    end if;
     l_max_retries := pkg_cfg_properties.f_get_properties('download_retries');
     l_wait_time := pkg_cfg_properties.f_get_properties('download_retry_wait');
     <<try_again>>
@@ -76,7 +83,8 @@ create or replace TYPE BODY o_download_action AS
         raise_application_error(-20001, 'Expected hash='||rawtohex(self.hash_md5#)||' current hash='||rawtohex(l_hash));
       end if;
     end if;
-    pkg_download_internal.p_hist_insert(i_starttime =>l_start_time, i_stoptime => l_stop_time, i_url => self.url#, i_content => l_blob);
+    insert into download_files(start_time#, stop_time#, url#, content#)
+      values (l_start_time, l_stop_time, self.url#, l_blob);
   end;
 
 END;

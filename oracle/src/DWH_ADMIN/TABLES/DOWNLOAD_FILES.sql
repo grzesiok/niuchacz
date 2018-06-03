@@ -2,7 +2,6 @@ create table download_files
 (
   start_time# timestamp,
   stop_time# timestamp,
-  username# varchar2(128),
   url# varchar2(4000),
   content# blob
 )

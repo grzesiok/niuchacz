@@ -85,6 +85,7 @@ grant execute on dbms_lock to dwh_admin;
 grant execute on dbms_crypto to dwh_admin;
 grant execute on dbms_aq to dwh_admin;
 grant execute on dbms_aqadm to dwh_admin;
+grant create job to dwh_admin;
 
 create user dwh_test identified by dwh_test default tablespace TS_LOADER_DATA account unlock;
 grant connect, resource to dwh_test;
