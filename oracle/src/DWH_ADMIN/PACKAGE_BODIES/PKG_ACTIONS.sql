@@ -1,19 +1,29 @@
 create or replace PACKAGE BODY PKG_ACTIONS AS
 
   procedure p_job_handler as
-    pragma autonomous_transaction;
-    l_action o_action;
   BEGIN
     loop
-      l_action := f_dequeue(i_autocommit => false, i_waittime => 1);
-      exit when (l_action is null);
-      l_action.p_create;
-      l_action.p_execbefore;
-      l_action.p_exec;
-      l_action.p_execafter;
-      l_action.p_destroy;
-      commit;
+      p_consume_single_action(i_waittime => 1);
     end loop;
+  END;
+
+  procedure p_consume_single_action(i_consumer varchar2 default sys_context('userenv', 'session_user'),
+                                    i_waittime number) as
+    pragma autonomous_transaction;
+    l_action o_action;
+  begin
+    l_action := f_dequeue(i_consumer => i_consumer,
+                          i_autocommit => false,
+                          i_waittime => 1);
+    if(l_action is null) then
+      return;
+    end if;
+    l_action.p_create;
+    l_action.p_execbefore;
+    l_action.p_exec;
+    l_action.p_execafter;
+    l_action.p_destroy;
+    commit;
   exception
     when e_dbmsaq_timeout then null;
     when others then
@@ -22,7 +32,7 @@ create or replace PACKAGE BODY PKG_ACTIONS AS
       end if;
       rollback;
       raise_application_error(-20000, 'Error during processing action.', true);
-  END;
+  end;
 
   procedure p_enqueue(i_recipient varchar2 default sys_context('userenv', 'session_user'),
                       i_autocommit boolean default true,

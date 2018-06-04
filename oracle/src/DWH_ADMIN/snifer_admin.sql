@@ -10,12 +10,22 @@ begin
 end;
 /
 BEGIN
-  DBMS_SCHEDULER.CREATE_JOB(job_name => 'j_download_files_schedule',
+  DBMS_SCHEDULER.CREATE_JOB(job_name => 'j_download_files_producer',
                             job_type => 'PLSQL_BLOCK',
-                            job_action => 'BEGIN pkg_download_files.p_job_handler; END;',
+                            job_action => 'BEGIN pkg_download_files.p_job_producer_handler; END;',
                             --start_date => /* As soon as job is enabled */,
                             repeat_interval => 'FREQ=HOURLY',
                             enabled =>  TRUE,
-                            comments => 'Automatic schedule download fresh files');
+                            comments => 'Automatic produce queue actions for fresh files');
+END;
+/
+BEGIN
+  DBMS_SCHEDULER.CREATE_JOB(job_name => 'j_download_files_consumer',
+                            job_type => 'PLSQL_BLOCK',
+                            job_action => 'BEGIN pkg_download_files.p_job_consumer_handler; END;',
+                            --start_date => /* As soon as job is enabled */,
+                            repeat_interval => 'FREQ=HOURLY',
+                            enabled =>  TRUE,
+                            comments => 'Automatic consume download actions');
 END;
 /

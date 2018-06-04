@@ -76,6 +76,7 @@ grant create procedure to dwh_logging;
 
 create user dwh_admin identified by dwh_admin default tablespace TS_LOADER_CORE account unlock;
 grant connect, resource to dwh_admin;
+alter user dwh_admin quota unlimited on TS_LOADER_FILES;
 alter user dwh_admin quota unlimited on TS_LOADER_CORE;
 alter user dwh_admin quota unlimited on TS_LOADER_CORE_IDX;
 alter user dwh_admin quota unlimited on TS_LOADER_CORE_HIST;
@@ -111,29 +112,29 @@ grant read on directory DWH_NETDUMPS_DIR to dwh_admin;
 exec dbms_java.grant_permission('DWH_ADMIN', 'SYS:java.io.FilePermission', '<<ALL FILES>>', 'read');
 
 begin
-  dbms_network_acl_admin.drop_acl(acl=> 'DWH_CORE_ACL.xml');
+  dbms_network_acl_admin.drop_acl(acl=> 'DWH_ADMIN_ACL.xml');
   dbms_network_acl_admin.create_acl(
-    acl => 'DWH_CORE_ACL.xml',
-    description => 'ACLs for DWH_CORE',
-    principal => 'DWH_CORE',
+    acl => 'DWH_ADMIN_ACL.xml',
+    description => 'ACLs for DWH_ADMIN',
+    principal => 'DWH_ADMIN',
     is_grant => true,
     privilege => 'resolve',
     start_date => null,
     end_date => null);
-  DBMS_NETWORK_ACL_ADMIN.ASSIGN_ACL(acl  => 'DWH_CORE_ACL.xml', host => '*');
+  DBMS_NETWORK_ACL_ADMIN.ASSIGN_ACL(acl  => 'DWH_ADMIN_ACL.xml', host => '*');
   commit;
 end;
 /
 begin
   dbms_network_acl_admin.drop_acl(acl=> 'DWH_CORE_ACL_CONNECT.xml');
   dbms_network_acl_admin.create_acl(
-        acl         => 'DWH_CORE_ACL_CONNECT.xml',
+        acl         => 'DWH_ADMIN_ACL_CONNECT.xml',
         description => 'ACL for dwh_loader',
-        principal   => 'DWH_CORE',
+        principal   => 'DWH_ADMIN',
         is_grant    =>  true,
         privilege   => 'connect');
   dbms_network_acl_admin.assign_acl(
-    acl => 'DWH_CORE_ACL_CONNECT.xml',
+    acl => 'DWH_ADMIN_ACL_CONNECT.xml',
     host => 'api.nbp.pl',
     lower_port => 80);
 end;
