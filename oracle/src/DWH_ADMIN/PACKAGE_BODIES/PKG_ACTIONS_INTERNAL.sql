@@ -50,6 +50,7 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
     p_heartbeat_queue(i_queue_name => 'q_core_actions',
                       i_exception_queue_name => 'aq$_core_actions_queue_e');
     l_cmd := o_action.f_deserialize(i_action);
+    dbms_output.put_line('l_cmd='||l_cmd.getClobVal());
     l_recipients(1) := sys.aq$_agent(name => i_recipient, address => null, protocol => null);
     l_message_properties.recipient_list := l_recipients;
     dbms_aq.enqueue(queue_name => 'q_core_actions',
@@ -81,7 +82,7 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
                     msgid => l_message_id);
     execute immediate 'declare
                          l_cmd xmltype;
-                         l_action '||l_cmd.getrootelement()||';
+                         l_action '||i_consumer||'.'||l_cmd.getrootelement()||';
                        begin
                          l_cmd := :1;
                          l_cmd.toobject(l_action);

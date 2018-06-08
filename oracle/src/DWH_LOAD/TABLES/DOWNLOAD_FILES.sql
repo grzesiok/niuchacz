@@ -5,7 +5,7 @@ create table download_files
   url# varchar2(4000),
   content# blob
 )
-tablespace ts_loader_core_hist
+tablespace ts_loader_files
 pctfree 0
 lob(content#) store as securefile lob$download_filecontent#
 (

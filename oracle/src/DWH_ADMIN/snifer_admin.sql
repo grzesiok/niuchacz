@@ -9,23 +9,6 @@ begin
   dbms_aqadm.start_queue(queue_name => 'aq$_core_actions_queue_e', enqueue => false, dequeue => true);
 end;
 /
-BEGIN
-  DBMS_SCHEDULER.CREATE_JOB(job_name => 'j_download_files_producer',
-                            job_type => 'PLSQL_BLOCK',
-                            job_action => 'BEGIN pkg_download_files.p_job_producer_handler; END;',
-                            --start_date => /* As soon as job is enabled */,
-                            repeat_interval => 'FREQ=HOURLY',
-                            enabled =>  TRUE,
-                            comments => 'Automatic produce queue actions for fresh files');
-END;
-/
-BEGIN
-  DBMS_SCHEDULER.CREATE_JOB(job_name => 'j_download_files_consumer',
-                            job_type => 'PLSQL_BLOCK',
-                            job_action => 'BEGIN pkg_download_files.p_job_consumer_handler; END;',
-                            --start_date => /* As soon as job is enabled */,
-                            repeat_interval => 'FREQ=HOURLY',
-                            enabled =>  TRUE,
-                            comments => 'Automatic consume download actions');
-END;
-/
+grant execute, under on  o_action to dwh_load with grant option;
+grant execute on pkg_cfg_properties to dwh_load;
+grant execute on pkg_actions to dwh_load;

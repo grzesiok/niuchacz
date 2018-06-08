@@ -25,7 +25,7 @@ create or replace PACKAGE BODY PKG_ACTIONS AS
     l_action.p_destroy;
     commit;
   exception
-    when e_dbmsaq_timeout then null;
+    --when e_dbmsaq_timeout then null;
     when others then
       if(l_action.dbop_eid is not null) then
         null;--dbms_sql_monitor.end_operation(dbop_name => i_action.dbop_name, dbop_eid => i_action.dbop_eid);

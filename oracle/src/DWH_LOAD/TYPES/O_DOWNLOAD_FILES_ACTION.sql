@@ -1,17 +1,19 @@
-create or replace TYPE o_download_files_action under o_action(
+create or replace TYPE o_download_files_action under dwh_admin.o_action(
   url# varchar2(4000),
   hash_md5# raw(16),
-  constructor function o_download_files_action(i_url varchar2, i_hash_md5 raw) return self as result,
+  l_download_file_def_id number,
+  constructor function o_download_files_action(i_download_file_def_id varchar2, i_url varchar2, i_hash_md5 raw) return self as result,
   overriding member procedure p_exec
 );
 /
 create or replace TYPE BODY o_download_files_action AS
 
-  constructor function o_download_files_action(i_url varchar2, i_hash_md5 raw) return self as result AS
+  constructor function o_download_files_action(i_download_file_def_id varchar2, i_url varchar2, i_hash_md5 raw) return self as result AS
   BEGIN
-    self.key# := 'odfa';
+    self.key# := 'df_odfa';
     self.url# := i_url;
     self.hash_md5# := i_hash_md5;
+    self.l_download_file_def_id := i_download_file_def_id;
     RETURN;
   END o_download_files_action;
 
@@ -24,7 +26,7 @@ create or replace TYPE BODY o_download_files_action AS
     l_hash raw(16);
     l_start_time timestamp;
     l_stop_time timestamp;
-    
+
     function f_download(p_url varchar2) return blob is
       l_http_request utl_http.req;
       l_http_response utl_http.resp;
@@ -55,6 +57,26 @@ create or replace TYPE BODY o_download_files_action AS
                raise_application_error(-20000, '??', true);
       end;
     end;
+    
+    procedure p_enqueue_importaction(i_url varchar2, i_hash_md5 raw) as
+      l_importaction_owner download_files_def.import_action_owner%type;
+      l_import_action_typename download_files_def.import_action_typename%type;
+      l_plsql_block varchar2(4000);
+    begin
+      select dfd.import_action_owner, dfd.import_action_typename
+        into l_importaction_owner, l_import_action_typename
+      from download_files_def dfd
+      where dfd.download_file_def_id = l_download_file_def_id;
+      l_plsql_block := 'declare
+                          l_action  '||l_importaction_owner||'.'||l_import_action_typename||' := '||l_importaction_owner||'.'||l_import_action_typename||'(:1, :2);
+                        begin
+                          dwh_admin.pkg_actions.p_enqueue(i_recipient => :3,
+                                                          i_autocommit => false,
+                                                          i_action => l_action);
+                        end;';
+      dbms_output.put_line(l_plsql_block);
+      execute immediate l_plsql_block using in i_url, in i_hash_md5, in l_importaction_owner;
+    end;
   begin
     select count(*) into l_url_already_downloaded
     from download_files
@@ -62,8 +84,8 @@ create or replace TYPE BODY o_download_files_action AS
     if(l_url_already_downloaded > 0) then
       return;
     end if;
-    l_max_retries := pkg_cfg_properties.f_get_properties('download_retries');
-    l_wait_time := pkg_cfg_properties.f_get_properties('download_retry_wait');
+    l_max_retries := dwh_admin.pkg_cfg_properties.f_get_properties('download_retries');
+    l_wait_time := dwh_admin.pkg_cfg_properties.f_get_properties('download_retry_wait');
     <<try_again>>
     begin
       l_start_time := systimestamp;
@@ -85,6 +107,7 @@ create or replace TYPE BODY o_download_files_action AS
     end if;
     insert into download_files(start_time#, stop_time#, url#, content#)
       values (l_start_time, l_stop_time, self.url#, l_blob);
+    p_enqueue_importaction(self.url#, self.hash_md5#);
   end;
 
 END;
