@@ -58,6 +58,7 @@ grant create materialized view to dwh_load;
 grant create synonym to dwh_load;
 grant execute on dbms_lock to dwh_load;
 grant execute on dbms_crypto to dwh_load;
+grant create job to dwh_load;
 
 create user dwh_core identified by dwh_core default tablespace TS_LOADER_CORE  account unlock;
 grant connect, resource to dwh_core;

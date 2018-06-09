@@ -1,6 +1,6 @@
 create or replace PACKAGE BODY PKG_DOWNLOAD_FILES AS
 
-  procedure p_job_producer_handler as
+  procedure p_job_producer_df_handler as
     l_curr_date date;
     l_sysdate date := sysdate;
   begin
@@ -10,7 +10,7 @@ create or replace PACKAGE BODY PKG_DOWNLOAD_FILES AS
       while(l_curr_date < l_sysdate)
       loop
         l_curr_date := l_curr_date + c.next_download_offset;
-        dwh_admin.pkg_actions.p_enqueue(i_recipient => 'RECP_DOWNLOAD_FILES',
+        dwh_admin.pkg_actions.p_enqueue(i_queue_name => g_queue_downloadfiles,
                                         i_autocommit => false,
                                         i_action => o_download_files_action(c.download_file_def_id, to_char(l_curr_date, c.url), null));
       end loop;
@@ -21,10 +21,18 @@ create or replace PACKAGE BODY PKG_DOWNLOAD_FILES AS
     commit;
   end;
 
-  procedure p_job_consumer_handler as
+  procedure p_job_consumer_df_handler as
   begin
     loop
-      dwh_admin.pkg_actions.p_consume_single_action(i_consumer => 'RECP_DOWNLOAD_FILES',
+      dwh_admin.pkg_actions.p_consume_single_action(i_queue_name => g_queue_downloadfiles,
+                                                    i_waittime => 1);
+    end loop;
+  end;
+  
+  procedure p_job_consumer_if_handler as
+  begin
+    loop
+      dwh_admin.pkg_actions.p_consume_single_action(i_queue_name => g_queue_importfiles,
                                                     i_waittime => 1);
     end loop;
   end;

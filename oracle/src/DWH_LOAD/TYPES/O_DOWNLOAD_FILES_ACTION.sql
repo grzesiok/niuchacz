@@ -70,7 +70,8 @@ create or replace TYPE BODY o_download_files_action AS
       l_plsql_block := 'declare
                           l_action  '||l_importaction_owner||'.'||l_import_action_typename||' := '||l_importaction_owner||'.'||l_import_action_typename||'(:1, :2);
                         begin
-                          dwh_admin.pkg_actions.p_enqueue(i_recipient => :3,
+                          dwh_admin.pkg_actions.p_enqueue(i_queue_name => pkg_download_files.g_queue_importfiles,
+                                                          i_recipient => :3,
                                                           i_autocommit => false,
                                                           i_action => l_action);
                         end;';
