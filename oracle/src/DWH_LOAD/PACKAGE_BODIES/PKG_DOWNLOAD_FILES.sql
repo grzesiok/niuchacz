@@ -9,10 +9,10 @@ create or replace PACKAGE BODY PKG_DOWNLOAD_FILES AS
       l_curr_date := c.next_download;
       while(l_curr_date < l_sysdate)
       loop
-        l_curr_date := l_curr_date + c.next_download_offset;
         dwh_admin.pkg_actions.p_enqueue(i_queue_name => g_queue_downloadfiles,
                                         i_autocommit => false,
                                         i_action => o_download_files_action(c.download_file_def_id, to_char(l_curr_date, c.url), null));
+        l_curr_date := l_curr_date + c.next_download_offset;
       end loop;
       update download_files_def
         set next_download = l_sysdate+1

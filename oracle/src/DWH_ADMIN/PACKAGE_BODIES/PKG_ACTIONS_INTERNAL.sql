@@ -1,6 +1,8 @@
 create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
 
   g_queue_table constant varchar2(128) := 'core_actions_queue';
+  e_dbmsaq_end_of_group exception;
+  pragma exception_init(end_of_group, -25235);
 
   procedure p_heartbeat_queue(i_queue_name varchar2) as
     l_upp_queue_table user_queues.queue_table%type;
@@ -56,7 +58,8 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
       dbms_aqadm.create_queue_table(queue_table => g_queue_table,
                                     comment => 'Main Queue with all actions in system',
                                     queue_payload_type => 'SYS.XMLType',
-                                    multiple_consumers => true);
+                                    multiple_consumers => true,
+                                    message_grouping => dbms_aqadm.transactional);
     end if;
     /* If queue not exists we need to create it */
     if(l_queue_exists = 'N') then
@@ -101,6 +104,7 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
     dbms_output.put_line('l_cmd='||l_cmd.getClobVal());
     l_recipients(1) := sys.aq$_agent(name => i_recipient, address => null, protocol => null);
     l_message_properties.recipient_list := l_recipients;
+    l_queue_options.visibility := dbms_aq.on_commit;
     dbms_aq.enqueue(queue_name => i_queue_name,
                     enqueue_options => l_queue_options,
                     message_properties => l_message_properties,
@@ -125,11 +129,20 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
     l_queue_options.consumer_name := i_consumer;
     l_queue_options.visibility := dbms_aq.on_commit;
     l_queue_options.wait := i_waittime;
-    dbms_aq.dequeue(queue_name => i_queue_name,
-                    dequeue_options => l_queue_options,
-                    message_properties => l_message_properties,
-                    payload => l_cmd,
-                    msgid => l_message_id);
+    l_queue_options.navigation := dbms_aq.first_message;
+    loop
+      begin
+        dbms_aq.dequeue(queue_name => i_queue_name,
+                        dequeue_options => l_queue_options,
+                        message_properties => l_message_properties,
+                        payload => l_cmd,
+                        msgid => l_message_id);
+        exit;
+      exception
+        when e_dbmsaq_end_of_group
+          then l_queue_options.navigation := dbms_aq.next_transaction;
+      end;
+    end loop;
     execute immediate 'declare
                          l_cmd xmltype;
                          l_action '||i_consumer||'.'||l_cmd.getrootelement()||';
