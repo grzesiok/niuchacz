@@ -148,6 +148,8 @@ BEGIN
 END open_pdbs;
 /
 
+@$ORACLE_HOME/rdbms/admin/profload.sql
+
 --privileges
 grant select on dwh_load.netdumps to dwh_core;
 grant execute on dwh_logging.pkg_logging to dwh_core;

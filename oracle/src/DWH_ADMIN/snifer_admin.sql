@@ -12,3 +12,4 @@ end;
 grant execute, under on  o_action to dwh_load with grant option;
 grant execute on pkg_cfg_properties to dwh_load;
 grant execute on pkg_actions to dwh_load;
+@$ORACLE_HOME/rdbms/admin/proftab.sql

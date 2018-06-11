@@ -1,4 +1,4 @@
-
+@$ORACLE_HOME/rdbms/admin/proftab.sql
 BEGIN
   DBMS_SCHEDULER.CREATE_JOB(job_name => 'j_download_files_producer',
                             job_type => 'PLSQL_BLOCK',
