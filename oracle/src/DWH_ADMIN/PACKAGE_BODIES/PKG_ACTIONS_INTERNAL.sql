@@ -2,7 +2,7 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
 
   g_queue_table constant varchar2(128) := 'core_actions_queue';
   e_dbmsaq_end_of_group exception;
-  pragma exception_init(end_of_group, -25235);
+  pragma exception_init(e_dbmsaq_end_of_group, -25235);
 
   procedure p_heartbeat_queue(i_queue_name varchar2) as
     l_upp_queue_table user_queues.queue_table%type;
