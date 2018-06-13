@@ -27,6 +27,8 @@ create or replace PACKAGE BODY PKG_DOWNLOAD_FILES AS
       dwh_admin.pkg_actions.p_consume_single_action(i_queue_name => g_queue_downloadfiles,
                                                     i_waittime => 1);
     end loop;
+  exception
+    when dwh_admin.pkg_actions.e_dbmsaq_timeout then return;
   end;
   
   procedure p_job_consumer_if_handler as
@@ -35,6 +37,8 @@ create or replace PACKAGE BODY PKG_DOWNLOAD_FILES AS
       dwh_admin.pkg_actions.p_consume_single_action(i_queue_name => g_queue_importfiles,
                                                     i_waittime => 1);
     end loop;
+  exception
+    when dwh_admin.pkg_actions.e_dbmsaq_timeout then return;
   end;
 END PKG_DOWNLOAD_FILES;
 /

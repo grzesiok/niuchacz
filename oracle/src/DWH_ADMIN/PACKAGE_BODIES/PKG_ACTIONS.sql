@@ -28,7 +28,7 @@ create or replace PACKAGE BODY PKG_ACTIONS AS
     l_action.p_destroy;
     commit;
   exception
-    when e_dbmsaq_timeout then null;
+    --when e_dbmsaq_timeout then null;
     when others then
       rollback;
       raise_application_error(-20000, 'Error during processing action.', true);
