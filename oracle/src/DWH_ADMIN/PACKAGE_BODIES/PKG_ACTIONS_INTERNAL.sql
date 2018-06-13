@@ -104,6 +104,7 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
     dbms_output.put_line('l_cmd='||l_cmd.getClobVal());
     l_recipients(1) := sys.aq$_agent(name => i_recipient, address => null, protocol => null);
     l_message_properties.recipient_list := l_recipients;
+    l_message_properties.expiration := dbms_aq.never;
     l_queue_options.visibility := dbms_aq.on_commit;
     dbms_aq.enqueue(queue_name => i_queue_name,
                     enqueue_options => l_queue_options,
