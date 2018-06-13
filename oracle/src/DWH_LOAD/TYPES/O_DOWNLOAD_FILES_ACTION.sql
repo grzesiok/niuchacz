@@ -39,6 +39,12 @@ create or replace TYPE BODY o_download_files_action AS
       l_http_request := UTL_HTTP.begin_request(p_url);
       BEGIN
         l_http_response := utl_http.get_response(l_http_request);
+        if(l_http_response.status_code != utl_http.http_ok) then
+          utl_http.end_response(l_http_response);
+          raise_application_error(-20000, 'HTTP_VERSION='||l_http_response.http_version||' '||
+                                          'STATUS_CODE='||l_http_response.status_code||' '||
+                                          'REASON_PHRASE'||l_http_response.reason_phrase);
+        end if;
         -- Copy the response into the BLOB.
         begin
           LOOP
@@ -54,7 +60,7 @@ create or replace TYPE BODY o_download_files_action AS
         when others
           then utl_http.end_response(l_http_response);
                dbms_lob.freetemporary(l_blob);
-               raise_application_error(-20000, '??', true);
+               raise_application_error(-20000, DBMS_UTILITY.format_error_stack, true);
       end;
     end;
     
