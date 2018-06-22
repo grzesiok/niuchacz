@@ -26,6 +26,8 @@ create or replace TYPE BODY o_download_files_action AS
     l_hash raw(16);
     l_start_time timestamp;
     l_stop_time timestamp;
+    l_download_options_json download_files_def.next_download_options%type;
+    l_download_options json_object_t;
 
     function f_download(p_url varchar2) return blob is
       l_http_request utl_http.req;
@@ -63,7 +65,7 @@ create or replace TYPE BODY o_download_files_action AS
                raise_application_error(-20000, DBMS_UTILITY.format_error_stack, true);
       end;
     end;
-    
+
     procedure p_enqueue_importaction(i_url varchar2, i_hash_md5 raw) as
       l_importaction_owner download_files_def.import_action_owner%type;
       l_import_action_typename download_files_def.import_action_typename%type;
@@ -91,6 +93,10 @@ create or replace TYPE BODY o_download_files_action AS
     if(l_url_already_downloaded > 0) then
       return;
     end if;
+    select nvl(dfd.next_download_options, '{}') into l_download_options_json
+    from download_files_def dfd
+    where dfd.download_file_def_id = l_download_file_def_id;
+    l_download_options := json_object_t(l_download_options_json);
     l_max_retries := dwh_admin.pkg_cfg_properties.f_get_properties('download_retries');
     l_wait_time := dwh_admin.pkg_cfg_properties.f_get_properties('download_retry_wait');
     <<try_again>>
@@ -105,12 +111,16 @@ create or replace TYPE BODY o_download_files_action AS
           dbms_lock.sleep(l_wait_time);
           goto try_again;
         end if;
+        raise;
     end;
     if(self.hash_md5# is not null) then
       l_hash := dbms_crypto.hash(src => l_blob, typ => dbms_crypto.hash_md5);
       if(utl_raw.compare(self.hash_md5#, l_hash) != 0) then
         raise_application_error(-20001, 'Expected hash='||rawtohex(self.hash_md5#)||' current hash='||rawtohex(l_hash));
       end if;
+    end if;
+    if(l_download_options.get_string('compression') = 'zip') then
+      l_blob := utl_compress.lz_uncompress(src => l_blob);
     end if;
     insert into download_files(start_time#, stop_time#, url#, content#)
       values (l_start_time, l_stop_time, self.url#, l_blob);
