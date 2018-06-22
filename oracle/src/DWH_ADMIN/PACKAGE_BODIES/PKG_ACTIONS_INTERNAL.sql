@@ -15,9 +15,13 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
     l_exceptionqueue_exists varchar2(1);
     l_exceptionqueue_is_active varchar2(1);
   begin
-    l_upp_queue_name := upper(i_queue_name);
+    if(i_queue_name like '%\_E' escape '\') then
+      l_upp_queue_name := rtrim(upper(i_queue_name), '_E');
+    else
+      l_upp_queue_name := upper(i_queue_name);
+    end if;
     l_upp_queue_table := upper(g_queue_table);
-    l_upp_exception_queue_name := upper(i_queue_name)||'_E';
+    l_upp_exception_queue_name := upper(l_upp_queue_name)||'_E';
     dbms_output.put_line('l_upp_queue_name='||l_upp_queue_name||' l_upp_queue_table='||l_upp_queue_table||' l_upp_exception_queue_name='||l_upp_exception_queue_name);
     /* checking if queue and exception_queue is in correct state */
     select case when exists(select 1 from user_queue_tables
@@ -93,20 +97,23 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
                       i_recipient varchar2 default sys_context('userenv', 'session_user'),
                       i_autocommit boolean default true,
                       i_action o_action) AS
+    l_queue_name varchar2(4000);
     l_queue_options dbms_aq.enqueue_options_t;
     l_message_properties dbms_aq.message_properties_t;
     l_message_id raw(16);
     l_recipients dbms_aq.aq$_recipient_list_t;
     l_cmd xmltype;
   begin
-    p_heartbeat_queue(i_queue_name => i_queue_name);
+    l_queue_name := upper(i_queue_name);
+    p_heartbeat_queue(i_queue_name => l_queue_name);
     l_cmd := o_action.f_deserialize(i_action);
     dbms_output.put_line('l_cmd='||l_cmd.getClobVal());
     l_recipients(1) := sys.aq$_agent(name => i_recipient, address => null, protocol => null);
     l_message_properties.recipient_list := l_recipients;
     l_message_properties.expiration := dbms_aq.never;
+    l_message_properties.exception_queue := l_queue_name||'_E';
     l_queue_options.visibility := dbms_aq.on_commit;
-    dbms_aq.enqueue(queue_name => i_queue_name,
+    dbms_aq.enqueue(queue_name => l_queue_name,
                     enqueue_options => l_queue_options,
                     message_properties => l_message_properties,
                     payload => l_cmd,
@@ -120,20 +127,24 @@ create or replace PACKAGE BODY PKG_ACTIONS_INTERNAL AS
                      i_consumer varchar2 default sys_context('userenv', 'session_user'),
                      i_waittime number default dbms_aq.forever,
                      i_autocommit boolean default true) return o_action AS
+    l_queue_name varchar2(4000);
     l_queue_options dbms_aq.dequeue_options_t;
     l_message_properties dbms_aq.message_properties_t;
     l_message_id raw(16);
     l_cmd xmltype;
     l_action o_action;
   begin
-    p_heartbeat_queue(i_queue_name => i_queue_name);
-    l_queue_options.consumer_name := i_consumer;
+    l_queue_name := upper(i_queue_name);
+    if(l_queue_name not like '%\_E' escape '\') then
+      p_heartbeat_queue(i_queue_name => l_queue_name);
+      l_queue_options.consumer_name := i_consumer;
+    end if;
     l_queue_options.visibility := dbms_aq.on_commit;
     l_queue_options.wait := i_waittime;
     l_queue_options.navigation := dbms_aq.first_message;
     loop
       begin
-        dbms_aq.dequeue(queue_name => i_queue_name,
+        dbms_aq.dequeue(queue_name => l_queue_name,
                         dequeue_options => l_queue_options,
                         message_properties => l_message_properties,
                         payload => l_cmd,
