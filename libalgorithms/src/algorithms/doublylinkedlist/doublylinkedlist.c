@@ -246,13 +246,11 @@ bool doublylinkedlistQuery(PDOUBLYLINKEDLIST pdoublylinkedlist, PDOUBLYLINKEDLIS
 	    activeRecordsArePulled = true;
         }
 	spinlockUnlock(&pdoublylinkedlist->_isActiveEntriesLocked);
-	if(activeRecordsArePulled) {
-	    spinlockLock(&pdoublylinkedlist->_isDeletedEntriesLocked);
-	    if(!i_doublylinkedlistQuerySingleList(&pdoublylinkedlist->_deletedEntries, &pquery, psize_inout, &size_out)) {
-	        deletedRecordsArePulled = true;
-            }
-	    spinlockUnlock(&pdoublylinkedlist->_isDeletedEntriesLocked);
-	}
+	spinlockLock(&pdoublylinkedlist->_isDeletedEntriesLocked);
+	if(i_doublylinkedlistQuerySingleList(&pdoublylinkedlist->_deletedEntries, &pquery, psize_inout, &size_out)) {
+	    deletedRecordsArePulled = true;
+        }
+        spinlockUnlock(&pdoublylinkedlist->_isDeletedEntriesLocked);
         memset(pquery, 0, sizeof(void*));
 	*psize_inout = size_out;
 	return activeRecordsArePulled && deletedRecordsArePulled;
