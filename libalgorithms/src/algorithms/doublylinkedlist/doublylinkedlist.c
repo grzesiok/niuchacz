@@ -94,14 +94,14 @@ void doublylinkedlistFree(PDOUBLYLINKEDLIST pdoublylinkedlist) {
 	while(!i_doublylinkedlistEntryIsEnd(&pdoublylinkedlist->_activeEntries, pentry)) {
 		i_doublylinkedlistEntryDel(pentry);
                 free(pentry);
-		pentry = i_doublylinkedlistEntryNext(&pdoublylinkedlist->_activeEntries);
+		pentry = (PDOUBLYLINKEDLIST_ENTRY)i_doublylinkedlistEntryHeaderNext(&pdoublylinkedlist->_activeEntries);
 	}
 	//releasing memory from inactive entries
 	pentry = (PDOUBLYLINKEDLIST_ENTRY)i_doublylinkedlistEntryHeaderNext(&pdoublylinkedlist->_deletedEntries);
 	while(!i_doublylinkedlistEntryIsEnd(&pdoublylinkedlist->_deletedEntries, pentry)) {
 		i_doublylinkedlistEntryDel(pentry);
 		free(pentry);
-                pentry = i_doublylinkedlistEntryNext(&pdoublylinkedlist->_deletedEntries);
+                pentry = (PDOUBLYLINKEDLIST_ENTRY)i_doublylinkedlistEntryHeaderNext(&pdoublylinkedlist->_deletedEntries);
 	}
 	// don't need to release lock as structure is freed up
 	free(pdoublylinkedlist);
