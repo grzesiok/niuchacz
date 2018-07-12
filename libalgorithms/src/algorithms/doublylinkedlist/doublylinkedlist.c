@@ -111,11 +111,12 @@ void doublylinkedlistFreeDeletedEntries(PDOUBLYLINKEDLIST pdoublylinkedlist) {
 	spinlockLock(&pdoublylinkedlist->_isDeletedEntriesLocked);
 	PDOUBLYLINKEDLIST_ENTRY pentry = (PDOUBLYLINKEDLIST_ENTRY)i_doublylinkedlistEntryHeaderNext(&pdoublylinkedlist->_deletedEntries);
 	while(!i_doublylinkedlistEntryIsEnd(&pdoublylinkedlist->_deletedEntries, pentry)) {
-		if(pentry->_isDeleted && pentry->_references == 0) {
-			i_doublylinkedlistEntryDel(pentry);
-			free(pentry);
-		}
-		pentry = i_doublylinkedlistEntryNext(pentry);
+		if(pentry->_isDeleted && __atomic_load_n(&pentry->_references, __ATOMIC_ACQUIRE) == 0) {
+			PDOUBLYLINKEDLIST_ENTRY pentryToFree = pentry;
+			pentry = i_doublylinkedlistEntryNext(pentry);
+			i_doublylinkedlistEntryDel(pentryToFree);
+			free(pentryToFree);
+		} else pentry = i_doublylinkedlistEntryNext(pentry);
 	}
 	spinlockUnlock(&pdoublylinkedlist->_isDeletedEntriesLocked);
 }
@@ -139,17 +140,14 @@ void* doublylinkedlistAdd(PDOUBLYLINKEDLIST pdoublylinkedlist, uint64_t key, voi
 void doublylinkedlistDel(PDOUBLYLINKEDLIST pdoublylinkedlist, void* ptr){
 	spinlockLock(&pdoublylinkedlist->_isActiveEntriesLocked);
 	PDOUBLYLINKEDLIST_ENTRY pentry = moveUserDataToPtr(ptr);
-	i_doublylinkedlistEntryDel(pentry);
-	if(pentry->_references > 0) {
+	i_doublylinkedlistEntryDel(pentry);	
+	if(__atomic_load_n(&pentry->_references, __ATOMIC_ACQUIRE) > 0) {
 		pentry->_isDeleted = true;
 		spinlockLock(&pdoublylinkedlist->_isDeletedEntriesLocked);
 		i_doublylinkedlistEntryAdd(&pdoublylinkedlist->_deletedEntries, pentry);
 		spinlockUnlock(&pdoublylinkedlist->_isDeletedEntriesLocked);
 	}
 	spinlockUnlock(&pdoublylinkedlist->_isActiveEntriesLocked);
-	if(pentry->_references == 0) {
-		free(pentry);
-	}
 }
 
 void* doublylinkedlistFind(PDOUBLYLINKEDLIST pdoublylinkedlist, uint64_t key) {
@@ -201,10 +199,7 @@ void* doublylinkedlistGetLast(PDOUBLYLINKEDLIST pdoublylinkedlist) {
 
 void doublylinkedlistRelease(void* ptr) {
 	PDOUBLYLINKEDLIST_ENTRY pentry = moveUserDataToPtr(ptr);
-	uint32_t new_val = __atomic_sub_fetch(&pentry->_references, 1, __ATOMIC_RELEASE);
-	if(new_val == 0 && pentry->_isDeleted) {
-		free(pentry);
-	}
+	__atomic_sub_fetch(&pentry->_references, 1, __ATOMIC_RELEASE);
 }
 
 bool doublylinkedlistIsEmpty(PDOUBLYLINKEDLIST pdoublylinkedlist) {
