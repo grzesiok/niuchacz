@@ -1,7 +1,7 @@
 #include "queue.h"
 #include <stdlib.h>
 #include <string.h>
-
+#include <errno.h>
 #include <stdint.h>
 #include <immintrin.h>
 
@@ -69,11 +69,17 @@ void queue_destroy(queue_t* pqueue) {
 
 int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
 	queue_entry_t header;
+	int ret;
 
 	pthread_mutex_lock(&pqueue->_readMutex);
 	// if tail and head are the same => no entries in queue waiting for read
-	while(pqueue->_leftsize == pqueue->_maxsize)
-		pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
+	while(pqueue->_leftsize == pqueue->_maxsize) {
+		ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);
+		if(ret == ETIMEDOUT) {
+			pthread_mutex_unlock(&pqueue->_readMutex);
+			return QUEUE_RET_TIMEOUT;
+		}
+	}
 	// copy header as first bytes)
 	pqueue->_tail = i_queue_memcpy_from(pqueue, &header, pqueue->_tail, sizeof(queue_entry_t));
 	// then copy data
@@ -83,7 +89,7 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
 	// and broadcast changes to other threads
 	pthread_cond_broadcast(&pqueue->_writeCondVariable);
 	if(sse42_crc32(pbuf, header._size) != header._crc32) {
-		return -1;
+		return QUEUE_RET_ERROR;
 	}
 	return header._size;
 }
@@ -91,16 +97,22 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
 int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct timespec *timeout) {
 	queue_entry_t header;
 	size_t entrySize = nBytes+sizeof(queue_entry_t);
+	int ret;
 
 	if(entrySize >= pqueue->_maxsize)
-		return -1;
+		return QUEUE_RET_ERROR;
 	// prepare header
 	header._size = nBytes;
 	header._crc32 = sse42_crc32(pbuf, nBytes);
 	pthread_mutex_lock(&pqueue->_writeMutex);
 	// check if we have enough room to store data
-	while(pqueue->_leftsize < entrySize)
-		pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
+	while(pqueue->_leftsize < entrySize) {
+		ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
+		if(ret == ETIMEDOUT) {
+			pthread_mutex_unlock(&pqueue->_writeMutex);
+			return QUEUE_RET_TIMEOUT;
+		}
+	}
 	// copy header
 	pqueue->_head = i_queue_memcpy_to(pqueue, pqueue->_head, &header, sizeof(queue_entry_t));
 	// and data

@@ -18,6 +18,9 @@ typedef struct {
     pthread_cond_t _writeCondVariable;
 } queue_t;
 
+#define QUEUE_RET_ERROR -1
+#define QUEUE_RET_TIMEOUT -2
+
 queue_t* queue_create(size_t size);
 void queue_destroy(queue_t* pqueue);
 int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout);
