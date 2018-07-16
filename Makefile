@@ -20,7 +20,6 @@ FILEASM64OBJ_=$(FILEASM64OBJ:%=$(OBJDIR)/%)
 FILEASM32OBJ_=$(FILEASM32OBJ:%=$(OBJDIR)/%)
 FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
-DEFINES=_GNU_SOURCE
 
 prepare:
 	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
@@ -28,11 +27,11 @@ prepare:
 	@$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
 
 clean_dependencies:
-	#@$(MAKE) -C libalgorithms clean
+	@$(MAKE) -C libalgorithms clean
 	#@$(MAKE) -C sqlite clean
 	
 build_dependencies: prepare
-	#@$(MAKE) -C libalgorithms all
+	@$(MAKE) -C libalgorithms all
 	#@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
 	#@$(MAKE) -C sqlite all
 
@@ -63,6 +62,8 @@ install:
 	cp sys/etc/niuchacz/* /etc/niuchacz
 	systemctl daemon-reload
 	systemctl start niuchacz.service
+
+enable_debug:
 
 #kompilacja
 $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)

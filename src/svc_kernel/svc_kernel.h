@@ -5,7 +5,7 @@
 #include "svc_lock.h"
 #include "svc_statistics.h"
 #include "svc_time.h"
-#include "../psmgr/psmgr.h"
+#include "psmgr/psmgr.h"
 #include "execute_unit/cmd_manager.h"
 #include "database/database.h"
 #include <libconfig.h>
@@ -23,9 +23,10 @@ typedef struct _KERNEL
 
 KSTATUS svcKernelInit(const char* confFileName);
 void svcKernelExit(int code) NORETURN;
+void svcKernelMainLoop(void);
 KSTATUS svcKernelStatus(int requested_status);
 int svcKernelGetCurrentStatus(void);
 sqlite3* svcKernelGetDb(void);
-PKERNEL svcKernelGetCfg(void);
+config_t* svcKernelGetCfg(void);
 #define svcKernelIsRunning() (svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_RUNNING || svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_START_PENDING)
 #endif

@@ -1,7 +1,8 @@
 #pliki wykorzystywane przy kompilacji
 FILEASM64OBJ=
 FILECOBJ=\
-    src/psmgr/psmgr.o\
+    src/kernel.o\
+    src/svc_kernel/psmgr/psmgr.o\
     src/svc_kernel/database/database.o\
     src/svc_kernel/svc_lock.o\
     src/svc_kernel/svc_kernel.o\
@@ -13,15 +14,18 @@ FILECOBJ=\
     src/mapper.o
     
 FILECOBJ_TESTHASHPERF=\
+    src/kernel.o\
     src/tests/testhashperf.o\
     src/svc_kernel/svc_time.o
     
 FILECOBJ_TESTPSMGR=\
+    src/kernel.o\
     src/tests/testpsmgr.o\
-    src/psmgr/psmgr.o
+    src/svc_kernel/psmgr/psmgr.o
     
 FILECOBJ_TESTCMDMGR=\
-    src/psmgr/psmgr.o\
+    src/kernel.o\
+    src/svc_kernel/psmgr/psmgr.o\
     src/svc_kernel/database/database.o\
     src/svc_kernel/svc_lock.o\
     src/svc_kernel/svc_kernel.o\

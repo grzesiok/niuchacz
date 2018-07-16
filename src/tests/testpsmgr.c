@@ -1,4 +1,18 @@
-#include "../psmgr/psmgr.h"
+#include <stdio.h>
+#include <time.h>
+#include "../svc_kernel/psmgr/psmgr.h"
+
+int randomGet(int min, int max) {
+    int tmp;
+    if (max>=min)
+        max-= min;
+    else {
+        tmp= min - max;
+        min= max;
+        max= tmp;
+    }
+    return max ? (rand() % max + min) : min;
+}
 
 typedef struct _TEST_ENTRY
 {
@@ -10,20 +24,29 @@ typedef struct _TEST_ENTRY
 } TEST_ENTRY, *PTEST_ENTRY;
 
 KSTATUS testRoutine(void* p_arg) {
-	PTEST_ENTRY pentry = (PTEST_ENTRY)p_arg;
+        PTEST_ENTRY pentry = (PTEST_ENTRY)p_arg;
+	DPRINTF(TEXT("testRoutine START(%s)..."), pentry->_key);
 	pentry->_p_private_mem = malloc(5);
-	DPRINTF("testRoutine START(%s)...", pentry->_key);
-	int a = 1/0;
-	sleep(1);
-	DPRINTF("testRoutine STOP(%s)...", pentry->_key);
+	sleep(pentry->_value);
+	int a, *b = (int*)NULL;
+        switch(randomGet(0, 2)) {
+	case 0:
+		DPRINTF(TEXT("SIGFPE"));
+		a = 1/0;
+	case 1:
+		DPRINTF(TEXT("SIGFLT"));
+		*b = 1;
+	}
+        free(pentry->_p_private_mem);
+	DPRINTF(TEXT("testRoutine STOP(%s)..."), pentry->_key);
 	return 1;
 }
 
 void cancelRoutine(void* p_arg) {
 	PTEST_ENTRY pentry = (PTEST_ENTRY)p_arg;
-	DPRINTF("cancelRoutine START(%s)...", pentry->_key);
+	DPRINTF(TEXT("cancelRoutine START(%s)..."), pentry->_key);
 	free(pentry->_p_private_mem);
-	DPRINTF("cancelRoutine STOP(%s)...", pentry->_key);
+	DPRINTF(TEXT("cancelRoutine STOP(%s)..."), pentry->_key);
 }
 
 TEST_ENTRY gTab[] = {
@@ -40,13 +63,16 @@ int main()
 	TEST_ENTRY val;
 	unsigned long long size, i;
 	struct timeval timestamp;
-
-	DPRINTF("PSMGR Starting...");
+	time_t tt;
+	int seed = time(&tt);
+	srand(seed);
+	DPRINTF(TEXT("PSMGR Starting..."));
 	_status = psmgrStart();
 	for(i = 0;i < sizeof(gTab)/sizeof(gTab[0]);i++) {
 		_status = psmgrCreateThread(gTab[i]._key, gTab[i]._p_execRoutine, gTab[i]._p_cancelRoutine, &gTab[i]);
 	}
-	DPRINTF("PSMGR Stopping...");
+	psmgrIdle(5);
+	DPRINTF(TEXT("PSMGR Stopping..."));
 	psmgrStop();
 	return 0;
 }

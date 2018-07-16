@@ -22,8 +22,8 @@ typedef struct _NIUCHACZ_CTX {
 
 typedef struct _NIUCHACZ_MAIN {
 	NIUCHACZ_CTX _threads[2];
-    sqlite3_stmt *_stmt;
-    sqlite3 *_db;
+	sqlite3_stmt *_stmt;
+	sqlite3 *_db;
 } NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
 
 NIUCHACZ_MAIN g_Main;
@@ -115,11 +115,15 @@ int packet_analyze(struct timeval ts, void* packet, size_t packet_len) {
 	return 0;
 }
 
-void* pcap_thread_routine(void* arg)
+pcap_t *gp_PcapHandle;
+void pcap_thread_cancelRoutine(void* arg) {
+	pcap_breakloop(gp_PcapHandle);
+}
+
+KSTATUS pcap_thread_routine(void* arg)
 {
 	PNIUCHACZ_CTX p_ctx = (PNIUCHACZ_CTX)arg;
 	char errbuf[PCAP_ERRBUF_SIZE];
-	pcap_t *handle;
 	struct pcap_pkthdr header;
 	void* packet;
 	struct timespec startTime;
@@ -131,37 +135,36 @@ void* pcap_thread_routine(void* arg)
 	PJOB pjob;
 
 	SYSLOG(LOG_INFO, "Listen on device=%s", p_ctx->_p_deviceName);
-    /* get network number and mask associated with capture device */
-    if (pcap_lookupnet(p_ctx->_p_deviceName, &net, &mask, errbuf) == -1) {
-    	SYSLOG(LOG_ERR, "Couldn't get netmask for device %s: %s", p_ctx->_p_deviceName, errbuf);
-    	net = 0;
-    	mask = 0;
-    }
-    /* open capture device */
-    handle = pcap_open_live(p_ctx->_p_deviceName, BUFSIZ, 0, 1000, errbuf);
-	if(handle == NULL) {
+	/* get network number and mask associated with capture device */
+	if (pcap_lookupnet(p_ctx->_p_deviceName, &net, &mask, errbuf) == -1) {
+		SYSLOG(LOG_ERR, "Couldn't get netmask for device %s: %s", p_ctx->_p_deviceName, errbuf);
+		net = 0;
+		mask = 0;
+	}
+	/* open capture device */
+	gp_PcapHandle = pcap_open_live(p_ctx->_p_deviceName, BUFSIZ, 0, 1000, errbuf);
+	if(gp_PcapHandle == NULL) {
 		SYSLOG(LOG_ERR, "Couldn't open device %s: %s", p_ctx->_p_deviceName, errbuf);
-		return NULL;
+		return KSTATUS_UNSUCCESS;
 	}
 	/* make sure we're capturing on an Ethernet device */
-	if(pcap_datalink(handle) != DLT_EN10MB) {
+	if(pcap_datalink(gp_PcapHandle) != DLT_EN10MB) {
 		SYSLOG(LOG_ERR, "%s is not an Ethernet", p_ctx->_p_deviceName);
-		exit(EXIT_FAILURE);
+		return KSTATUS_UNSUCCESS;
 	}
 	/* compile the filter expression */
-	if(pcap_compile(handle, &fp, filter_exp, 0, net) == -1) {
-		SYSLOG(LOG_ERR, "Couldn't parse filter %s: %s", filter_exp, pcap_geterr(handle));
-		exit(EXIT_FAILURE);
+	if(pcap_compile(gp_PcapHandle, &fp, filter_exp, 0, net) == -1) {
+		SYSLOG(LOG_ERR, "Couldn't parse filter %s: %s", filter_exp, pcap_geterr(gp_PcapHandle));
+		return KSTATUS_UNSUCCESS;
 	}
 	/* apply the compiled filter */
-	if (pcap_setfilter(handle, &fp) == -1) {
-		SYSLOG(LOG_ERR, "Couldn't install filter %s: %s", filter_exp, pcap_geterr(handle));
-		exit(EXIT_FAILURE);
+	if (pcap_setfilter(gp_PcapHandle, &fp) == -1) {
+		SYSLOG(LOG_ERR, "Couldn't install filter %s: %s", filter_exp, pcap_geterr(gp_PcapHandle));
+		return KSTATUS_UNSUCCESS;
 	}
 	while(svcKernelIsRunning()) {
-		packet = (void*)pcap_next(handle, &header);
-		if(packet != NULL)
-		{
+		packet = (void*)pcap_next(gp_PcapHandle, &header);
+		if(packet != NULL) {
 			startTime = timerStart();
 			_status = cmdmgrJobPrepare("PACKET_ANALYZE", packet, header.caplen, header.ts, &pjob);
 			if(!KSUCCESS(_status)) {
@@ -178,8 +181,8 @@ void* pcap_thread_routine(void* arg)
 	}
 	/* cleanup */
 	pcap_freecode(&fp);
-	pcap_close(handle);
-	return NULL;
+	pcap_close(gp_PcapHandle);
+	return KSTATUS_SUCCESS;
 }
 
 KSTATUS schema_sync(void)
@@ -193,21 +196,18 @@ int main(int argc, char* argv[])
 {
 	KSTATUS _status;
 	const char *dbFileName, *deviceName;
-	PKERNEL pKernelCfg = svcKernelGetCfg();
-
-	return import_db("/root/live.db", "PDBDWH", "dwh_load", "dwh_load");
 
 	if(argc != 2)
 		return -1;
 	_status = svcKernelInit(argv[1]);
 	if(!KSUCCESS(_status))
 		goto __exit;
-	if(!config_lookup_string(&pKernelCfg->_cfg, "DB.fileName", &dbFileName)) {
-		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(&pKernelCfg->_cfg), config_error_line(&pKernelCfg->_cfg), config_error_text(&pKernelCfg->_cfg));
+	if(!config_lookup_string(svcKernelGetCfg(), "DB.fileName", &dbFileName)) {
+		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
 		goto __exit;
 	}
-	if(!config_lookup_string(&pKernelCfg->_cfg, "NIUCHACZ.deviceName", &deviceName)) {
-		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(&pKernelCfg->_cfg), config_error_line(&pKernelCfg->_cfg), config_error_text(&pKernelCfg->_cfg));
+	if(!config_lookup_string(svcKernelGetCfg(), "NIUCHACZ.deviceName", &deviceName)) {
+		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
 		goto __exit;
 	}
 	_status = dbStart(dbFileName, &g_Main._db);
@@ -220,10 +220,10 @@ int main(int argc, char* argv[])
 	_status = cmdmgrAddCommand("PACKET_ANALYZE", "Analyze network packets and store it in DB file", packet_analyze, 1);
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
-    if(sqlite3_prepare(g_Main._db, cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "Could not prepare statement.");
+	if(sqlite3_prepare(g_Main._db, cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
+		SYSLOG(LOG_ERR, "Could not prepare statement.");
 		goto __database_stop_andexit;
-    }
+	}
 	g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
 	_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	if(!KSUCCESS(_status)) {
@@ -237,13 +237,11 @@ int main(int argc, char* argv[])
 		goto __database_stop_andexit;
 	}
 	SYSLOG(LOG_INFO, "Prepare listen on device=%s", deviceName);
-	_status = psmgrCreateThread(pcap_thread_routine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
+	_status = psmgrCreateThread("pcapThreadRoutine", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
-	while(svcKernelIsRunning()) {
-		psmgrIdle(1);
-	}
-    sqlite3_finalize(g_Main._stmt);
+	svcKernelMainLoop();
+	sqlite3_finalize(g_Main._stmt);
 	statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 __database_stop_andexit:

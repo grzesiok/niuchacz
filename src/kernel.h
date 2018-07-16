@@ -15,8 +15,10 @@
 #define REALLOC(var, type, num) (type*)realloc(var, sizeof(type)*num)
 #define FREE(var) free(var)
 
+int mpp_printf(const char* format, ...);
 #ifdef DEBUG_MODE
-#define SYSLOG(mode, format, ...) printf("[%s:%d]: " # format "\n", /*__FILE__, */__FUNCTION__, __LINE__, ##__VA_ARGS__)
+//#define SYSLOG(mode, format, ...) mpp_printf("[%s:%d]: " # format "\n", /*__FILE__, */__FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define SYSLOG(mode, format, ...) syslog(mode, format, ##__VA_ARGS__)
 #define DPRINTF(...) SYSLOG(LOG_DEBUG, __VA_ARGS__)
 #define ASSERT(expression) if(!(expression)) {DPRINTF("ASSERT FAIL:%s(%u): %s\n", __FILE__, __LINE__, __FUNCSIG__);}
 #else

@@ -10,6 +10,7 @@ static const char* cgInsertCommand =
 
 typedef struct {
 	queue_t *_pjobQueue;
+	unsigned int _activeJobs;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
@@ -51,11 +52,16 @@ static PJOB_ROUTINE i_cmdmgrFindRoutine(const char* cmd) {
 KSTATUS i_cmdmgrJobExec(PJOB pjob) {
 	int ret;
 	PJOB_ROUTINE proutine;
-	printf("i_cmdmgrJobExec\n");
+
+	if(!svcKernelIsRunning()) {
+		return KSTATUS_SVC_IS_STOPPING;
+	}
 	proutine = i_cmdmgrFindRoutine(pjob->_cmd);
 	if(proutine == NULL)
 		return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
+	__atomic_add_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_ACQUIRE);
 	ret = proutine(pjob->_ts, pjob->_data, pjob->_dataSize);
+	__atomic_sub_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_RELEASE);
 	if(ret != 0)
 		//job should be rescheduled again
 		//or job should be freed if rescheduled is not an option
@@ -63,17 +69,24 @@ KSTATUS i_cmdmgrJobExec(PJOB pjob) {
 	return KSTATUS_SUCCESS;
 }
 
-void* i_cmdmgrExecutor(void* arg) {
+KSTATUS i_cmdmgrExecutor(void* arg) {
 	char buffer[100000];
 	PJOB pjob = (PJOB)buffer;
+	int ret;
+	static struct timespec time_to_wait = {0, 0};
 
 	SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
 	while(svcKernelIsRunning()) {
-		queue_read(gCmdManager._pjobQueue, pjob, NULL);
-		i_cmdmgrJobExec(pjob);
+		time_to_wait.tv_sec = time(NULL) + 1;
+		ret = queue_read(gCmdManager._pjobQueue, pjob, &time_to_wait);
+		if(ret > 0) {
+			i_cmdmgrJobExec(pjob);
+		} else if(ret == QUEUE_RET_ERROR) {
+			SYSLOG(LOG_ERR, "[CMDMGR] Error during dequeue job");
+		}
 	}
 	SYSLOG(LOG_INFO, "[CMDMGR] Stopping Job Executor");
-	return NULL;
+	return KSTATUS_SUCCESS;
 }
 
 /* External API */
@@ -82,12 +95,13 @@ KSTATUS cmdmgrStart(void) {
 	KSTATUS _status;
 	SYSLOG(LOG_INFO, "[CMDMGR] Starting...");
 	_status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList);
-    if(!KSUCCESS(_status))
-    	return _status;
+	if(!KSUCCESS(_status))
+		return _status;
 	gCmdManager._pjobQueue = queue_create(1000000);
+	gCmdManager._activeJobs = 0;
 	if(gCmdManager._pjobQueue == NULL)
 		return KSTATUS_UNSUCCESS;
-	_status = psmgrCreateThread(i_cmdmgrExecutor, NULL);
+	_status = psmgrCreateThread("cmdmgrExecutor", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, NULL);
 	return _status;
 }
 
@@ -96,52 +110,58 @@ void cmdmgrStop(void) {
 	queue_destroy(gCmdManager._pjobQueue);
 }
 
+void cmdmgrWaitForAllJobs(void) {
+	while(__atomic_load_n(&gCmdManager._activeJobs, __ATOMIC_ACQUIRE) > 0) {
+		sleep(1);
+	}
+}
+
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_ROUTINE proutine, int version) {
 	int rc;
 	sqlite3_stmt *stmt;
 
 	rc = sqlite3_prepare_v2(svcKernelGetDb(), cgInsertCommand, -1, &stmt, 0);
-    if(rc != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "Failed to prepare cursor: %s", dbGetErrmsg(svcKernelGetDb()));
-        return KSTATUS_UNSUCCESS;
-    }
+	if(rc != SQLITE_OK) {
+		SYSLOG(LOG_ERR, "Failed to prepare cursor: %s", dbGetErrmsg(svcKernelGetDb()));
+		return KSTATUS_UNSUCCESS;
+	}
 	rc = sqlite3_bind_text(stmt, 1, cmd, -1, SQLITE_STATIC);
-    if(rc != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "Failed to bind command(%s): %s", cmd, dbGetErrmsg(svcKernelGetDb()));
-        return KSTATUS_UNSUCCESS;
-    }
+	if(rc != SQLITE_OK) {
+		SYSLOG(LOG_ERR, "Failed to bind command(%s): %s", cmd, dbGetErrmsg(svcKernelGetDb()));
+		return KSTATUS_UNSUCCESS;
+	}
 	rc = sqlite3_bind_text(stmt, 2, description, -1, SQLITE_STATIC);
-    if(rc != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "Failed to bind description(%s): %s", description, dbGetErrmsg(svcKernelGetDb()));
-        return KSTATUS_UNSUCCESS;
-    }
+	if(rc != SQLITE_OK) {
+		SYSLOG(LOG_ERR, "Failed to bind description(%s): %s", description, dbGetErrmsg(svcKernelGetDb()));
+		return KSTATUS_UNSUCCESS;
+	}
 	rc = sqlite3_bind_int(stmt, 3, version);
-    if(rc != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "Failed to bind version(%d): %s", version, dbGetErrmsg(svcKernelGetDb()));
-        return KSTATUS_UNSUCCESS;
-    }
+	if(rc != SQLITE_OK) {
+		SYSLOG(LOG_ERR, "Failed to bind version(%d): %s", version, dbGetErrmsg(svcKernelGetDb()));
+		return KSTATUS_UNSUCCESS;
+	}
 	rc = sqlite3_bind_int64(stmt, 4, (sqlite_int64)proutine);
-    if(rc != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "Failed to bind routine(%p): %s", proutine, dbGetErrmsg(svcKernelGetDb()));
-        return KSTATUS_UNSUCCESS;
-    }
-    if(sqlite3_step(stmt) != SQLITE_DONE) {
-    	SYSLOG(LOG_ERR, "Failed to add new command=%s: %s", cmd, dbGetErrmsg(svcKernelGetDb()));
-        return KSTATUS_UNSUCCESS;
-    }
-    rc = sqlite3_finalize(stmt);
-    if(rc != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "Failed to clear cursor: %s", dbGetErrmsg(svcKernelGetDb()));
-        return KSTATUS_UNSUCCESS;
-    }
-    DPRINTF("Command %s added successfully", cmd);
-    return KSTATUS_SUCCESS;
+	if(rc != SQLITE_OK) {
+		SYSLOG(LOG_ERR, "Failed to bind routine(%p): %s", proutine, dbGetErrmsg(svcKernelGetDb()));
+		return KSTATUS_UNSUCCESS;
+	}
+	if(sqlite3_step(stmt) != SQLITE_DONE) {
+		SYSLOG(LOG_ERR, "Failed to add new command=%s: %s", cmd, dbGetErrmsg(svcKernelGetDb()));
+		return KSTATUS_UNSUCCESS;
+	}
+	rc = sqlite3_finalize(stmt);
+	if(rc != SQLITE_OK) {
+		SYSLOG(LOG_ERR, "Failed to clear cursor: %s", dbGetErrmsg(svcKernelGetDb()));
+		return KSTATUS_UNSUCCESS;
+	}
+	SYSLOG(LOG_INFO, "Command %s added successfully", cmd);
+	return KSTATUS_SUCCESS;
 }
 
 KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, PJOB* pjob) {
 	PJOB pjob2;
 	int cmdLength = strlen(cmd);
-    DPRINTF("Allocate %zuB memory for command %s", dataSize, cmd);
+	DPRINTF("Allocate %zuB memory for command %s", dataSize, cmd);
 
 	pjob2 = MALLOC2(JOB, 1, dataSize+cmdLength+1);
 	if(pjob2 == NULL)

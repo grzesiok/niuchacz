@@ -9,12 +9,14 @@
 static KERNEL gKernelCfg;
 
 static void svcKernelSigHandler(int signo) {
+	mpp_printf("KernelHandler(pid=%d, %d)\n", getpid(), signo);
 	if(signo == SIGTERM || signo == SIGINT)
 		svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
 	/*if(signo == SIGHUP)
 	 * TODO: reload configuration file */
 }
 
+#ifndef DEBUG_MODE
 static void svcKernelInitService(void) {
 	int fd;
 
@@ -34,6 +36,7 @@ static void svcKernelInitService(void) {
 	stdout = fopen("/dev/null", "w+");
 	stderr = fopen("/dev/null", "w+");
 }
+#endif
 
 KSTATUS svcKernelInit(const char* confFileName) {
 	KSTATUS _status;
@@ -43,7 +46,11 @@ KSTATUS svcKernelInit(const char* confFileName) {
 	svcKernelInitService();
 #endif
 	/* Open system log and write message to it */
+#ifndef DEBUG_MODE
 	openlog("NIUCHACZ", LOG_PID|LOG_CONS, LOG_DAEMON);
+#else
+	openlog("NIUCHACZ_DEBUG", LOG_PID|LOG_CONS, LOG_DAEMON);
+#endif
 	SYSLOG(LOG_INFO, "Starting...");
 	if(signal(SIGINT, svcKernelSigHandler) == SIG_ERR)
 		return KSTATUS_UNSUCCESS;
@@ -90,6 +97,14 @@ void svcKernelExit(int code) {
 	exit(code);
 }
 
+void svcKernelMainLoop(void) {
+	while(svcKernelIsRunning()) {
+		psmgrIdle(1);
+	}
+	cmdmgrWaitForAllJobs();
+	psmgrStopUserThreads();
+}
+
 KSTATUS svcKernelStatus(int requested_status) {
 	int old_status = __atomic_load_n(&gKernelCfg._status, __ATOMIC_ACQUIRE);
 	if(requested_status == SVC_KERNEL_STATUS_STOP_PENDING
@@ -112,6 +127,6 @@ sqlite3* svcKernelGetDb(void) {
 	return gKernelCfg._db;
 }
 
-PKERNEL svcKernelGetCfg(void) {
-	return &gKernelCfg;
+config_t* svcKernelGetCfg(void) {
+	return &gKernelCfg._cfg;
 }

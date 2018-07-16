@@ -18,6 +18,7 @@ typedef enum _JobMode {
 
 KSTATUS cmdmgrStart(void);
 void cmdmgrStop(void);
+void cmdmgrWaitForAllJobs(void);
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_ROUTINE proutine, int version);
 KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, PJOB* pjob);
 KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode);
