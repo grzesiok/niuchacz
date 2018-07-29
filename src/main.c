@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <netinet/ether.h>
+#include <signal.h>
 #include "svc_kernel/database/database.h"
 
 #define MAIN_THREAD_PRODUCER 0
@@ -116,7 +117,10 @@ int packet_analyze(struct timeval ts, void* packet, size_t packet_len) {
 }
 
 pcap_t *gp_PcapHandle;
-void pcap_thread_cancelRoutine(void* arg) {
+void pcap_thread_cancelRoutine(void* ptr) {
+	pcap_breakloop(gp_PcapHandle);
+}
+void pcap_thread_ExitRoutine(int signo) {
 	pcap_breakloop(gp_PcapHandle);
 }
 
@@ -134,6 +138,10 @@ KSTATUS pcap_thread_routine(void* arg)
 	KSTATUS _status;
 	PJOB pjob;
 
+	if(signal(SIGTERM, pcap_thread_ExitRoutine) == SIG_ERR)
+		return KSTATUS_UNSUCCESS;
+	if(signal(SIGINT, pcap_thread_ExitRoutine) == SIG_ERR)
+		return KSTATUS_UNSUCCESS;
 	SYSLOG(LOG_INFO, "Listen on device=%s", p_ctx->_p_deviceName);
 	/* get network number and mask associated with capture device */
 	if (pcap_lookupnet(p_ctx->_p_deviceName, &net, &mask, errbuf) == -1) {
@@ -182,6 +190,8 @@ KSTATUS pcap_thread_routine(void* arg)
 	/* cleanup */
 	pcap_freecode(&fp);
 	pcap_close(gp_PcapHandle);
+	signal(SIGTERM, SIG_DFL);
+	signal(SIGINT, SIG_DFL);
 	return KSTATUS_SUCCESS;
 }
 
