@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "cmd_manager.h"
 
 static const char* cgCreateSchemaCmdList =
