@@ -1,4 +1,5 @@
 #include "psmgr.h"
+#include "../svc_kernel.h"
 #include <errno.h>
 #include <linux/sched.h>
 #include <sys/wait.h>
@@ -30,13 +31,19 @@ static PSMGR g_psmgrCfg;
 #define STACK_FREE(var) free(var)
 
 // internal API
+static void i_psmgrHandleMainTerminate(int signo) {
+    mpp_printf("psmgrHandleMainTerminate(pid=%d, %d)\n", getpid(), signo);
+    svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
+    /*if(signo == SIGHUP) TODO: reload configuration file */
+
+}
 
 static void i_psmgrHandleChildTerminate(int signo) {
     pid_t pid;
     int status;
     struct rusage child_rusage;
-    mpp_printf("psmgrChildTerminateHanlder(pid=%d, %d)\n", getpid(), signo);
     pid = wait3(&status, WNOHANG, &child_rusage);
+    mpp_printf("psmgrChildTerminateHanlder(pid=%d, handled_pid=%d, %d)\n", getpid(), pid, signo);
 }
 
 static void i_psmgrCancelRoutineEmpty(void* ptr) {
@@ -60,26 +67,46 @@ static void i_psmgrCancelRoutine(int signo) {
 
 typedef struct {
     int _signo;
-    void (*_sigHandler)(int);
+    struct sigaction _sigcfg;
 } signal_handlers_t;
 
-static const signal_handlers_t g_psmgrHandledSignals[] = {
-    {SIGILL, i_psmgrCancelRoutine},
-    {SIGFPE, i_psmgrCancelRoutine},
-    {SIGSEGV, i_psmgrCancelRoutine},
-    {SIGCHLD, i_psmgrHandleChildTerminate},
-    {SIGTERM, SIG_IGN},
-    {SIGINT, SIG_IGN},
-    {SIGABRT, SIG_IGN}
+static const signal_handlers_t g_psmgrHandledSignalsThreadNew[] = {
+    {SIGILL, (struct sigaction){.sa_handler = i_psmgrCancelRoutine, .sa_flags = SA_SIGINFO}},
+    {SIGFPE, (struct sigaction){.sa_handler = i_psmgrCancelRoutine, .sa_flags = SA_SIGINFO}},
+    {SIGSEGV, (struct sigaction){.sa_handler = i_psmgrCancelRoutine, .sa_flags = SA_SIGINFO}},
+    {SIGCHLD, (struct sigaction){}},//.sa_handler = i_psmgrHandleChildTerminate, .sa_flags = SA_SIGINFO}},
+    {SIGTERM, (struct sigaction){.sa_handler = SIG_IGN, .sa_flags = SA_SIGINFO}},
+    {SIGINT, (struct sigaction){.sa_handler = SIG_IGN, .sa_flags = SA_SIGINFO}},
+    {SIGABRT, (struct sigaction){.sa_handler = SIG_IGN, .sa_flags = SA_SIGINFO}}
 };
+static signal_handlers_t g_psmgrHandledSignalsThreadOld[] = {
+    {SIGILL, (struct sigaction){}},
+    {SIGFPE, (struct sigaction){}},
+    {SIGSEGV, (struct sigaction){}},
+    {SIGCHLD, (struct sigaction){}},
+    {SIGTERM, (struct sigaction){}},
+    {SIGINT, (struct sigaction){}},
+    {SIGABRT, (struct sigaction){}}
+};
+static const signal_handlers_t g_psmgrHandledSignalsMainNew[] = {
+    {SIGCHLD, (struct sigaction){}},//.sa_handler = i_psmgrHandleChildTerminate, .sa_flags = SA_SIGINFO}},
+    {SIGTERM, (struct sigaction){.sa_handler = i_psmgrHandleMainTerminate, .sa_flags = SA_SIGINFO}},
+    {SIGINT, (struct sigaction){.sa_handler = i_psmgrHandleMainTerminate, .sa_flags = SA_SIGINFO}}
+};
+static signal_handlers_t g_psmgrHandledSignalsMainOld[] = {
+    {SIGCHLD, (struct sigaction){}},
+    {SIGTERM, (struct sigaction){}},
+    {SIGINT, (struct sigaction){}}
+};
+
 static int i_psmgrExecRoutine(void* p_arg) {
     int i = 0, ret;
     bool all_signals_handled = true;
     PPSMGR_THREAD p_threadCtx = (PPSMGR_THREAD)p_arg;
     
     SYSLOG(LOG_INFO, "[PSMGR] INIT threadName=%s ppid=%u pid=%u p_execRoutine=%p", p_threadCtx->_fullThreadName, getppid(), getpid(), p_threadCtx->_p_execRoutine);
-    for(i = 0;i < sizeof(g_psmgrHandledSignals)/sizeof(g_psmgrHandledSignals[0]);i++) {
-        if(signal(g_psmgrHandledSignals[i]._signo, g_psmgrHandledSignals[i]._sigHandler) == SIG_ERR)
+    for(i = 0;i < sizeof(g_psmgrHandledSignalsThreadNew)/sizeof(g_psmgrHandledSignalsThreadNew[0]);i++) {
+        if(sigaction(g_psmgrHandledSignalsThreadNew[i]._signo, &g_psmgrHandledSignalsThreadNew[i]._sigcfg, &g_psmgrHandledSignalsThreadOld[i]._sigcfg) != 0)
             all_signals_handled = false;
     }
     p_threadCtx->_pid = getpid();
@@ -90,8 +117,8 @@ static int i_psmgrExecRoutine(void* p_arg) {
         ret = p_threadCtx->_p_execRoutine(p_threadCtx->_p_arg);
         SYSLOG(LOG_INFO, "[PSMGR] RET threadName=%s ppid=%u pid=%u p_execRoutine=%p ret=%d", p_threadCtx->_fullThreadName, getppid(), getpid(), p_threadCtx->_p_execRoutine, ret);
     }
-    for(i = 0;i < sizeof(g_psmgrHandledSignals)/sizeof(g_psmgrHandledSignals[0]);i++) {
-        signal(g_psmgrHandledSignals[i]._signo, SIG_DFL);
+    for(i = 0;i < sizeof(g_psmgrHandledSignalsThreadOld)/sizeof(g_psmgrHandledSignalsThreadOld[0]);i++) {
+        sigaction(g_psmgrHandledSignalsThreadOld[i]._signo, &g_psmgrHandledSignalsThreadOld[i]._sigcfg, NULL);
     }
     //release lock from execRoutine
     doublylinkedlistDel(g_psmgrCfg._threadList, p_threadCtx);
@@ -127,9 +154,15 @@ static void i_psmgrDumpList(void) {
 // external API
 
 KSTATUS psmgrStart(void) {
+    int i;
+    bool all_signals_handled = true;
     SYSLOG(LOG_INFO, "[PSMGR] Starting ...");
-    //if(signal(SIGCHLD, i_psmgrHandleChildTerminate) == SIG_ERR)
-    //    return KSTATUS_UNSUCCESS;
+    for(i = 0;i < sizeof(g_psmgrHandledSignalsMainNew)/sizeof(g_psmgrHandledSignalsMainNew[0]);i++) {
+        if(sigaction(g_psmgrHandledSignalsMainNew[i]._signo, &g_psmgrHandledSignalsMainNew[i]._sigcfg, &g_psmgrHandledSignalsMainOld[i]._sigcfg) != 0)
+            all_signals_handled = false;
+    }
+    if(!all_signals_handled)
+        return KSTATUS_UNSUCCESS;
     g_psmgrCfg._threadList = doublylinkedlistAlloc();
     if(g_psmgrCfg._threadList == NULL)
         return KSTATUS_UNSUCCESS;
@@ -137,9 +170,12 @@ KSTATUS psmgrStart(void) {
 }
 
 void psmgrStop(void) {
+    int i;
     i_psmgrDumpList();
     SYSLOG(LOG_INFO, "[PSMGR] Stopping ...");
-    //signal(SIGCHLD, SIG_DFL);
+    for(i = 0;i < sizeof(g_psmgrHandledSignalsMainOld)/sizeof(g_psmgrHandledSignalsMainOld[0]);i++) {
+        sigaction(g_psmgrHandledSignalsMainOld[i]._signo, &g_psmgrHandledSignalsMainOld[i]._sigcfg, NULL);
+    }
     SYSLOG(LOG_INFO, "[PSMGR] Cleaning up...");
     doublylinkedlistFreeDeletedEntries(g_psmgrCfg._threadList);
     doublylinkedlistFree(g_psmgrCfg._threadList);

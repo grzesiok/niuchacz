@@ -8,14 +8,6 @@
 
 static KERNEL gKernelCfg;
 
-static void svcKernelSigHandler(int signo) {
-	mpp_printf("KernelHandler(pid=%d, %d)\n", getpid(), signo);
-	if(signo == SIGTERM || signo == SIGINT)
-		svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
-	/*if(signo == SIGHUP)
-	 * TODO: reload configuration file */
-}
-
 #ifndef DEBUG_MODE
 static void svcKernelInitService(void) {
 	int fd;
@@ -52,10 +44,6 @@ KSTATUS svcKernelInit(const char* confFileName) {
 	openlog("NIUCHACZ_DEBUG", LOG_PID|LOG_CONS, LOG_DAEMON);
 #endif
 	SYSLOG(LOG_INFO, "Starting...");
-	if(signal(SIGINT, svcKernelSigHandler) == SIG_ERR)
-		return KSTATUS_UNSUCCESS;
-	if(signal(SIGTERM, svcKernelSigHandler) == SIG_ERR)
-		return KSTATUS_UNSUCCESS;
 	/* Initialize config filesystem */
 	config_init(&gKernelCfg._cfg);
 	if(!config_read_file(&gKernelCfg._cfg, confFileName)) {
@@ -87,8 +75,6 @@ void svcKernelExit(int code) {
 	dbStop(gKernelCfg._db);
 	statsStop();
 	config_destroy(&gKernelCfg._cfg);
-	signal(SIGINT, SIG_DFL);
-	signal(SIGTERM, SIG_DFL);
 
 	/* Write system log and close it. */
 	SYSLOG(LOG_INFO, "Stopped");
