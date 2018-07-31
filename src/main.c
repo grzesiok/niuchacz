@@ -138,6 +138,7 @@ KSTATUS pcap_thread_routine(void* arg)
 	KSTATUS _status;
 	PJOB pjob;
 
+	SYSLOG(LOG_INFO, "PCAP init signals");
 	if(signal(SIGTERM, pcap_thread_ExitRoutine) == SIG_ERR)
 		return KSTATUS_UNSUCCESS;
 	if(signal(SIGINT, pcap_thread_ExitRoutine) == SIG_ERR)
