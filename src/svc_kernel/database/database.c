@@ -15,6 +15,7 @@ KSTATUS dbStart(const char* p_path, sqlite3** p_db)
 		SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
 		return KSTATUS_UNSUCCESS;
 	}
+	SYSLOG(LOG_INFO, "[DB] Openning FileName(%s) Version(%s)...", p_path, sqlite3_libversion());
 	rc = sqlite3_open(p_path, &db);
 	_status = (rc) ? KSTATUS_DB_OPEN_ERROR : KSTATUS_SUCCESS;
 	if(!KSUCCESS(_status))
@@ -29,6 +30,7 @@ KSTATUS dbStart(const char* p_path, sqlite3** p_db)
 		*p_db = NULL;
 		return KSTATUS_DB_OPEN_ERROR;
 	}
+	SYSLOG(LOG_INFO, "[DB] Opened FileName(%s) Version(%s)", p_path, sqlite3_libversion());
 	*p_db = db;
 	return KSTATUS_SUCCESS;
 }
