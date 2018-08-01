@@ -3,11 +3,11 @@
 
 static const char* cgCreateSchemaCmdList =
 		"create table if not exists cmdmgr_cmdlist ("
-		"code text, description text, version integer, routine integer"
+		"code text, description text, version integer, pexec integer, pcreate integer, pdestroy integer"
 		");";
 static const char* cgInsertCommand =
-		"insert into cmdmgr_cmdlist(code, description, version, routine)"
-		"values (?, ?, ?, ?);";
+		"insert into cmdmgr_cmdlist(code, description, version, pexec, pcreate, pdestroy)"
+		"values (?, ?, ?, ?, ?, ?);";
 
 typedef struct {
 	queue_t *_pjobQueue;
@@ -18,18 +18,19 @@ CMD_MANAGER gCmdManager;
 
 /* Internal API */
 
-static PJOB_ROUTINE i_cmdmgrFindRoutine(const char* cmd) {
-	int rc;
-	sqlite3_stmt *stmt;
-	PJOB_ROUTINE proutine;
+static PJOB_ROUTINE i_cmdmgrFindPtr(const char* cmd, const char* column_name) {
+    int rc;
+    sqlite3_stmt *stmt;
+    char formatted_query[255];
+    PJOB_ROUTINE proutine;
 
-	rc = sqlite3_prepare_v2(svcKernelGetDb(), "select routine from cmdmgr_cmdlist where code = ?;", -1, &stmt, 0);
+    sptrinf(formatted_query, "select %s from cmdmgr_cmdlist where code = ?;", column_name);
+    rc = sqlite3_prepare_v2(svcKernelGetDb(), formatted_query, -1, &stmt, 0);
     if(rc != SQLITE_OK) {
     	SYSLOG(LOG_ERR, "Failed to prepare cursor: %s", dbGetErrmsg(svcKernelGetDb()));
         return NULL;
     }
-
-	rc = sqlite3_bind_text(stmt, 1, cmd, -1, SQLITE_STATIC);
+    rc = sqlite3_bind_text(stmt, 1, cmd, -1, SQLITE_STATIC);
     if(rc != SQLITE_OK) {
     	SYSLOG(LOG_ERR, "Failed to bind text(%s): %s", cmd, dbGetErrmsg(svcKernelGetDb()));
         return NULL;
@@ -40,14 +41,26 @@ static PJOB_ROUTINE i_cmdmgrFindRoutine(const char* cmd) {
     	proutine = (PJOB_ROUTINE)sqlite3_column_int64(stmt, 0);
         rc = sqlite3_finalize(stmt);
         if(rc != SQLITE_OK) {
-        	SYSLOG(LOG_ERR, "Failed to clear cursor: %s", dbGetErrmsg(svcKernelGetDb()));
+            SYSLOG(LOG_ERR, "Failed to clear cursor: %s", dbGetErrmsg(svcKernelGetDb()));
             return NULL;
         }
         DPRINTF("Routine %p found for cmd=%s", proutine, cmd);
         return proutine;
     }
-	SYSLOG(LOG_ERR, "No command found for: %s", cmd);
+    SYSLOG(LOG_ERR, "No command found for: %s", cmd);
     return NULL;
+}
+
+static PJOB_ROUTINE i_cmdmgrFindCreate(const char* cmd) {
+    return i_cmdmgrFindPtr(cmd, "pcreate");
+}
+
+static PJOB_ROUTINE i_cmdmgrFindDestroy(const char* cmd) {
+    return i_cmdmgrFindPtr(cmd, "pdestroy");
+}
+
+static PJOB_ROUTINE i_cmdmgrFindRoutine(const char* cmd) {
+    return i_cmdmgrFindPtr(cmd, "pexec");
 }
 
 KSTATUS i_cmdmgrJobExec(PJOB pjob) {
@@ -117,7 +130,7 @@ void cmdmgrWaitForAllJobs(void) {
 	}
 }
 
-KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_ROUTINE proutine, int version) {
+KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_ROUTINE proutine, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version) {
 	int rc;
 	sqlite3_stmt *stmt;
 
@@ -129,30 +142,58 @@ KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_ROUTINE 
 	rc = sqlite3_bind_text(stmt, 1, cmd, -1, SQLITE_STATIC);
 	if(rc != SQLITE_OK) {
 		SYSLOG(LOG_ERR, "Failed to bind command(%s): %s", cmd, dbGetErrmsg(svcKernelGetDb()));
-		return KSTATUS_UNSUCCESS;
+		_status = KSTATUS_UNSUCCESS;
+		goto __cleanup;
 	}
 	rc = sqlite3_bind_text(stmt, 2, description, -1, SQLITE_STATIC);
 	if(rc != SQLITE_OK) {
 		SYSLOG(LOG_ERR, "Failed to bind description(%s): %s", description, dbGetErrmsg(svcKernelGetDb()));
-		return KSTATUS_UNSUCCESS;
+		_status = KSTATUS_UNSUCCESS;
+		goto __cleanup;
 	}
 	rc = sqlite3_bind_int(stmt, 3, version);
 	if(rc != SQLITE_OK) {
 		SYSLOG(LOG_ERR, "Failed to bind version(%d): %s", version, dbGetErrmsg(svcKernelGetDb()));
-		return KSTATUS_UNSUCCESS;
+		_status = KSTATUS_UNSUCCESS;
+		goto __cleanup;
 	}
-	rc = sqlite3_bind_int64(stmt, 4, (sqlite_int64)proutine);
+	rc = sqlite3_bind_int64(stmt, 4, (sqlite_int64)pexec);
 	if(rc != SQLITE_OK) {
-		SYSLOG(LOG_ERR, "Failed to bind routine(%p): %s", proutine, dbGetErrmsg(svcKernelGetDb()));
-		return KSTATUS_UNSUCCESS;
+		SYSLOG(LOG_ERR, "Failed to bind pexec(%p): %s", pexec, dbGetErrmsg(svcKernelGetDb()));
+		_status = KSTATUS_UNSUCCESS;
+		goto __cleanup;
+	}
+	rc = sqlite3_bind_int64(stmt, 5, (sqlite_int64)pcreate);
+	if(rc != SQLITE_OK) {
+		SYSLOG(LOG_ERR, "Failed to bind pcreate(%p): %s", pcreate, dbGetErrmsg(svcKernelGetDb()));
+		_status = KSTATUS_UNSUCCESS;
+		goto __cleanup;
+	}
+	rc = sqlite3_bind_int64(stmt, 6, (sqlite_int64)pdestroy);
+	if(rc != SQLITE_OK) {
+		SYSLOG(LOG_ERR, "Failed to bind pdestroy(%p): %s", pdestroy, dbGetErrmsg(svcKernelGetDb()));
+		_status = KSTATUS_UNSUCCESS;
+		goto __cleanup;
 	}
 	if(sqlite3_step(stmt) != SQLITE_DONE) {
 		SYSLOG(LOG_ERR, "Failed to add new command=%s: %s", cmd, dbGetErrmsg(svcKernelGetDb()));
-		return KSTATUS_UNSUCCESS;
+		_status = KSTATUS_UNSUCCESS;
+		goto __cleanup;
+	}
+	rc = pcreate();
+	if(rc != 0) {
+		SYSLOG(LOG_ERR, "Failed to create command=%s: %d", cmd, rc);
+		_status = KSTATUS_UNSUCCESS;
+	}
+__cleanup:
+	if(!KSUCCESS(_status)) {
+		pdestroy();
+		return _status;
 	}
 	rc = sqlite3_finalize(stmt);
 	if(rc != SQLITE_OK) {
 		SYSLOG(LOG_ERR, "Failed to clear cursor: %s", dbGetErrmsg(svcKernelGetDb()));
+		pdestroy();
 		return KSTATUS_UNSUCCESS;
 	}
 	SYSLOG(LOG_INFO, "Command %s added successfully", cmd);

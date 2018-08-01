@@ -6,12 +6,13 @@
 #include <net/ethernet.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
-#include "mapper.h"
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <netinet/ether.h>
 #include <signal.h>
 #include "svc_kernel/database/database.h"
+#include "import.h"
+#include "export.h"
 
 #define MAIN_THREAD_PRODUCER 0
 #define MAIN_THREAD_CONSUMER 1
@@ -23,7 +24,6 @@ typedef struct _NIUCHACZ_CTX {
 
 typedef struct _NIUCHACZ_MAIN {
 	NIUCHACZ_CTX _threads[2];
-	sqlite3_stmt *_stmt;
 	sqlite3 *_db;
 } NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
 
@@ -34,87 +34,6 @@ static const char * cgCreateSchema =
 		"ts_sec unsigned big int, ts_usec unsigned big int, eth_shost text, eth_dhost text, eth_type int,"
 		"ip_vhl int,ip_tos int,ip_len int,ip_id int,ip_off int,ip_ttl int,ip_p int,ip_sum int,ip_src text,ip_dst text"
 		");";
-static const char * cgStmt =
-		"insert into packets(ts_sec, ts_usec,eth_shost,eth_dhost,eth_type,"
-		"ip_vhl,ip_tos,ip_len,ip_id,ip_off,ip_ttl,ip_p,ip_sum,ip_src,ip_dst)"
-		"values (?,?,?,?,?,"
-		"?,?,?,?,?,?,?,?,?,?);";
-
-int packet_analyze(struct timeval ts, void* packet, size_t packet_len) {
-	MAPPER_RESULTS results;
-	struct timespec startTime;
-
-    if(!mapFrame((unsigned char *)packet, packet_len, &results)) {
-    	SYSLOG(LOG_ERR, "Error in parsing message!");
-		return -1;
-	}
-    //ts_sec since Epoch (1970) timestamp						  /* Timestamp of packet */
-    if(!dbBind_int64(true, g_Main._stmt, 1, ts.tv_sec)) {
-        return -1;
-    }//ts_usec /* Microseconds */
-    if(!dbBind_int64(true, g_Main._stmt, 2, ts.tv_usec)) {
-        return -1;
-    }
-    //u_char  eth_shost[ETHER_ADDR_LEN];      /* source host address */
-    if(!dbBind_text(true, g_Main._stmt, 3, ether_ntoa((struct ether_addr*)&results._ethernet.eth_shost)) != SQLITE_OK) {
-        return -1;
-    }
-    //u_char  eth_dhost[ETHER_ADDR_LEN];      /* destination host address */
-    if(!dbBind_text(true, g_Main._stmt, 4, ether_ntoa((struct ether_addr*)&results._ethernet.eth_dhost)) != SQLITE_OK) {
-        return -1;
-    }
-    //u_short eth_type;                       /* IP? ARP? RARP? etc */
-    if(!dbBind_int(true, g_Main._stmt, 5, results._ethernet.eth_type) != SQLITE_OK) {
-        return -1;
-    }
-    //u_char  ip_vhl;                 		  /* version << 4 | header length >> 2 */
-    if(!dbBind_int(true, g_Main._stmt, 6, results._ip.ip_vhl) != SQLITE_OK) {
-        return -1;
-    }
-    //u_char  ip_tos;                 		  /* type of service */
-    if(!dbBind_int(true, g_Main._stmt, 7, results._ip.ip_tos) != SQLITE_OK) {
-        return -1;
-    }
-    //u_short ip_len;                 		  /* total length */
-    if(!dbBind_int(true, g_Main._stmt, 8, results._ip.ip_len) != SQLITE_OK) {
-        return -1;
-    }
-    //u_short ip_id;                  		  /* identification */
-    if(!dbBind_int(true, g_Main._stmt, 9, results._ip.ip_id) != SQLITE_OK) {
-        return -1;
-    }
-    //u_short ip_off;                 		  /* fragment offset field */
-    if(!dbBind_int(true, g_Main._stmt, 10, results._ip.ip_off) != SQLITE_OK) {
-        return -1;
-    }
-    //u_char  ip_ttl;                 		  /* time to live */
-    if(!dbBind_int(true, g_Main._stmt, 11, results._ip.ip_ttl) != SQLITE_OK) {
-        return -1;
-    }
-    //u_char  ip_p;                   		  /* protocol */
-    if(!dbBind_int(true, g_Main._stmt, 12, results._ip.ip_p) != SQLITE_OK) {
-        return -1;
-    }
-    //u_short ip_sum;                 		  /* checksum */
-    if(!dbBind_int(true, g_Main._stmt, 13, results._ip.ip_sum) != SQLITE_OK) {
-        return -1;
-    }
-    //struct  in_addr ip_src;  		  /* source address */
-    if(!dbBind_text(true, g_Main._stmt, 14, inet_ntoa(results._ip.ip_src)) != SQLITE_OK) {
-        return -1;
-    }
-    //struct  in_addr ip_dst;  		  /* dest address */
-    if(!dbBind_text(true, g_Main._stmt, 15, inet_ntoa(results._ip.ip_dst)) != SQLITE_OK) {
-        return -1;
-    }
-	startTime = timerStart();
-    if(sqlite3_step(g_Main._stmt) != SQLITE_DONE) {
-    	SYSLOG(LOG_ERR, "%s", dbGetErrmsg(g_Main._db));
-    }
-    sqlite3_reset(g_Main._stmt);
-	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
-	return 0;
-}
 
 pcap_t *gp_PcapHandle;
 void pcap_thread_cancelRoutine(void* ptr) {
@@ -203,6 +122,20 @@ KSTATUS schema_sync(void)
 	return _status;
 }
 
+KSTATUS cmd_sync(void) {
+	KSTATUS _status;
+	_status = cmdmgrAddCommand("PACKET_ANALYZE", "Analyze network packets and store it in DB file", cmdPacketAnalyzeExec, cmdPacketAnalyzeCreate, cmdPacketAnalyzeDestroy, 1);
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = cmdmgrAddCommand("IMPORT_FILE", "Import PCAP file to DB", cmdImportFileExec, cmdImportFileCreate, cmdImportFileDestroy, 1);
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = cmdmgrAddCommand("EXPORT_FILE", "Export DB to file", cmdExportFileExec, cmdExportFileCreate, cmdExportFileDestroy, 1);
+	if(!KSUCCESS(_status))
+		return _status;
+	return KSTATUS_SUCCESS;
+}
+
 int main(int argc, char* argv[])
 {
 	KSTATUS _status;
@@ -228,13 +161,9 @@ int main(int argc, char* argv[])
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
 	svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);
-	_status = cmdmgrAddCommand("PACKET_ANALYZE", "Analyze network packets and store it in DB file", packet_analyze, 1);
+	_status = cmd_sync();
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
-	if(sqlite3_prepare(g_Main._db, cgStmt, -1, &g_Main._stmt, 0) != SQLITE_OK) {
-		SYSLOG(LOG_ERR, "Could not prepare statement.");
-		goto __database_stop_andexit;
-	}
 	g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
 	_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	if(!KSUCCESS(_status)) {
@@ -252,7 +181,6 @@ int main(int argc, char* argv[])
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
 	svcKernelMainLoop();
-	sqlite3_finalize(g_Main._stmt);
 	statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 __database_stop_andexit:
