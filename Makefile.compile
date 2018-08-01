@@ -10,7 +10,9 @@ FILECOBJ=\
     src/svc_kernel/svc_time.o\
     src/svc_kernel/execute_unit/cmd_manager.o\
     src/main.o\
-    src/import.o\
+    src/import_file.o\
+    src/export_file.o\
+    src/packet_analyze.o\
     src/mapper.o
     
 FILECOBJ_TESTHASHPERF=\
