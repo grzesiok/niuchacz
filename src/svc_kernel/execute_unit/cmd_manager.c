@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <stdio.h>
 #include "cmd_manager.h"
 
 static const char* cgCreateSchemaCmdList =
@@ -18,13 +19,13 @@ CMD_MANAGER gCmdManager;
 
 /* Internal API */
 
-static PJOB_ROUTINE i_cmdmgrFindPtr(const char* cmd, const char* column_name) {
+static void* i_cmdmgrFindPtr(const char* cmd, const char* column_name) {
     int rc;
     sqlite3_stmt *stmt;
     char formatted_query[255];
-    PJOB_ROUTINE proutine;
+    void* ptr = NULL;
 
-    sptrinf(formatted_query, "select %s from cmdmgr_cmdlist where code = ?;", column_name);
+    sprintf(formatted_query, "select %s from cmdmgr_cmdlist where code = ?;", column_name);
     rc = sqlite3_prepare_v2(svcKernelGetDb(), formatted_query, -1, &stmt, 0);
     if(rc != SQLITE_OK) {
     	SYSLOG(LOG_ERR, "Failed to prepare cursor: %s", dbGetErrmsg(svcKernelGetDb()));
@@ -38,43 +39,42 @@ static PJOB_ROUTINE i_cmdmgrFindPtr(const char* cmd, const char* column_name) {
 
     rc = sqlite3_step(stmt);
     if(rc == SQLITE_ROW) {
-    	proutine = (PJOB_ROUTINE)sqlite3_column_int64(stmt, 0);
-        rc = sqlite3_finalize(stmt);
-        if(rc != SQLITE_OK) {
-            SYSLOG(LOG_ERR, "Failed to clear cursor: %s", dbGetErrmsg(svcKernelGetDb()));
-            return NULL;
-        }
-        DPRINTF("Routine %p found for cmd=%s", proutine, cmd);
-        return proutine;
+    	ptr = (void*)sqlite3_column_int64(stmt, 0);
+        DPRINTF("Routine %p(%s) found for cmd=%s", ptr, column_name, cmd);
+        return ptr;
+    } else SYSLOG(LOG_ERR, "No command found for: %s", cmd);
+    rc = sqlite3_finalize(stmt);
+    if(rc != SQLITE_OK) {
+        SYSLOG(LOG_ERR, "Failed to clear cursor: %s", dbGetErrmsg(svcKernelGetDb()));
+        return ptr;
     }
-    SYSLOG(LOG_ERR, "No command found for: %s", cmd);
-    return NULL;
+    return ptr;
 }
 
-static PJOB_ROUTINE i_cmdmgrFindCreate(const char* cmd) {
-    return i_cmdmgrFindPtr(cmd, "pcreate");
+static PJOB_CREATE i_cmdmgrFindCreate(const char* cmd) {
+    return (PJOB_CREATE)i_cmdmgrFindPtr(cmd, "pcreate");
 }
 
-static PJOB_ROUTINE i_cmdmgrFindDestroy(const char* cmd) {
-    return i_cmdmgrFindPtr(cmd, "pdestroy");
+static PJOB_DESTROY i_cmdmgrFindDestroy(const char* cmd) {
+    return (PJOB_DESTROY)i_cmdmgrFindPtr(cmd, "pdestroy");
 }
 
-static PJOB_ROUTINE i_cmdmgrFindRoutine(const char* cmd) {
-    return i_cmdmgrFindPtr(cmd, "pexec");
+static PJOB_EXEC i_cmdmgrFindExec(const char* cmd) {
+    return (PJOB_EXEC)i_cmdmgrFindPtr(cmd, "pexec");
 }
 
 KSTATUS i_cmdmgrJobExec(PJOB pjob) {
 	int ret;
-	PJOB_ROUTINE proutine;
+	PJOB_EXEC pexec;
 
 	if(!svcKernelIsRunning()) {
 		return KSTATUS_SVC_IS_STOPPING;
 	}
-	proutine = i_cmdmgrFindRoutine(pjob->_cmd);
-	if(proutine == NULL)
+	pexec = i_cmdmgrFindExec(pjob->_cmd);
+	if(pexec == NULL)
 		return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
 	__atomic_add_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_ACQUIRE);
-	ret = proutine(pjob->_ts, pjob->_data, pjob->_dataSize);
+	ret = pexec(pjob->_ts, pjob->_data, pjob->_dataSize);
 	__atomic_sub_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_RELEASE);
 	if(ret != 0)
 		//job should be rescheduled again
@@ -112,9 +112,9 @@ KSTATUS cmdmgrStart(void) {
 	if(!KSUCCESS(_status))
 		return _status;
 	gCmdManager._pjobQueue = queue_create(1000000);
-	gCmdManager._activeJobs = 0;
 	if(gCmdManager._pjobQueue == NULL)
 		return KSTATUS_UNSUCCESS;
+	gCmdManager._activeJobs = 0;
 	_status = psmgrCreateThread("cmdmgrExecutor", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, NULL);
 	return _status;
 }
@@ -130,9 +130,10 @@ void cmdmgrWaitForAllJobs(void) {
 	}
 }
 
-KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_ROUTINE proutine, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version) {
+KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version) {
 	int rc;
 	sqlite3_stmt *stmt;
+	KSTATUS _status;
 
 	rc = sqlite3_prepare_v2(svcKernelGetDb(), cgInsertCommand, -1, &stmt, 0);
 	if(rc != SQLITE_OK) {
@@ -196,7 +197,7 @@ __cleanup:
 		pdestroy();
 		return KSTATUS_UNSUCCESS;
 	}
-	SYSLOG(LOG_INFO, "Command %s added successfully", cmd);
+	SYSLOG(LOG_INFO, "Command %s(%p, %p, %p) added successfully", cmd, pexec, pcreate, pdestroy);
 	return KSTATUS_SUCCESS;
 }
 
