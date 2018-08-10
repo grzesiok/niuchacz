@@ -1,5 +1,6 @@
 #include "queue.h"
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <errno.h>
 #include <stdint.h>
@@ -42,6 +43,7 @@ static void* i_queue_memcpy_from(queue_t *pqueue, const void* dst, volatile void
 }
 
 queue_t* queue_create(size_t size) {
+	bool all_mutexes_properly_initialized = true;
 	queue_t *pqueue_tmp = malloc(size+sizeof(queue_t));
 	if(pqueue_tmp == NULL)
 		return NULL;
@@ -51,15 +53,29 @@ queue_t* queue_create(size_t size) {
 	pqueue_tmp->_tail = pqueue_tmp->_leftborder;
 	pqueue_tmp->_maxsize = size;
 	pqueue_tmp->_leftsize = size;
-	pthread_mutex_init(&pqueue_tmp->_readMutex, NULL);
-	pthread_cond_init(&pqueue_tmp->_readCondVariable, NULL);
-	pthread_mutex_init(&pqueue_tmp->_writeMutex, NULL);
-	pthread_cond_init(&pqueue_tmp->_writeCondVariable, NULL);
+	if(pthread_mutex_init(&pqueue_tmp->_readMutex, NULL) != 0) {
+		all_mutexes_properly_initialized = false;
+	}
+	if(pthread_cond_init(&pqueue_tmp->_readCondVariable, NULL) != 0) {
+		all_mutexes_properly_initialized = false;
+	}
+	if(pthread_mutex_init(&pqueue_tmp->_writeMutex, NULL) != 0) {
+		all_mutexes_properly_initialized = false;
+	}
+	if(pthread_cond_init(&pqueue_tmp->_writeCondVariable, NULL) != 0) {
+		all_mutexes_properly_initialized = false;
+	}
+	if(!all_mutexes_properly_initialized) {
+		queue_destroy(pqueue_tmp);
+		return NULL;
+	}
 	memset(pqueue_tmp->_leftborder, 0, size);
 	return pqueue_tmp;
 }
 
 void queue_destroy(queue_t* pqueue) {
+	if(pqueue == NULL)
+		return;
 	pthread_mutex_destroy(&pqueue->_readMutex);
 	pthread_cond_destroy(&pqueue->_readCondVariable);
 	pthread_mutex_destroy(&pqueue->_writeMutex);
