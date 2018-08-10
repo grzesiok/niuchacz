@@ -43,7 +43,7 @@ KSTATUS svcKernelInit(const char* confFileName) {
 #else
 	openlog("NIUCHACZ_DEBUG", LOG_PID|LOG_CONS, LOG_DAEMON);
 #endif
-	SYSLOG(LOG_INFO, "Starting...");
+	SYSLOG(LOG_INFO, "[KERNEL] Starting...");
 	/* Initialize config filesystem */
 	config_init(&gKernelCfg._cfg);
 	if(!config_read_file(&gKernelCfg._cfg, confFileName)) {
@@ -64,12 +64,12 @@ KSTATUS svcKernelInit(const char* confFileName) {
 	if(!KSUCCESS(_status))
 		return _status;
 
-	SYSLOG(LOG_INFO, "Started");
+	SYSLOG(LOG_INFO, "[KERNEL] Started");
 	return KSTATUS_SUCCESS;
 }
 
 void svcKernelExit(int code) {
-	SYSLOG(LOG_INFO, "Stopping...");
+	SYSLOG(LOG_INFO, "[KERNEL] Stopping...");
 	cmdmgrStop();
 	psmgrStop();
 	dbStop(gKernelCfg._db);
@@ -77,7 +77,7 @@ void svcKernelExit(int code) {
 	config_destroy(&gKernelCfg._cfg);
 
 	/* Write system log and close it. */
-	SYSLOG(LOG_INFO, "Stopped");
+	SYSLOG(LOG_INFO, "[KERNEL] Stopped");
 	closelog();
 
 	exit(code);
