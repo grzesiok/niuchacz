@@ -13,4 +13,6 @@ bool dbBind_int(bool isNotEmpty, sqlite3_stmt *pStmt, int i, int iValue);
 bool dbBind_text(bool isNotEmpty, sqlite3_stmt *pStmt, int i, const char *zData);
 
 extern stats_key g_statsKey_DbExecTime;
+
+extern sqlite3* getNiuchaczPcapDB();
 #endif /* _DATABASE_H */
