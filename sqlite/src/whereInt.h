@@ -19,7 +19,7 @@
 ** Trace output macros
 */
 #if defined(SQLITE_TEST) || defined(SQLITE_DEBUG)
-/***/ int sqlite3WhereTrace;
+/***/ extern int sqlite3WhereTrace;
 #endif
 #if defined(SQLITE_DEBUG) \
     && (defined(SQLITE_TEST) || defined(SQLITE_ENABLE_WHERETRACE))
@@ -467,12 +467,10 @@ int sqlite3WhereExplainOneScan(
   Parse *pParse,                  /* Parse context */
   SrcList *pTabList,              /* Table list this loop refers to */
   WhereLevel *pLevel,             /* Scan to write OP_Explain opcode for */
-  int iLevel,                     /* Value for "level" column of output */
-  int iFrom,                      /* Value for "from" column of output */
   u16 wctrlFlags                  /* Flags passed to sqlite3WhereBegin() */
 );
 #else
-# define sqlite3WhereExplainOneScan(u,v,w,x,y,z) 0
+# define sqlite3WhereExplainOneScan(u,v,w,x) 0
 #endif /* SQLITE_OMIT_EXPLAIN */
 #ifdef SQLITE_ENABLE_STMT_SCANSTATUS
 void sqlite3WhereAddScanStatus(
@@ -515,7 +513,6 @@ void sqlite3WhereTabFuncArgs(Parse*, struct SrcList_item*, WhereClause*);
 **     WO_LE    == SQLITE_INDEX_CONSTRAINT_LE
 **     WO_GT    == SQLITE_INDEX_CONSTRAINT_GT
 **     WO_GE    == SQLITE_INDEX_CONSTRAINT_GE
-**     WO_MATCH == SQLITE_INDEX_CONSTRAINT_MATCH
 */
 #define WO_IN     0x0001
 #define WO_EQ     0x0002
@@ -523,7 +520,7 @@ void sqlite3WhereTabFuncArgs(Parse*, struct SrcList_item*, WhereClause*);
 #define WO_LE     (WO_EQ<<(TK_LE-TK_EQ))
 #define WO_GT     (WO_EQ<<(TK_GT-TK_EQ))
 #define WO_GE     (WO_EQ<<(TK_GE-TK_EQ))
-#define WO_MATCH  0x0040
+#define WO_AUX    0x0040       /* Op useful to virtual tables only */
 #define WO_IS     0x0080
 #define WO_ISNULL 0x0100
 #define WO_OR     0x0200       /* Two or more OR-connected terms */

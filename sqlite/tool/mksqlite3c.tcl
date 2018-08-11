@@ -320,6 +320,7 @@ foreach file {
 
    os_unix.c
    os_win.c
+   memdb.c
 
    bitvec.c
    pcache.c
@@ -362,6 +363,7 @@ foreach file {
    table.c
    trigger.c
    update.c
+   upsert.c
    vacuum.c
    vtab.c
    wherecode.c
@@ -394,6 +396,7 @@ foreach file {
    fts3_icu.c
    sqlite3rbu.c
    dbstat.c
+   dbpage.c
    sqlite3session.c
    json1.c
    fts5.c
