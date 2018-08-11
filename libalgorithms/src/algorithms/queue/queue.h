@@ -25,6 +25,7 @@ queue_t* queue_create(size_t size);
 void queue_destroy(queue_t* pqueue);
 int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout);
 int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct timespec *timeout);
+void queue_signal(queue_t *pqueue);
 
 
 #endif /*_LIBALGORITHMS_ALGORITHMS_QUEUE_H */

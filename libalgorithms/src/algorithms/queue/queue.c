@@ -138,3 +138,8 @@ int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct t
 	pthread_cond_broadcast(&pqueue->_readCondVariable);
 	return header._size;
 }
+
+void queue_signal(queue_t *pqueue) {
+	pthread_cond_broadcast(&pqueue->_readCondVariable);
+	pthread_cond_broadcast(&pqueue->_writeCondVariable);
+}
