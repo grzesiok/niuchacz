@@ -2,17 +2,16 @@
 #include "svc_kernel/svc_kernel.h"
 #include <pcap.h>
 #include <unistd.h>
-#include <netinet/in.h>
 #include <net/ethernet.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
-#include <arpa/inet.h>
 #include <stdbool.h>
-#include <netinet/ether.h>
 #include <signal.h>
 #include "svc_kernel/database/database.h"
-#include "import.h"
-#include "export.h"
+//Commands
+#include "packet_analyze.h"
+#include "import_file.h"
+#include "export_file.h"
 
 #define MAIN_THREAD_PRODUCER 0
 #define MAIN_THREAD_CONSUMER 1
@@ -34,6 +33,10 @@ static const char * cgCreateSchema =
 		"ts_sec unsigned big int, ts_usec unsigned big int, eth_shost text, eth_dhost text, eth_type int,"
 		"ip_vhl int,ip_tos int,ip_len int,ip_id int,ip_off int,ip_ttl int,ip_p int,ip_sum int,ip_src text,ip_dst text"
 		");";
+
+sqlite3* getNiuchaczPcapDB() {
+	return g_Main._db;
+}
 
 pcap_t *gp_PcapHandle;
 void pcap_thread_cancelRoutine(void* ptr) {
@@ -118,7 +121,7 @@ KSTATUS pcap_thread_routine(void* arg)
 KSTATUS schema_sync(void)
 {
 	KSTATUS _status;
-	_status = dbExec(g_Main._db, cgCreateSchema);
+	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchema);
 	return _status;
 }
 
@@ -184,7 +187,7 @@ int main(int argc, char* argv[])
 	statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
 	statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
 __database_stop_andexit:
-	dbStop(g_Main._db);
+	dbStop(getNiuchaczPcapDB());
 __exit:
 	svcKernelExit(0);
 }

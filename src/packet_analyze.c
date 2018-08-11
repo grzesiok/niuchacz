@@ -1,8 +1,12 @@
 #include "packet_analyze.h"
+#include <netinet/ether.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include "mapper.h"
 #include "svc_kernel/database/database.h"
 
-struct {
+typedef struct {
 	sqlite3_stmt *_stmt;
 } cmd_packet_analyze_t;
 
@@ -17,7 +21,7 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
     MAPPER_RESULTS results;
     struct timespec startTime;
 
-    if(!mapFrame((unsigned char *)packet, packet_len, &results)) {
+    if(!mapFrame((unsigned char *)pdata, dataSize, &results)) {
     	SYSLOG(LOG_ERR, "Error in parsing message!");
         return -1;
     }
@@ -82,7 +86,7 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
     }
 	startTime = timerStart();
     if(sqlite3_step(g_cmd_packetAnalyze._stmt) != SQLITE_DONE) {
-    	SYSLOG(LOG_ERR, "%s", dbGetErrmsg(g_cmd_packetAnalyze._db));
+    	SYSLOG(LOG_ERR, "%s", dbGetErrmsg(getNiuchaczPcapDB()));
     }
     sqlite3_reset(g_cmd_packetAnalyze._stmt);
     statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
@@ -90,14 +94,14 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
 }
 
 int cmdPacketAnalyzeCreate(void) {
-    if(sqlite3_prepare(g_Main._db, cgStmt, -1, &g_cmd_packetAnalyze._stmt, 0) != SQLITE_OK) {
+    if(sqlite3_prepare(getNiuchaczPcapDB(), cgStmt, -1, &g_cmd_packetAnalyze._stmt, 0) != SQLITE_OK) {
         SYSLOG(LOG_ERR, "Could not prepare statement.");
         return -1;
     }
     return 0;
 }
 
-int cmdaPacketAnalyzeDestroy(void) {
+int cmdPacketAnalyzeDestroy(void) {
     sqlite3_finalize(g_cmd_packetAnalyze._stmt);
     return 0;
 }
