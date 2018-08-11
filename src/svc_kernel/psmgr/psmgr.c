@@ -202,7 +202,7 @@ void psmgrStopUserThreads(void) {
 }
 
 KSTATUS psmgrCreateThread(const char* c_threadName, int threadType, psmgr_execRoutine p_execRoutine, psmgr_cancelRoutine p_cancelRoutine, void *p_arg) {
-    //KSTATUS _status = KSTATUS_UNSUCCESS;
+    KSTATUS _status;
     PPSMGR_THREAD p_threadCtx;
     pid_t pid;
 
@@ -230,12 +230,20 @@ KSTATUS psmgrCreateThread(const char* c_threadName, int threadType, psmgr_execRo
     pid = clone(i_psmgrExecRoutine, p_threadCtx->_p_stack + STACK_SIZE-1, CLONE_FILES | CLONE_VM | CLONE_FS, p_threadCtx);
     if(pid != -1) {
          SYSLOG(LOG_INFO, "[PSMGR] CREATE threadName=%s pid=%u ppid=%u p_execRoutine=%p p_cancelRoutine=%p", c_threadName, pid, getpid(), p_execRoutine, p_cancelRoutine);
-         /*if(waitpid(pid, NULL, __WALL) == -1) {
-                  DPRINTF(TEXT("errno %u"), errno);
-         } else _status = KSTATUS_SUCCESS;*/
+    /*if(waitpid(pid, NULL, __WALL) == -1) {
+          DPRINTF(TEXT("errno %u"), errno);
+    } else _status = KSTATUS_SUCCESS;*/
+        _status = KSTATUS_SUCCESS;
     } else {
         FREE(p_threadCtx);
      	STACK_FREE(p_threadCtx->_p_stack);
+        _status = KSTATUS_UNSUCCESS;
     }
+    return _status;
+}
+
+KSTATUS psmgrWaitForThread(pid_t pid) {
+    while(waitpid(pid, NULL, __WALL) != pid)
+	sleep(1);
     return KSTATUS_SUCCESS;
 }
