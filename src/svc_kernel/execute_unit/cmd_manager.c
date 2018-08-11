@@ -11,8 +11,9 @@ static const char* cgInsertCommand =
 		"values (?, ?, ?, ?, ?, ?);";
 
 typedef struct {
-	queue_t *_pjobQueue;
-	unsigned int _activeJobs;
+    queue_t *_pjobQueue;
+    unsigned int _activeJobs;
+    pid_t _cmdExecutorPid;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
@@ -64,70 +65,73 @@ static PJOB_EXEC i_cmdmgrFindExec(const char* cmd) {
 }
 
 KSTATUS i_cmdmgrJobExec(PJOB pjob) {
-	int ret;
-	PJOB_EXEC pexec;
+    int ret;
+    PJOB_EXEC pexec;
 
-	if(!svcKernelIsRunning()) {
-		return KSTATUS_SVC_IS_STOPPING;
-	}
-	pexec = i_cmdmgrFindExec(pjob->_cmd);
-	if(pexec == NULL)
-		return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
-	__atomic_add_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_ACQUIRE);
-	ret = pexec(pjob->_ts, pjob->_data, pjob->_dataSize);
-	__atomic_sub_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_RELEASE);
-	if(ret != 0)
-		//job should be rescheduled again
-		//or job should be freed if rescheduled is not an option
-		return KSTATUS_UNSUCCESS;
-	return KSTATUS_SUCCESS;
+    if(!svcKernelIsRunning()) {
+        return KSTATUS_SVC_IS_STOPPING;
+    }
+    pexec = i_cmdmgrFindExec(pjob->_cmd);
+    if(pexec == NULL)
+        return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
+    __atomic_add_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_ACQUIRE);
+    ret = pexec(pjob->_ts, pjob->_data, pjob->_dataSize);
+    __atomic_sub_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_RELEASE);
+    if(ret != 0)
+        //job should be rescheduled again
+        //or job should be freed if rescheduled is not an option
+        return KSTATUS_UNSUCCESS;
+    return KSTATUS_SUCCESS;
 }
 
 KSTATUS i_cmdmgrExecutor(void* arg) {
-	char buffer[100000];
-	PJOB pjob = (PJOB)buffer;
-	int ret;
-	static struct timespec time_to_wait = {0, 0};
+    char buffer[100000];
+    PJOB pjob = (PJOB)buffer;
+    int ret;
+    static struct timespec time_to_wait = {0, 0};
 
-	SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
-	while(svcKernelIsRunning()) {
-		time_to_wait.tv_sec = time(NULL) + 1;
-		ret = queue_read(gCmdManager._pjobQueue, pjob, &time_to_wait);
-		if(ret > 0) {
-			i_cmdmgrJobExec(pjob);
-		} else if(ret == QUEUE_RET_ERROR) {
-			SYSLOG(LOG_ERR, "[CMDMGR] Error during dequeue job");
-		}
-	}
-	SYSLOG(LOG_INFO, "[CMDMGR] Stopping Job Executor");
-	return KSTATUS_SUCCESS;
+    SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
+    gCmdManager._cmdExecutorPid = getpid();
+    while(svcKernelIsRunning()) {
+        time_to_wait.tv_sec = time(NULL) + 1;
+        ret = queue_read(gCmdManager._pjobQueue, pjob, &time_to_wait);
+        if(ret > 0) {
+            i_cmdmgrJobExec(pjob);
+        } else if(ret == QUEUE_RET_ERROR) {
+            SYSLOG(LOG_ERR, "[CMDMGR] Error during dequeue job");
+        }
+    }
+    SYSLOG(LOG_INFO, "[CMDMGR] Stopping Job Executor");
+    return KSTATUS_SUCCESS;
 }
 
 /* External API */
 
 KSTATUS cmdmgrStart(void) {
-	KSTATUS _status;
-	SYSLOG(LOG_INFO, "[CMDMGR] Starting...");
-	_status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList);
-	if(!KSUCCESS(_status))
-		return _status;
-	gCmdManager._pjobQueue = queue_create(1000000);
-	if(gCmdManager._pjobQueue == NULL)
-		return KSTATUS_UNSUCCESS;
-	gCmdManager._activeJobs = 0;
-	_status = psmgrCreateThread("cmdmgrExecutor", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, NULL);
-	return _status;
+    KSTATUS _status;
+    SYSLOG(LOG_INFO, "[CMDMGR] Starting...");
+    _status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList);
+    if(!KSUCCESS(_status))
+        return _status;
+    gCmdManager._pjobQueue = queue_create(1000000);
+    if(gCmdManager._pjobQueue == NULL)
+        return KSTATUS_UNSUCCESS;
+    gCmdManager._activeJobs = 0;
+    _status = psmgrCreateThread("cmdmgrExecutor", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, NULL);
+    return _status;
 }
 
 void cmdmgrStop(void) {
-	SYSLOG(LOG_INFO, "[CMDMGR] Stopping...");
-	queue_destroy(gCmdManager._pjobQueue);
+    SYSLOG(LOG_INFO, "[CMDMGR] Stopping...");
+    queue_signal(gCmdManager._pjobQueue);
+    psmgrWaitForThread(gCmdManager._cmdExecutorPid);
+    queue_destroy(gCmdManager._pjobQueue);
 }
 
 void cmdmgrWaitForAllJobs(void) {
-	while(__atomic_load_n(&gCmdManager._activeJobs, __ATOMIC_ACQUIRE) > 0) {
-		sleep(1);
-	}
+    while(__atomic_load_n(&gCmdManager._activeJobs, __ATOMIC_ACQUIRE) > 0) {
+        sleep(1);
+    }
 }
 
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version) {
