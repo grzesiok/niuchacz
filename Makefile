@@ -21,7 +21,7 @@ FILEASM32OBJ_=$(FILEASM32OBJ:%=$(OBJDIR)/%)
 FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 
-prepare:
+prepare: build_dependencies
 	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
 	@$(ECHO) CC=$(CC) CFLAGS=$(CFLAGS)
 	@$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
@@ -30,7 +30,7 @@ clean_dependencies:
 	#@$(MAKE) -C libalgorithms clean
 	#@$(MAKE) -C sqlite clean
 	
-build_dependencies: prepare
+build_dependencies:
 	#@$(MAKE) -C libalgorithms all
 	#@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
 	#@$(MAKE) -C sqlite all
@@ -63,21 +63,19 @@ install:
 	systemctl daemon-reload
 	systemctl start niuchacz.service
 
-enable_debug:
-
 #kompilacja
 $(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
 	@$(ECHO) [COMPILE] $(OUTFILE)
 	@$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
 	
-testhashperf.out: enable_debug build_dependencies $(FILECOBJ_TESTHASHPERF)
+testhashperf.out: prepare $(FILECOBJ_TESTHASHPERF)
 	@$(ECHO) [COMPILE] testhashperf.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTHASHPERF)
 	
-testpsmgr.out: enable_debug build_dependencies $(FILECOBJ_TESTPSMGR)
+testpsmgr.out: prepare $(FILECOBJ_TESTPSMGR)
 	@$(ECHO) [COMPILE] testpsmgr.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTPSMGR)
 	
-testcmdmgr.out: build_dependencies $(FILECOBJ_TESTCMDMGR)
+testcmdmgr.out: prepare $(FILECOBJ_TESTCMDMGR)
 	@$(ECHO) [COMPILE] testcmdmgr.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTCMDMGR)
