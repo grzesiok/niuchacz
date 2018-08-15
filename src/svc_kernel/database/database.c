@@ -2,6 +2,10 @@
 
 stats_key g_statsKey_DbExecTime;
 
+// Internal API
+
+// External API
+
 KSTATUS dbStart(const char* p_path, sqlite3** p_db)
 {
 	int  rc;
@@ -43,8 +47,7 @@ void dbStop(sqlite3* db)
 	statsFree(g_statsKey_DbExecTime);
 }
 
-KSTATUS dbExec(sqlite3* db, const char* stmt, ...)
-{
+KSTATUS dbExec(sqlite3* db, const char* stmt, ...) {
 	int ret;
 	va_list args;
 	char buff[512];
@@ -56,6 +59,25 @@ KSTATUS dbExec(sqlite3* db, const char* stmt, ...)
 	va_end(args);
 	startTime = timerStart();
 	ret = sqlite3_exec(db, stmt, 0, 0, &errmsg);
+	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
+    	if(ret != SQLITE_OK) {
+    		SYSLOG(LOG_ERR, "[DB] Error during processing query=(%s): %s!", stmt, errmsg);
+    	}
+	return (ret != SQLITE_OK) ? KSTATUS_DB_EXEC_ERROR : KSTATUS_SUCCESS;
+}
+
+KSTATUS dbExecQuery(sqlite3* db, const char* stmt, int (*callback)(void*,int,char**,char**), ...) {
+	int ret;
+	va_list args;
+	char buff[512];
+	char *errmsg;
+	struct timespec startTime;
+
+	va_start(args, callback);
+	ret = vsnprintf(buff, 512, stmt, args);
+	va_end(args);
+	startTime = timerStart();
+	ret = sqlite3_exec(db, stmt, callback, 0, &errmsg);
 	statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
     	if(ret != SQLITE_OK) {
     		SYSLOG(LOG_ERR, "[DB] Error during processing query=(%s): %s!", stmt, errmsg);
