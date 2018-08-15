@@ -23,6 +23,12 @@ FILECOBJ_TESTHASHPERF=\
 FILECOBJ_TESTPSMGR=\
     src/kernel.o\
     src/tests/testpsmgr.o\
+    src/svc_kernel/database/database.o\
+    src/svc_kernel/svc_lock.o\
+    src/svc_kernel/svc_kernel.o\
+    src/svc_kernel/svc_statistics.o\
+    src/svc_kernel/svc_time.o\
+    src/svc_kernel/execute_unit/cmd_manager.o\
     src/svc_kernel/psmgr/psmgr.o
     
 FILECOBJ_TESTCMDMGR=\
