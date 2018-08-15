@@ -1,53 +1,65 @@
 #include "../svc_kernel/svc_kernel.h"
 
 int routineFirst(struct timeval ts, void* pdata, size_t dataSize) {
-	DPRINTF("First Executed(%s, %zu)", (char*)pdata, dataSize);
-	return 0;
+    DPRINTF("First Executed(%s, %zu)", (char*)pdata, dataSize);
+    return 0;
 }
 
 int routineSecond(struct timeval ts, void* pdata, size_t dataSize) {
-	DPRINTF("Second Executed(%s, %zu)", (char*)pdata, dataSize);
-	return 0;
+    DPRINTF("Second Executed(%s, %zu)", (char*)pdata, dataSize);
+    return 0;
 }
 
 int dummyCreate() {
-	return 0;
+    return 0;
 }
 
 int dummyDestroy() {
-	return 0;
+    return 0;
 }
 
 int main(int argc, char* argv[]) {
-	KSTATUS _status;
-	PJOB pjob;
-	struct timeval ts;
+    KSTATUS _status;
+    PJOB pjob;
+    struct timeval ts;
 
-	_status = svcKernelInit(argv[1]);
-	if(!KSUCCESS(_status))
-		goto __exit;
-	SYSLOG(LOG_INFO, "Environment prepared");
-	_status = cmdmgrAddCommand("FIRST", "First command desc", routineFirst, dummyCreate, dummyDestroy, 1);
-	if(!KSUCCESS(_status))
-		goto __exit;
-	_status = cmdmgrAddCommand("SECOND", "Second command desc", routineSecond, dummyCreate, dummyDestroy, 1);
-	if(!KSUCCESS(_status))
-		goto __exit;
-	_status = cmdmgrJobPrepare("FIRST", "FIRST", strlen("FIRST")+1, ts, &pjob);
-	if(!KSUCCESS(_status))
-		goto __exit;
-	_status = cmdmgrJobExec(pjob, JobModeSynchronous);
-	if(!KSUCCESS(_status))
-		goto __exit;
-	_status = cmdmgrJobPrepare("SECOND", "SECOND", strlen("SECOND")+1, ts, &pjob);
-	if(!KSUCCESS(_status))
-		goto __exit;
-	_status = cmdmgrJobExec(pjob, JobModeSynchronous);
-	if(!KSUCCESS(_status))
-		goto __exit;
+    _status = svcKernelInit(argv[1]);
+    if(!KSUCCESS(_status))
+        goto __exit;
+    svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);
+    SYSLOG(LOG_INFO, "Environment prepared");
+    _status = cmdmgrAddCommand("FIRST", "First command desc", routineFirst, dummyCreate, dummyDestroy, 1);
+    if(!KSUCCESS(_status))
+        goto __exit;
+    _status = cmdmgrAddCommand("SECOND", "Second command desc", routineSecond, dummyCreate, dummyDestroy, 1);
+    if(!KSUCCESS(_status))
+        goto __exit;
+    _status = cmdmgrJobPrepare("FIRST", "FIRST", strlen("FIRST")+1, ts, &pjob);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during preparing FIRST command");
+        goto __exit;
+    }
+    _status = cmdmgrJobExec(pjob, JobModeSynchronous);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during processing FIRST command");
+        goto __exit;
+    }
+    _status = cmdmgrJobPrepare("SECOND", "SECOND", strlen("SECOND")+1, ts, &pjob);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during preparing FIRST command");
+        goto __exit;
+    }
+    _status = cmdmgrJobExec(pjob, JobModeSynchronous);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during processing SECOND command");
+        goto __exit;
+    }
 __exit:
-	svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
-	svcKernelMainLoop();
-	svcKernelExit(0);
-	return 0;
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during processing test");
+    }
+    svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
+    svcKernelMainLoop();
+    svcKernelExit(0);
+    return 0;
 }
