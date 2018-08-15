@@ -13,7 +13,7 @@ static const char* cgInsertCommand =
 typedef struct {
     queue_t *_pjobQueue;
     unsigned int _activeJobs;
-    pid_t _cmdExecutorPid;
+    pthread_t _cmdExecutorThreadId;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
@@ -91,7 +91,7 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
     static struct timespec time_to_wait = {0, 0};
 
     SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
-    gCmdManager._cmdExecutorPid = getpid();
+    gCmdManager._cmdExecutorThreadId = pthread_self();
     while(svcKernelIsRunning()) {
         time_to_wait.tv_sec = time(NULL) + 1;
         ret = queue_read(gCmdManager._pjobQueue, pjob, &time_to_wait);
@@ -124,7 +124,7 @@ KSTATUS cmdmgrStart(void) {
 void cmdmgrStop(void) {
     SYSLOG(LOG_INFO, "[CMDMGR] Stopping...");
     queue_signal(gCmdManager._pjobQueue);
-    psmgrWaitForThread(gCmdManager._cmdExecutorPid);
+    psmgrWaitForThread(gCmdManager._cmdExecutorThreadId);
     queue_destroy(gCmdManager._pjobQueue);
 }
 
@@ -226,8 +226,6 @@ KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct t
 
 KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode) {
 	KSTATUS _status = KSTATUS_UNSUCCESS;
-
-	DPRINTF("Execute job");
 	switch(mode) {
 	//if mode == JobModeAsynchronous then function should back immediatelly and schedule job to future
 	case JobModeAsynchronous:
