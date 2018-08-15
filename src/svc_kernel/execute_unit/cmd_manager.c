@@ -64,6 +64,20 @@ static PJOB_EXEC i_cmdmgrFindExec(const char* cmd) {
     return (PJOB_EXEC)i_cmdmgrFindPtr(cmd, "pexec");
 }
 
+int i_cmdmgrDestroySingleCommand(void *NotUsed, int argc, char **argv, char **azColName) {
+    if(argc == 0) {
+        SYSLOG(LOG_ERR, "argc = 0");
+        return 0;
+    }
+    SYSLOG(LOG_INFO, "Destroying %s", argv[0]);
+    PJOB_DESTROY pdestroy = i_cmdmgrFindDestroy(argv[0]);
+    if(pdestroy == NULL) {
+        return 0;
+    }
+    pdestroy();
+    return 0;
+}
+
 KSTATUS i_cmdmgrJobExec(PJOB pjob) {
     int ret;
     PJOB_EXEC pexec;
@@ -126,6 +140,8 @@ void cmdmgrStop(void) {
     queue_signal(gCmdManager._pjobQueue);
     psmgrWaitForThread(gCmdManager._cmdExecutorThreadId);
     queue_destroy(gCmdManager._pjobQueue);
+    SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up commands...");
+    dbExecQuery(svcKernelGetDb(), "select code from cmdmgr_cmdlist", i_cmdmgrDestroySingleCommand);
 }
 
 void cmdmgrWaitForAllJobs(void) {
@@ -189,7 +205,7 @@ KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pex
 	if(rc != 0) {
 		SYSLOG(LOG_ERR, "Failed to create command=%s: %d", cmd, rc);
 		_status = KSTATUS_UNSUCCESS;
-	}
+	} else _status = KSTATUS_SUCCESS;
 __cleanup:
 	if(!KSUCCESS(_status)) {
 		pdestroy();
