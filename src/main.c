@@ -121,7 +121,7 @@ KSTATUS pcap_thread_routine(void* arg)
 KSTATUS schema_sync(void)
 {
 	KSTATUS _status;
-	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchema);
+	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchema, 0);
 	return _status;
 }
 
@@ -139,13 +139,31 @@ KSTATUS cmd_sync(void) {
 	return KSTATUS_SUCCESS;
 }
 
+KSTATUS testExportFile(const char* file_name) {
+    KSTATUS _status;
+    PJOB pjob;
+    struct timeval ts;
+    cmd_export_cfg_t cfg;
+
+    strcpy(cfg._file_name, file_name);
+    _status = cmdmgrJobPrepare("EXPORT_FILE", &cfg, sizeof(cmd_export_cfg_t), ts, &pjob);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during preparing EXPORT_FILE command");
+        return _status;
+    }
+    _status = cmdmgrJobExec(pjob, JobModeSynchronous);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during processing EXPORT_FILE command");
+        return _status;
+    }
+    return KSTATUS_SUCCESS;
+}
+
 int main(int argc, char* argv[])
 {
 	KSTATUS _status;
 	const char *dbFileName, *deviceName;
 
-	if(argc != 2)
-		return -1;
 	_status = svcKernelInit(argv[1]);
 	if(!KSUCCESS(_status))
 		goto __exit;
@@ -167,25 +185,34 @@ int main(int argc, char* argv[])
 	_status = cmd_sync();
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
-	g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
-	_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
-	if(!KSUCCESS(_status)) {
-		SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
-		goto __database_stop_andexit;
+	if(config_lookup(svcKernelGetCfg(), "NIUCHACZ.testMode") == NULL) {
+		g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
+		_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
+		if(!KSUCCESS(_status)) {
+			SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
+			goto __database_stop_andexit;
+		}
+		g_Main._threads[MAIN_THREAD_CONSUMER]._p_deviceName = deviceName;
+		_status = statsAlloc("consumerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
+		if(!KSUCCESS(_status)) {
+			SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
+			goto __database_stop_andexit;
+		}
+		SYSLOG(LOG_INFO, "Prepare listen on device=%s", deviceName);
+		_status = psmgrCreateThread("pcapThreadRoutine", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
+		if(!KSUCCESS(_status))
+			goto __database_stop_andexit;
+	} else {
+		if(strcmp(argv[2], "EXPORT_FILE") == 0) {
+			testExportFile(argv[3]);
+		}
+		svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
 	}
-	g_Main._threads[MAIN_THREAD_CONSUMER]._p_deviceName = deviceName;
-	_status = statsAlloc("consumerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
-	if(!KSUCCESS(_status)) {
-		SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
-		goto __database_stop_andexit;
-	}
-	SYSLOG(LOG_INFO, "Prepare listen on device=%s", deviceName);
-	_status = psmgrCreateThread("pcapThreadRoutine", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
-	if(!KSUCCESS(_status))
-		goto __database_stop_andexit;
 	svcKernelMainLoop();
-	statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
-	statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
+	if(config_lookup(svcKernelGetCfg(), "NIUCHACZ.testMode") == NULL) {
+		statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
+		statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
+	}
 __database_stop_andexit:
 	dbStop(getNiuchaczPcapDB());
 __exit:
