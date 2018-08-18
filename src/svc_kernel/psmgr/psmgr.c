@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include "algorithms.h"
+#include <errno.h>
 
 typedef struct _PSMGR_THREAD {
     pthread_t _threadId;
@@ -195,8 +196,13 @@ KSTATUS psmgrCreateThread(const char* c_threadName, int threadType, psmgr_execRo
 
 KSTATUS psmgrWaitForThread(pthread_t threadId) {
     int ret;
-    ret = pthread_join(threadId, NULL);
-    if(ret != 0)
-        return KSTATUS_UNSUCCESS;
-    return KSTATUS_SUCCESS;
+    static struct timespec time_to_wait = {0, 0};
+
+    while(ret != ETIMEDOUT) {
+        time_to_wait.tv_sec = time(NULL) + 1;
+        ret = pthread_timedjoin_np(threadId, NULL, &time_to_wait);
+        if(ret == 0)
+            return KSTATUS_SUCCESS;
+    }
+    return KSTATUS_UNSUCCESS;
 }
