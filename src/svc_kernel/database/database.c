@@ -107,18 +107,18 @@ KSTATUS dbStart(const char* p_path, sqlite3** p_db)
     SYSLOG(LOG_INFO, "[DB] Openning FileName(%s) Version(%s)...", p_path, sqlite3_libversion());
     rc = sqlite3_open(p_path, &db);
     if(rc) {
-        SYSLOG(LOG_ERR, "[DB] Error during opening DB(%s)!", p_path);
+        SYSLOG(LOG_ERR, "[DB] Error during opening DB(%s): %s!", p_path, dbGetErrmsg(db));
         *p_db = db;
         return KSTATUS_DB_OPEN_ERROR;
     }
     _status = dbExec(db, "PRAGMA journal_mode = WAL;", 0);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB] Error during enabling WAL journal_mode for DB(%s)!", p_path);
+        SYSLOG(LOG_ERR, "[DB] Error during enabling WAL journal_mode for DB(%s): %s!", p_path, dbGetErrmsg(db));
         return _status;
     }
     _status = dbExec(db, "PRAGMA synchronous = NORMAL;", 0);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB] Error during switching synchronous to NORMAL for DB(%s)!", p_path);
+        SYSLOG(LOG_ERR, "[DB] Error during switching synchronous to NORMAL for DB(%s): %s!", p_path, dbGetErrmsg(db));
         return _status;
     }
     SYSLOG(LOG_INFO, "[DB] Opened FileName(%s) Version(%s)", p_path, sqlite3_libversion());
