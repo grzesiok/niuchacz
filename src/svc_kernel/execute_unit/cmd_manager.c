@@ -20,35 +20,21 @@ CMD_MANAGER gCmdManager;
 
 /* Internal API */
 
+int i_cmdmgrFindPtr_GetVal(void *retVal, sqlite3_stmt* stmt) {
+    void* ptr = (void*)sqlite3_column_int64(stmt, 0);
+    memcpy(retVal, (void*)&ptr, sizeof(void*));
+    return 0;
+}
+
 static void* i_cmdmgrFindPtr(const char* cmd, const char* column_name) {
-    int rc;
-    sqlite3_stmt *stmt;
-    char formatted_query[255];
+    KSTATUS _status;
     void* ptr = NULL;
+    char formatted_query[255];
 
     sprintf(formatted_query, "select %s from cmdmgr_cmdlist where code = ?;", column_name);
-    rc = sqlite3_prepare_v2(svcKernelGetDb(), formatted_query, -1, &stmt, 0);
-    if(rc != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "Failed to prepare cursor: %s", dbGetErrmsg(svcKernelGetDb()));
-        return NULL;
-    }
-    rc = sqlite3_bind_text(stmt, 1, cmd, -1, SQLITE_STATIC);
-    if(rc != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "Failed to bind text(%s): %s", cmd, dbGetErrmsg(svcKernelGetDb()));
-        return NULL;
-    }
-
-    rc = sqlite3_step(stmt);
-    if(rc == SQLITE_ROW) {
-    	ptr = (void*)sqlite3_column_int64(stmt, 0);
-        DPRINTF("Routine %p(%s) found for cmd=%s", ptr, column_name, cmd);
-        return ptr;
-    } else SYSLOG(LOG_ERR, "No command found for: %s", cmd);
-    rc = sqlite3_finalize(stmt);
-    if(rc != SQLITE_OK) {
-        SYSLOG(LOG_ERR, "Failed to clear cursor: %s", dbGetErrmsg(svcKernelGetDb()));
-        return ptr;
-    }
+    _status = dbExecQuery(svcKernelGetDb(), formatted_query, 1, i_cmdmgrFindPtr_GetVal, &ptr, DB_BIND_TEXT, cmd);
+    if(!KSUCCESS(_status))
+        ptr = NULL;
     return ptr;
 }
 
