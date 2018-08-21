@@ -4,6 +4,7 @@ FILECOBJ=\
     src/algorithms/stream/cardinality/hyperloglog.o\
     src/ext/murmur/MurmurHash2.o\
     src/ext/murmur/MurmurHash2_64.o\
+    src/ext/art/art.o\
     src/algorithms/hash/hash.o\
     src/algorithms/spinlock/spinlock.o\
     src/algorithms/doublylinkedlist/doublylinkedlist.o\
