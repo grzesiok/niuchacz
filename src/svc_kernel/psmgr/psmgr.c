@@ -30,7 +30,6 @@ static PSMGR g_psmgrCfg;
 
 // internal API
 static void i_psmgrHandleMainTerminate(int signo) {
-    mpp_printf("psmgrHandleMainTerminate(pid=%lu, %d)\n", pthread_self(), signo);
     svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
     /*if(signo == SIGHUP) TODO: reload configuration file */
 
