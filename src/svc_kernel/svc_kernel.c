@@ -63,6 +63,9 @@ KSTATUS svcKernelInit(const char* confFileName) {
 	_status = cmdmgrStart();
 	if(!KSUCCESS(_status))
 		return _status;
+	_status = svcUpdateStart();
+	if(!KSUCCESS(_status))
+		return _status;
 
 	SYSLOG(LOG_INFO, "[KERNEL] Started");
 	return KSTATUS_SUCCESS;
@@ -70,6 +73,7 @@ KSTATUS svcKernelInit(const char* confFileName) {
 
 void svcKernelExit(int code) {
 	SYSLOG(LOG_INFO, "[KERNEL] Stopping...");
+        svcUpdateStop();
 	cmdmgrStop();
 	psmgrStop();
 	dbStop(gKernelCfg._db);

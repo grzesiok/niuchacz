@@ -178,7 +178,7 @@ int main(int argc, char* argv[])
 	_status = dbStart(dbFileName, &g_Main._db);
 	if(!KSUCCESS(_status))
 		goto __exit;
-	_status = schema_sync();
+	_status = svcUpdateSync(getNiuchaczPcapDB());
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
 	svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);

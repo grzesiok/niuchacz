@@ -8,6 +8,7 @@ FILECOBJ=\
     src/svc_kernel/svc_kernel.o\
     src/svc_kernel/svc_statistics.o\
     src/svc_kernel/svc_time.o\
+    src/svc_kernel/svc_update.o\
     src/svc_kernel/execute_unit/cmd_manager.o\
     src/main.o\
     src/import_file.o\
@@ -28,6 +29,7 @@ FILECOBJ_TESTPSMGR=\
     src/svc_kernel/svc_kernel.o\
     src/svc_kernel/svc_statistics.o\
     src/svc_kernel/svc_time.o\
+    src/svc_kernel/svc_update.o\
     src/svc_kernel/execute_unit/cmd_manager.o\
     src/svc_kernel/psmgr/psmgr.o
     
@@ -39,6 +41,7 @@ FILECOBJ_TESTCMDMGR=\
     src/svc_kernel/svc_kernel.o\
     src/svc_kernel/svc_statistics.o\
     src/svc_kernel/svc_time.o\
+    src/svc_kernel/svc_update.o\
     src/svc_kernel/execute_unit/cmd_manager.o\
     src/tests/testcmdmgr.o
 

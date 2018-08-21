@@ -2,12 +2,13 @@
 #define _SVC_KERNEL_H
 #include "../kernel.h"
 #include "svc_status.h"
-#include "svc_lock.h"
 #include "svc_statistics.h"
+#include "database/database.h"
+#include "svc_lock.h"
 #include "svc_time.h"
+#include "svc_update.h"
 #include "psmgr/psmgr.h"
 #include "execute_unit/cmd_manager.h"
-#include "database/database.h"
 #include <libconfig.h>
 
 typedef struct _KERNEL
