@@ -1,6 +1,13 @@
 #include "database.h"
 
+const char* gc_statsKey_DbPrepareTime = "db prepare time";
+stats_key g_statsKey_DbPrepareTime;
+const char* gc_statsKey_DbBindTime = "db bind time";
+stats_key g_statsKey_DbBindTime;
+const char* gc_statsKey_DbExecTime = "db exec time";
 stats_key g_statsKey_DbExecTime;
+const char* gc_statsKey_DbFinalizeTime = "db finalize time";
+stats_key g_statsKey_DbFinalizeTime;
 
 // Internal API
 
@@ -49,12 +56,17 @@ KSTATUS i_dbExec(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(voi
 
     if(callback == NULL)
         callback = i_dbExecEmptyCallback;
+    startTime = timerStart();
     rc = sqlite3_prepare_v2(db, stmt, -1, &pStmt, 0);
+    statsUpdate(g_statsKey_DbPrepareTime, timerStop(startTime));
     if(rc != SQLITE_OK) {
     	SYSLOG(LOG_ERR, "[DB] Failed to prepare cursor: %s", dbGetErrmsg(db));
         return KSTATUS_UNSUCCESS;
     }
-    if(!i_dbExecBindVariables(pStmt, args, bindCnt)) {
+    startTime = timerStart();
+    _status = (i_dbExecBindVariables(pStmt, args, bindCnt)) ? KSTATUS_SUCCESS : KSTATUS_UNSUCCESS;
+    statsUpdate(g_statsKey_DbBindTime, timerStop(startTime));
+    if(!KSUCCESS(_status)) {
     	SYSLOG(LOG_ERR, "[DB] Failed to bind variables to cursor: %s", dbGetErrmsg(db));
         return KSTATUS_UNSUCCESS;
     }
@@ -82,7 +94,9 @@ KSTATUS i_dbExec(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(voi
         SYSLOG(LOG_ERR, "[DB] Failed to execute cursor: %s", dbGetErrmsg(db));
         _status = KSTATUS_DB_EXEC_ERROR;
     }
+    startTime = timerStart();
     rc = sqlite3_finalize(pStmt);
+    statsUpdate(g_statsKey_DbFinalizeTime, timerStop(startTime));
     if(rc != SQLITE_OK) {
         SYSLOG(LOG_ERR, "[DB] Failed to clear cursor: %s", dbGetErrmsg(db));
         _status = KSTATUS_DB_EXEC_ERROR;
@@ -99,7 +113,22 @@ KSTATUS dbStart(const char* p_path, sqlite3** p_db)
     sqlite3* db;
 
     SYSLOG(LOG_INFO, "[DB] Starting FileName(%s) Version(%s)...", p_path, sqlite3_libversion());
-    _status = statsAlloc("db exec time", STATS_TYPE_SUM, &g_statsKey_DbExecTime);
+    _status = statsAlloc(gc_statsKey_DbExecTime, STATS_TYPE_SUM, &g_statsKey_DbExecTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(gc_statsKey_DbPrepareTime, STATS_TYPE_SUM, &g_statsKey_DbPrepareTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(gc_statsKey_DbBindTime, STATS_TYPE_SUM, &g_statsKey_DbBindTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(gc_statsKey_DbFinalizeTime, STATS_TYPE_SUM, &g_statsKey_DbFinalizeTime);
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
         return KSTATUS_UNSUCCESS;
@@ -130,7 +159,10 @@ void dbStop(sqlite3* db)
 {
     SYSLOG(LOG_INFO, "[DB] Stopping(%s)...", sqlite3_db_filename(db, "main"));
     sqlite3_close(db);
+    statsFree(g_statsKey_DbPrepareTime);
+    statsFree(g_statsKey_DbBindTime);
     statsFree(g_statsKey_DbExecTime);
+    statsFree(g_statsKey_DbFinalizeTime);
 }
 
 KSTATUS dbExec(sqlite3* db, const char* stmt, int bindCnt, ...) {
