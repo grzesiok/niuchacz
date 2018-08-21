@@ -65,7 +65,7 @@ KSTATUS i_dbExec(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(voi
         if(rc == SQLITE_DONE || rc == SQLITE_ROW) {
             rowCount++;
         } else {
-            SYSLOG(LOG_ERR, "[DB] Error during cursor executin: %s", dbGetErrmsg(db));
+            SYSLOG(LOG_ERR, "[DB] Error during cursor executing: %s", dbGetErrmsg(db));
             break;
         }
         if(rc == SQLITE_DONE) {
