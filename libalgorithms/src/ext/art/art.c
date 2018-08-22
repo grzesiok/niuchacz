@@ -129,7 +129,9 @@ int art_tree_destroy(art_tree *t) {
  */
 
 #ifndef BROKEN_GCC_C99_INLINE
-extern inline uint64_t art_size(art_tree *t);
+inline uint64_t art_size(art_tree *t) {
+    return t->size;
+}
 #endif
 
 static art_node** find_child(art_node *n, unsigned char c) {

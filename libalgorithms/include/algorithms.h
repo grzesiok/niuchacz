@@ -5,5 +5,5 @@
 #include "../src/algorithms/doublylinkedlist/doublylinkedlist.h"
 #include "../src/algorithms/queue/queue.h"
 #include "../src/algorithms/spinlock/spinlock.h"
-//#include "../src/ext/art/art.h"
+#include "../src/ext/art/art.h"
 #endif
