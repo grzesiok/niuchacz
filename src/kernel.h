@@ -8,8 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../libalgorithms/include/algorithms.h"
-
 #define MALLOC(type, num) (type*)malloc(sizeof(type)*num)
 #define MALLOC2(type, num, extrasize) (type*)malloc(sizeof(type)*num+extrasize)
 #define REALLOC(var, type, num) (type*)realloc(var, sizeof(type)*num)

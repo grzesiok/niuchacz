@@ -1,5 +1,6 @@
-#include "svc_statistics.h"
-#include "svc_lock.h"
+#include "svc_kernel/svc_statistics.h"
+#include "svc_kernel/svc_lock.h"
+#include "algorithms.h"
 
 #define STATS_ENTRY_FLAGS_FREE 0
 #define STATS_ENTRY_FLAGS_USED 1

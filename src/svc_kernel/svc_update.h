@@ -1,6 +1,6 @@
 #ifndef _SVC_UPDATE_H
 #define _SVC_UPDATE_H
-#include "svc_kernel.h"
+#include "svc_kernel/svc_kernel.h"
 
 typedef KSTATUS (*PSVCUPDATE_EXEC)(void);
 

@@ -1,6 +1,6 @@
 #ifndef _SVC_STATUS_H
 #define _SVC_STATUS_H
-#include "../kernel.h"
+#include "kernel.h"
 typedef unsigned int KSTATUS;
 
 #define KSTATUS_SUCCESS 0

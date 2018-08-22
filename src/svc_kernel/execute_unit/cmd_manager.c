@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include "cmd_manager.h"
+#include "algorithms.h"
 
 static const char* cgCreateSchemaCmdList =
 		"create table if not exists cmdmgr_cmdlist ("

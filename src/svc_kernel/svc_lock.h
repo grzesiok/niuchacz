@@ -1,7 +1,7 @@
 #ifndef _SVC_LOCK_H
 #define _SVC_LOCK_H
-#include "svc_status.h"
-#include "../kernel.h"
+#include "kernel.h"
+#include "svc_kernel/svc_status.h"
 #include <pthread.h>
 
 typedef struct _LOCKER_T

@@ -1,7 +1,7 @@
 #ifndef _SVC_STATISTICS_H
 #define _SVC_STATISTICS_H
-#include "../kernel.h"
-#include "svc_status.h"
+#include "kernel.h"
+#include "svc_kernel/svc_status.h"
 
 #define STATS_ENTRY_NAME_MAXSIZE 32
 

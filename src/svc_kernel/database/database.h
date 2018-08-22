@@ -1,7 +1,7 @@
 #ifndef _DATABASE_H
 #define _DATABASE_H
-#include "../../../sqlite/sqlite3.h"
-#include "../svc_kernel.h"
+#include "sqlite3.h"
+#include "svc_kernel/svc_kernel.h"
 
 KSTATUS dbStart(const char* p_path, sqlite3** p_db);
 void dbStop(sqlite3* db);

@@ -1,6 +1,6 @@
 #ifndef _PS_MANAGER_H
 #define _PS_MANAGER_H
-#include "../svc_kernel.h"
+#include "svc_kernel/svc_kernel.h"
 #include <pthread.h>
 
 typedef KSTATUS (*psmgr_execRoutine)(void *);

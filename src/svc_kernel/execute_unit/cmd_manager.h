@@ -1,6 +1,6 @@
 #ifndef _CMD_MANAGER_H
 #define _CMD_MANAGER_H
-#include "../svc_kernel.h"
+#include "svc_kernel/svc_kernel.h"
 
 typedef int (*PJOB_EXEC)(struct timeval ts, void* pdata, size_t dataSize);
 typedef int (*PJOB_CREATE)(void);

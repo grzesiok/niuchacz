@@ -1,6 +1,6 @@
-#include "svc_kernel.h"
+#include "svc_kernel/svc_kernel.h"
 #include <signal.h>
-#include "database/database.h"
+#include "svc_kernel/database/database.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>

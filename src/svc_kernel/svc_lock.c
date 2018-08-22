@@ -1,4 +1,4 @@
-#include "svc_lock.h"
+#include "svc_kernel/svc_lock.h"
 
 #ifndef DEBUG_MODE
 KSTATUS lock_init(PLOCKER locker)
