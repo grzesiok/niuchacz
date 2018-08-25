@@ -3,30 +3,25 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "../doublylinkedlist/doublylinkedlist.h"
+#include <time.h>
 
-typedef struct {
-	struct timespec _dataTimeout;
-	size_t _dataSize;
-} bst_node_entry_t;
-
-typedef struct {
-	uint64_t _key;
-	struct bst_node_t* _left;
-	struct bst_node_t* _right;
-	PDOUBLYLINKEDLIST _entryList;
+typedef struct _bst_node_t {
+    uint64_t _key;
+    struct _bst_node_t* _left;
+    struct _bst_node_t* _right;
+    struct timespec _dataTimeout;
+    size_t _dataSize;
 } bst_node_t;
 
 typedef struct {
-    size_t _maxsize;
     bst_node_t* _root;
 } bst_t;
 
-bst_t* bst_create(size_t size);
+bst_t* bst_create(void);
 void bst_destroy(bst_t* pbst);
 int bst_insert(bst_t *pbst, uint64_t key, const void *pbuf, size_t nBytes, const struct timespec *dataTimeout);
 int bst_delete(bst_t *pbst, uint64_t key);
 size_t bst_search(bst_t *pbst, uint64_t key, void *pbuf, size_t nMaxBytes);
-
+void bst_print(bst_node_t* pbst_node, int level);
 
 #endif /*_LIBALGORITHMS_ALGORITHMS_TREE_BST_H */

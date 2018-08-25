@@ -35,3 +35,7 @@ FILECOBJ_TESTDOUBLYLINKEDLIST=\
 FILECOBJ_TESTQUEUE=\
     tests/testqueue.o\
     src/algorithms/queue/queue.o
+
+FILECOBJ_TESTBST=\
+    tests/testbst.o\
+    src/algorithms/tree/bst.o

@@ -25,8 +25,8 @@ build: $(OUTFILE)
 
 clean:
 	@$(ECHO) Cleanup...
-	@$(ECHO) [RM] $(FILECOBJ_) $(FILECOBJ_TESTHLL) $(FILECOBJ_TESTHLL)
-	@rm -f $(FILECOBJ_) $(FILECOBJ_TESTHLL)
+	@$(ECHO) [RM] $(FILECOBJ_) $(FILECOBJ_TESTHLL) $(FILECOBJ_TESTQUEUE) $(FILECOBJ_TESTBST)
+	@rm -f $(FILECOBJ_) $(FILECOBJ_TESTHLL) $(FILECOBJ_TESTQUEUE) $(FILECOBJ_TESTBST)
 	@$(ECHO) [RM] $(FILEASM64OBJ_) $(FILEASM32OBJ_)
 	@rm -f $(FILEASM32OBJ_) $(FILEASM64OBJ_)
 	@$(ECHO) [RM] $(OUTFILE)
@@ -52,10 +52,6 @@ testhll.out: $(FILECOBJ_TESTHLL)
 	@$(ECHO) [COMPILE] testhll.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTHLL)
 	
-testbloomfilter.out: $(FILECOBJ_TESTBLOOMFILTER)
-	@$(ECHO) [COMPILE] testbloomfilter.out
-	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTBLOOMFILTER)
-	
 testdoublylinkedlist.out: $(FILECOBJ_TESTDOUBLYLINKEDLIST)
 	@$(ECHO) [COMPILE] testdoublylinkedlist.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTDOUBLYLINKEDLIST)
@@ -63,3 +59,7 @@ testdoublylinkedlist.out: $(FILECOBJ_TESTDOUBLYLINKEDLIST)
 testqueue.out: $(FILECOBJ_TESTQUEUE)
 	@$(ECHO) [COMPILE] testqueue.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTQUEUE)
+
+testbst.out: $(FILECOBJ_TESTBST)
+	@$(ECHO) [COMPILE] testbst.out
+	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTBST)
