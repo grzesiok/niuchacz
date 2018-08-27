@@ -5,12 +5,15 @@
 #include <arpa/inet.h>
 #include "mapper.h"
 #include "svc_kernel/database/database.h"
+#include "algorithms.h"
 
 static const char * cgStmt =
 		"insert into packets(ts_sec, ts_usec,eth_shost,eth_dhost,eth_type,"
 		"ip_vhl,ip_tos,ip_len,ip_id,ip_off,ip_ttl,ip_p,ip_sum,ip_src,ip_dst)"
 		"values (?,?,?,?,?,"
 		"?,?,?,?,?,?,?,?,?,?);";
+bst_t* g_IPCache;
+bst_t* g_EthCache;
 
 int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
     MAPPER_RESULTS results;
@@ -57,9 +60,18 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
 }
 
 int cmdPacketAnalyzeCreate(void) {
+    g_IPCache = bst_create();
+    g_EthCache = bst_create();
+    if(g_IPCache == NULL || g_EthCache == NULL) {
+        bst_destroy(g_IPCache);
+        bst_destroy(g_EthCache);
+        return -1;
+    }
     return 0;
 }
 
 int cmdPacketAnalyzeDestroy(void) {
+    bst_destroy(g_IPCache);
+    bst_destroy(g_EthCache);
     return 0;
 }
