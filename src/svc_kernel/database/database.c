@@ -1,4 +1,5 @@
 #include "database.h"
+#include "algorithms.h"
 
 const char* gc_statsKey_DbPrepareTime = "db prepare time";
 stats_key g_statsKey_DbPrepareTime;
@@ -56,24 +57,24 @@ KSTATUS i_dbExec(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(voi
 
     if(callback == NULL)
         callback = i_dbExecEmptyCallback;
-    startTime = timerStart();
+    timerWatchStart(&startTime);
     rc = sqlite3_prepare_v2(db, stmt, -1, &pStmt, 0);
-    statsUpdate(g_statsKey_DbPrepareTime, timerStop(startTime));
+    statsUpdate(g_statsKey_DbPrepareTime, timerWatchStop(startTime));
     if(rc != SQLITE_OK) {
     	SYSLOG(LOG_ERR, "[DB] Failed to prepare cursor: %s", dbGetErrmsg(db));
         return KSTATUS_UNSUCCESS;
     }
-    startTime = timerStart();
+    timerWatchStart(&startTime);
     _status = (i_dbExecBindVariables(pStmt, args, bindCnt)) ? KSTATUS_SUCCESS : KSTATUS_UNSUCCESS;
-    statsUpdate(g_statsKey_DbBindTime, timerStop(startTime));
+    statsUpdate(g_statsKey_DbBindTime, timerWatchStop(startTime));
     if(!KSUCCESS(_status)) {
     	SYSLOG(LOG_ERR, "[DB] Failed to bind variables to cursor: %s", dbGetErrmsg(db));
         return KSTATUS_UNSUCCESS;
     }
     while(1) {
-        startTime = timerStart();
+        timerWatchStart(&startTime);
         rc = sqlite3_step(pStmt);
-        statsUpdate(g_statsKey_DbExecTime, timerStop(startTime));
+        statsUpdate(g_statsKey_DbExecTime, timerWatchStop(startTime));
         if(rc == SQLITE_DONE || rc == SQLITE_ROW) {
             rowCount++;
         } else {
@@ -94,9 +95,9 @@ KSTATUS i_dbExec(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(voi
         SYSLOG(LOG_ERR, "[DB] Failed to execute cursor: %s", dbGetErrmsg(db));
         _status = KSTATUS_DB_EXEC_ERROR;
     }
-    startTime = timerStart();
+    timerWatchStart(&startTime);
     rc = sqlite3_finalize(pStmt);
-    statsUpdate(g_statsKey_DbFinalizeTime, timerStop(startTime));
+    statsUpdate(g_statsKey_DbFinalizeTime, timerWatchStop(startTime));
     if(rc != SQLITE_OK) {
         SYSLOG(LOG_ERR, "[DB] Failed to clear cursor: %s", dbGetErrmsg(db));
         _status = KSTATUS_DB_EXEC_ERROR;

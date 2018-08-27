@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <signal.h>
 #include "svc_kernel/database/database.h"
+#include "algorithms.h"
 //Commands
 #include "packet_analyze.h"
 #include "import_file.h"
@@ -96,7 +97,7 @@ KSTATUS pcap_thread_routine(void* arg)
 	while(svcKernelIsRunning()) {
 		packet = (void*)pcap_next(gp_PcapHandle, &header);
 		if(packet != NULL) {
-			startTime = timerStart();
+			timerWatchStart(&startTime);
 			_status = cmdmgrJobPrepare("PACKET_ANALYZE", packet, header.caplen, header.ts, &pjob);
 			if(!KSUCCESS(_status)) {
 				SYSLOG(LOG_ERR, "Couldn't prepare packet to analyze");
@@ -107,7 +108,7 @@ KSTATUS pcap_thread_routine(void* arg)
 				SYSLOG(LOG_ERR, "Couldn't execute job");
 				continue;
 			}
-			statsUpdate(p_ctx->_statsKey, timerStop(startTime));
+			statsUpdate(p_ctx->_statsKey, timerWatchStop(startTime));
 		}
 	}
 	/* cleanup */

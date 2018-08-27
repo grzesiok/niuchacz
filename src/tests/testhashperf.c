@@ -7,7 +7,7 @@
 #include "../svc_kernel/svc_time.h"
 #include <stdio.h>
 #include <string.h>
-#include "../../libalgorithms/include/algorithms.h"
+#include "algorithms.h"
 
 #define testCryptHASH(NAME, TYPE, LENGTH, INIT, UPDATE, FINAL)\
 unsigned long long testCrypt##NAME(int n, int size) {\
@@ -15,23 +15,25 @@ unsigned long long testCrypt##NAME(int n, int size) {\
 	TYPE c;\
 	unsigned char result[LENGTH];\
 	int i;\
-	struct timespec startTime = timerStart();\
+	struct timespec startTime;\
+        timerWatchStart(&startTime);\
 	for(i = 0;i < n;i++) {\
 		INIT(&c);\
 		UPDATE(&c, buffer, size);\
 		FINAL((unsigned char*)result, &c);\
 	}\
-	return timerStop(startTime);\
+	return timerWatchStop(startTime);\
 }
 #define testHASH64(NAME, FUNC)\
 unsigned long long test##NAME(int n, int size) {\
 	unsigned char buffer[size];\
 	int i;\
-	struct timespec startTime = timerStart();\
+	struct timespec startTime;\
+        timerWatchStart(&startTime);\
 	for(i = 0;i < n;i++) {\
 		FUNC((unsigned char*)buffer, size, 0);\
 	}\
-	return timerStop(startTime);\
+	return timerWatchStop(startTime);\
 }
 
 testCryptHASH(MD2, MD2_CTX, MD2_DIGEST_LENGTH, MD2_Init, MD2_Update, MD2_Final)

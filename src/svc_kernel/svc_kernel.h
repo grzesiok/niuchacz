@@ -5,7 +5,6 @@
 #include "svc_kernel/svc_statistics.h"
 #include "svc_kernel/database/database.h"
 #include "svc_kernel/svc_lock.h"
-#include "svc_kernel/svc_time.h"
 #include "svc_kernel/svc_update.h"
 #include "svc_kernel/psmgr/psmgr.h"
 #include "svc_kernel/execute_unit/cmd_manager.h"

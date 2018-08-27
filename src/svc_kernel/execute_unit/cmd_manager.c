@@ -94,7 +94,8 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
     SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
     gCmdManager._cmdExecutorThreadId = pthread_self();
     while(svcKernelIsRunning()) {
-        time_to_wait.tv_sec = time(NULL) + 1;
+        timerGetRealCurrentTimestamp(&time_to_wait);
+        time_to_wait.tv_sec += 1;
         ret = queue_read(gCmdManager._pjobQueue, pjob, &time_to_wait);
         if(ret > 0) {
             i_cmdmgrJobExec(pjob);
