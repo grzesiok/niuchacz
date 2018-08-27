@@ -20,7 +20,7 @@ typedef struct {
 bst_t* bst_create(void);
 void bst_destroy(bst_t* pbst);
 int bst_insert(bst_t *pbst, uint64_t key, const void *pbuf, size_t nBytes, const struct timespec *dataTimeout);
-int bst_delete(bst_t *pbst, uint64_t key);
+void bst_delete(bst_t *pbst, uint64_t key);
 size_t bst_search(bst_t *pbst, uint64_t key, void *pbuf, size_t nMaxBytes);
 void bst_print(bst_node_t* pbst_node, int level);
 
