@@ -8,7 +8,9 @@ FILECOBJ=\
     src/algorithms/hash/hash.o\
     src/algorithms/spinlock/spinlock.o\
     src/algorithms/doublylinkedlist/doublylinkedlist.o\
-    src/algorithms/queue/queue.o
+    src/algorithms/queue/queue.o\
+    src/algorithms/timer/timer.o\
+    src/algorithms/tree/bst.o
 
 #plik wynikowy
 OUTFILE=libalgorithms.so
@@ -38,4 +40,5 @@ FILECOBJ_TESTQUEUE=\
 
 FILECOBJ_TESTBST=\
     tests/testbst.o\
+    src/algorithms/timer/timer.o\
     src/algorithms/tree/bst.o
