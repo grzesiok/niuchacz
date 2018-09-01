@@ -23,6 +23,10 @@ int timerCmp(struct timespec *ts1, struct timespec *ts2) {
     return 1;
 }
 
+bool timerIsNull(struct timespec *ts) {
+    return (ts->tv_sec == 0 && ts->tv_nsec == 0);
+}
+
 void timerWatchStart(struct timespec *ts) {
     timerGetThreadCurrentTimestamp(ts);
 }
