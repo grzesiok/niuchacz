@@ -61,17 +61,22 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
 
 int cmdPacketAnalyzeCreate(void) {
     g_IPCache = bst_create();
-    g_EthCache = bst_create();
-    if(g_IPCache == NULL || g_EthCache == NULL) {
-        bst_destroy(g_IPCache);
-        bst_destroy(g_EthCache);
+    if(g_IPCache == NULL)
         return -1;
-    }
+    g_EthCache = bst_create();
+    if(g_EthCache == NULL)
+        return -1;
     return 0;
 }
 
 int cmdPacketAnalyzeDestroy(void) {
-    bst_destroy(g_IPCache);
-    bst_destroy(g_EthCache);
+    if(g_IPCache) {
+        bst_destroy(g_IPCache);
+        g_IPCache = NULL;
+    }
+    if(g_EthCache) {
+        bst_destroy(g_EthCache);
+        g_EthCache = NULL;
+    }
     return 0;
 }
