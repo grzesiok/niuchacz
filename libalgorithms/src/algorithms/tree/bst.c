@@ -73,8 +73,8 @@ bst_node_t* i_bst_delete_node(bst_node_t* root, int key) {
     return root;
 }
 
-bool i_bst_default_expire_handler(uint64_t key, void* ptr, size_t dataSize) {
-    return true;
+int i_bst_default_expire_handler(uint64_t key, void* ptr, size_t dataSize) {
+    return 0;
 }
 
 // external API
@@ -140,6 +140,8 @@ size_t bst_search(bst_t *pbst, uint64_t key, void *pbuf, size_t nMaxBytes) {
     bst_node_t *pbst_node;
     pbst_node = pbst->_root;
     struct timespec ts;
+    int tsNextCheckInS;
+
     while(pbst_node) {
         if(pbst_node->_key == key) {
             break;
@@ -155,7 +157,10 @@ size_t bst_search(bst_t *pbst, uint64_t key, void *pbuf, size_t nMaxBytes) {
     if(!timerIsNull(&pbst_node->_dataTimeout)) {
         timerGetRealCurrentTimestamp(&ts);
         if(timerCmp(&ts, &pbst_node->_dataTimeout) > 0) {
-            if(pbst->_expireHandler(key, memoryPtrMove(pbst_node, sizeof(bst_node_t)), pbst_node->_dataSize)) {
+            tsNextCheckInS = pbst->_expireHandler(key, memoryPtrMove(pbst_node, sizeof(bst_node_t)), pbst_node->_dataSize);
+            if(tsNextCheckInS > 0) {
+                pbst_node->_dataTimeout.tv_sec += tsNextCheckInS;
+            } else {
                 bst_delete(pbst, key);
                 return -2;
             }
