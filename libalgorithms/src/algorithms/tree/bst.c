@@ -143,6 +143,8 @@ size_t bst_search(bst_t *pbst, uint64_t key, void *pbuf, size_t nMaxBytes) {
             pbst_node = pbst_node->_right;
         }
     }
+    if(pbst_node == NULL)
+        return -1;
     if(!timerIsNull(&pbst_node->_dataTimeout)) {
         timerGetRealCurrentTimestamp(&ts);
         if(timerCmp(&ts, &pbst_node->_dataTimeout) < 0) {
@@ -150,8 +152,6 @@ size_t bst_search(bst_t *pbst, uint64_t key, void *pbuf, size_t nMaxBytes) {
             return -2;
         }
     }
-    if(pbst_node == NULL)
-        return -1;
     memcpy(pbuf, memoryPtrMove(pbst_node, sizeof(bst_node_t)), MIN(nMaxBytes, pbst_node->_dataSize));
     return MIN(nMaxBytes, pbst_node->_dataSize);
 }
