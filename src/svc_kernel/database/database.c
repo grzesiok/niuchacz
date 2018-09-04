@@ -184,6 +184,21 @@ KSTATUS dbExecQuery(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(
     return _status;
 }
 
+KSTATUS dbTxnBegin(sqlite3* db) {
+    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    return KSTATUS_SUCCESS;
+}
+
+KSTATUS dbTxnCommit(sqlite3* db) {
+    sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+    return KSTATUS_SUCCESS;
+}
+
+KSTATUS dbTxnRollback(sqlite3* db) {
+    sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+    return KSTATUS_SUCCESS;
+}
+
 const char* dbGetErrmsg(sqlite3* db) {
     return sqlite3_errmsg(db);
 }

@@ -11,6 +11,9 @@ void dbStop(sqlite3* db);
 #define DB_BIND_TEXT 3
 KSTATUS dbExec(sqlite3* db, const char* stmt, int bindCnt, ...);
 KSTATUS dbExecQuery(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(void*,sqlite3_stmt*), void* param, ...);
+KSTATUS dbTxnBegin(sqlite3* db);
+KSTATUS dbTxnCommit(sqlite3* db);
+KSTATUS dbTxnRollback(sqlite3* db);
 const char* dbGetErrmsg(sqlite3* db);
 
 extern sqlite3* getNiuchaczPcapDB();
