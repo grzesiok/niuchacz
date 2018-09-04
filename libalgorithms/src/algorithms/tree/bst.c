@@ -147,7 +147,7 @@ size_t bst_search(bst_t *pbst, uint64_t key, void *pbuf, size_t nMaxBytes) {
         return -1;
     if(!timerIsNull(&pbst_node->_dataTimeout)) {
         timerGetRealCurrentTimestamp(&ts);
-        if(timerCmp(&ts, &pbst_node->_dataTimeout) < 0) {
+        if(timerCmp(&ts, &pbst_node->_dataTimeout) > 0) {
             bst_delete(pbst, key);
             return -2;
         }
