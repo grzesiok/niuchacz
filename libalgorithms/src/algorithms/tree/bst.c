@@ -73,13 +73,20 @@ bst_node_t* i_bst_delete_node(bst_node_t* root, int key) {
     return root;
 }
 
+bool i_bst_default_expire_handler(uint64_t key, void* ptr, size_t dataSize) {
+    return true;
+}
+
 // external API
 
-bst_t* bst_create(void) {
+bst_t* bst_create(bst_expire_handler_t expireHandler) {
     bst_t *pbst = malloc(sizeof(bst_t));
     if(pbst == NULL)
         return NULL;
     pbst->_root = NULL;
+    if(expireHandler)
+        pbst->_expireHandler = expireHandler;
+    else pbst->_expireHandler = i_bst_default_expire_handler;
     return pbst;
 }
 
@@ -148,8 +155,10 @@ size_t bst_search(bst_t *pbst, uint64_t key, void *pbuf, size_t nMaxBytes) {
     if(!timerIsNull(&pbst_node->_dataTimeout)) {
         timerGetRealCurrentTimestamp(&ts);
         if(timerCmp(&ts, &pbst_node->_dataTimeout) > 0) {
-            bst_delete(pbst, key);
-            return -2;
+            if(pbst->_expireHandler(key, memoryPtrMove(pbst_node, sizeof(bst_node_t)), pbst_node->_dataSize)) {
+                bst_delete(pbst, key);
+                return -2;
+            }
         }
     }
     memcpy(pbuf, memoryPtrMove(pbst_node, sizeof(bst_node_t)), MIN(nMaxBytes, pbst_node->_dataSize));

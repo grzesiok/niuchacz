@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <time.h>
 
 typedef struct _bst_node_t {
@@ -13,11 +14,14 @@ typedef struct _bst_node_t {
     size_t _dataSize;
 } bst_node_t;
 
+typedef bool (*bst_expire_handler_t)(uint64_t key, void *pbuf, size_t nBytes);
+
 typedef struct {
     bst_node_t* _root;
+    bst_expire_handler_t _expireHandler;
 } bst_t;
 
-bst_t* bst_create(void);
+bst_t* bst_create(bst_expire_handler_t expireHandler);
 void bst_destroy(bst_t* pbst);
 int bst_insert(bst_t *pbst, uint64_t key, const void *pbuf, size_t nBytes, const struct timespec *dataTimeout);
 void bst_delete(bst_t *pbst, uint64_t key);
