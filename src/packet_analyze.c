@@ -100,6 +100,7 @@ int i_cmdPacketAnalyzeCacheEthGet(struct ether_addr* ea) {
     _status = dbTxnCommit(getNiuchaczPcapDB());
     ts.tv_sec += 60;
     bst_insert(g_EthCache, i_cmdPacketAnalyzeCacheEthStrToKey(ea), &ethID, sizeof(ethID), &ts);
+    SYSLOG(LOG_INFO, "[CACHE_ETH]: %s(%d) loaded", ether_ntoa_r(ea, buffEthStr), ethID);
     return ethID;
 }
 
@@ -170,6 +171,7 @@ int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
     _status = dbTxnCommit(getNiuchaczPcapDB());
     ts.tv_sec += 60;
     bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
+    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%d) loaded", inet_ntoa(*ip), ipID);
     return ipID;
 }
 
