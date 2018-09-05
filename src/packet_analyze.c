@@ -60,14 +60,14 @@ int i_cmdPacketAnalyzeCacheEthPopulate(void* param, sqlite3_stmt* stmt) {
     ea = ether_aton((const char*)sqlite3_column_text(stmt, 1));
     if(ea == NULL) {
         SYSLOG(LOG_INFO, "[CACHE_ETH]: %s not loaded - error during parsing!", sqlite3_column_text(stmt, 1));
-        return -1;
+        return 0;
     }
     ethID = sqlite3_column_int(stmt, 0);
     timerGetRealCurrentTimestamp(&ts);
     ts.tv_sec += 60;
     ret = bst_insert(g_EthCache, i_cmdPacketAnalyzeCacheEthStrToKey(ea), &ethID, sizeof(ethID), &ts);
     if(ret != sizeof(ethID))
-        return -2;
+        return 0;
     SYSLOG(LOG_INFO, "[CACHE_ETH]: %s(%d) loaded", sqlite3_column_text(stmt, 1), sqlite3_column_int(stmt, 0));
     return 0;
 }
@@ -112,7 +112,7 @@ int i_cmdPacketAnalyzeCacheIPPopulate(void* param, sqlite3_stmt* stmt) {
 
     if(inet_aton((const char*)sqlite3_column_text(stmt, 1), &ip) == 0) {
         SYSLOG(LOG_INFO, "[CACHE_IP]: %s not loaded - error during parsing", sqlite3_column_text(stmt, 1));
-        return -1;
+        return 0;
     }
     hp = gethostbyaddr((const void *)&ip, sizeof(ip), AF_INET);
     if(hp == NULL || strncmp(hp->h_name, (const char*)sqlite3_column_text(stmt, 2), MAX(strlen((const char*)sqlite3_column_text(stmt, 2)), hp->h_length)) != 0) {
@@ -125,7 +125,7 @@ int i_cmdPacketAnalyzeCacheIPPopulate(void* param, sqlite3_stmt* stmt) {
     ts.tv_sec += 60;
     ret = bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
     if(ret != sizeof(ipID))
-        return -2;
+        return 0;
     SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%d) loaded", sqlite3_column_text(stmt, 1), sqlite3_column_int(stmt, 0));
     return 0;
 }
