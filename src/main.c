@@ -29,12 +29,41 @@ typedef struct _NIUCHACZ_MAIN {
 
 NIUCHACZ_MAIN g_Main;
 
-static const char * cgCreateSchema =
-		"create table if not exists packets ("
-		"ts_sec unsigned big int, ts_usec unsigned big int, eth_shost text, eth_dhost text, eth_type int,"
-		"ip_vhl int,ip_tos int,ip_len int,ip_id int,ip_off int,ip_ttl int,ip_p int,ip_sum int,ip_src text,ip_dst text"
+static const char * cgCreateSchemaPackets =
+		"create table if not exists packets("
+		    "ts_sec unsigned big int,"
+                    "ts_usec unsigned big int,"
+                    "eth_shost text,"
+                    "eth_dhost text,"
+                    "eth_type int,"
+		    "ip_vhl int,"
+                    "ip_tos int,"
+                    "ip_len int,"
+                    "ip_id int,"
+                    "ip_off int,"
+                    "ip_ttl int,"
+                    "ip_p int,"
+                    "ip_sum int,"
+                    "ip_src text,"
+                    "ip_dst text"
 		");";
-
+static const char * cgCreateSchemaEth =
+                "create table if not exists eth("
+                    "eth_id integer primary key,"
+                    "ts_sec unsigned big int,"
+                    "ts_usec unsigned bit int,"
+                    "eth_addr text,"
+                    "activeflag int"
+                ");";
+static const char * cgCreateSchemaIP =
+                "create table if not exists ip("
+                    "ip_id integer primary key,"
+                    "ts_sec unsigned big int,"
+                    "ts_usec unsigned big int,"
+                    "ip_addr text,"
+                    "hostname text,"
+                    "activeflag int"
+                ");";
 sqlite3* getNiuchaczPcapDB() {
 	return g_Main._db;
 }
@@ -122,7 +151,13 @@ KSTATUS pcap_thread_routine(void* arg)
 KSTATUS schema_sync(void)
 {
 	KSTATUS _status;
-	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchema, 0);
+	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaEth, 0);
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaIP, 0);
+	if(!KSUCCESS(_status))
+		return _status;
+	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaPackets, 0);
 	return _status;
 }
 
@@ -179,7 +214,7 @@ int main(int argc, char* argv[])
 	_status = dbStart(dbFileName, &g_Main._db);
 	if(!KSUCCESS(_status))
 		goto __exit;
-	_status = svcUpdateSync(getNiuchaczPcapDB());
+	_status = schema_sync();//svcUpdateSync(getNiuchaczPcapDB());
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
 	svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);
