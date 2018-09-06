@@ -9,6 +9,8 @@ const char* gc_statsKey_DbExecTime = "db exec time";
 stats_key g_statsKey_DbExecTime;
 const char* gc_statsKey_DbFinalizeTime = "db finalize time";
 stats_key g_statsKey_DbFinalizeTime;
+const char* gc_statsKey_DbCallbackTime = "db callback time";
+stats_key g_statsKey_DbCallbackTime;
 
 // Internal API
 
@@ -84,7 +86,9 @@ KSTATUS i_dbExec(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(voi
         if(rc == SQLITE_DONE) {
             break;
         } else {
+            timerWatchStart(&startTime);
             rc = callback(param, pStmt);
+            statsUpdate(g_statsKey_DbCallbackTime, timerWatchStop(startTime));
             if(rc != 0) {
                 SYSLOG(LOG_ERR, "[DB] Callback return with error!");
                 break;
@@ -134,6 +138,11 @@ KSTATUS dbStart(const char* p_path, sqlite3** p_db)
         SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
         return KSTATUS_UNSUCCESS;
     }
+    _status = statsAlloc(gc_statsKey_DbCallbackTime, STATS_TYPE_SUM, &g_statsKey_DbCallbackTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
+        return KSTATUS_UNSUCCESS;
+    }
     SYSLOG(LOG_INFO, "[DB] Openning FileName(%s) Version(%s)...", p_path, sqlite3_libversion());
     rc = sqlite3_open(p_path, &db);
     if(rc) {
@@ -164,6 +173,7 @@ void dbStop(sqlite3* db)
     statsFree(g_statsKey_DbBindTime);
     statsFree(g_statsKey_DbExecTime);
     statsFree(g_statsKey_DbFinalizeTime);
+    statsFree(g_statsKey_DbCallbackTime);
 }
 
 KSTATUS dbExec(sqlite3* db, const char* stmt, int bindCnt, ...) {
