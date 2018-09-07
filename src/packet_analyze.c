@@ -10,8 +10,8 @@
 #include "math.h"
 
 static const char * cgStmtPackets =
-		"insert into packets(ts_sec, ts_usec,eth_shost,eth_dhost,eth_type,"
-		"ip_vhl,ip_tos,ip_len,ip_id,ip_off,ip_ttl,ip_p,ip_sum,ip_src,ip_dst)"
+		"insert into packets(ts_sec, ts_usec,eth_src_id,eth_dst_id,eth_type,"
+		"ip_vhl,ip_tos,ip_len,ip_id,ip_off,ip_ttl,ip_p,ip_sum,ip_src_id,ip_dst_id)"
 		"values (?,?,?,?,?,"
 		"?,?,?,?,?,?,?,?,?,?);";
 static const char * cgStmtEthPopulate =
@@ -180,24 +180,29 @@ int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
 int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
     MAPPER_RESULTS results;
     KSTATUS _status;
+    int ethSrcID, ethDstID, ipSrcID, ipDstID;
 
     if(!mapFrame((unsigned char *)pdata, dataSize, &results)) {
     	SYSLOG(LOG_ERR, "Error in parsing message!");
         return -1;
     }
-i_cmdPacketAnalyzeCacheEthGet((struct ether_addr*)&results._ethernet.eth_shost);
-i_cmdPacketAnalyzeCacheEthGet((struct ether_addr*)&results._ethernet.eth_dhost);
-i_cmdPacketAnalyzeCacheIPGet(&results._ip.ip_src);
-i_cmdPacketAnalyzeCacheIPGet(&results._ip.ip_dst);
+    ethSrcID = i_cmdPacketAnalyzeCacheEthGet((struct ether_addr*)&results._ethernet.eth_shost);
+    ethDstID = i_cmdPacketAnalyzeCacheEthGet((struct ether_addr*)&results._ethernet.eth_dhost);
+    ipSrcID = i_cmdPacketAnalyzeCacheIPGet(&results._ip.ip_src);
+    ipDstID = i_cmdPacketAnalyzeCacheIPGet(&results._ip.ip_dst);
+    if(ethSrcID == 0 || ethDstID == 0 || ipSrcID == 0 || ipDstID == 0) {
+    	SYSLOG(LOG_ERR, "Error in translating message!");
+        return -2;
+    }
     _status = dbExec(getNiuchaczPcapDB(), cgStmtPackets, 15, 
                      //ts_sec since Epoch (1970) timestamp						  /* Timestamp of packet */
                      DB_BIND_INT64, ts.tv_sec,
                      //ts_usec /* Microseconds */
                      DB_BIND_INT64, ts.tv_usec,
                      //u_char  eth_shost[ETHER_ADDR_LEN];      /* source host address */
-                     DB_BIND_TEXT, ether_ntoa((struct ether_addr*)&results._ethernet.eth_shost),
+                     DB_BIND_INT, ethSrcID,
                      //u_char  eth_dhost[ETHER_ADDR_LEN];      /* destination host address */
-                     DB_BIND_TEXT, ether_ntoa((struct ether_addr*)&results._ethernet.eth_dhost),
+                     DB_BIND_INT, ethDstID,
                      //u_short eth_type;                       /* IP? ARP? RARP? etc */
                      DB_BIND_INT, results._ethernet.eth_type,
                      //u_char  ip_vhl;                 		  /* version << 4 | header length >> 2 */
@@ -217,9 +222,9 @@ i_cmdPacketAnalyzeCacheIPGet(&results._ip.ip_dst);
                      //u_short ip_sum;                 		  /* checksum */
                      DB_BIND_INT, results._ip.ip_sum,
                      //struct  in_addr ip_src;  		  /* source address */
-                     DB_BIND_TEXT, inet_ntoa(results._ip.ip_src),
+                     DB_BIND_INT, ipSrcID,
                      //struct  in_addr ip_dst;  		  /* dest address */
-                     DB_BIND_TEXT, inet_ntoa(results._ip.ip_dst));
+                     DB_BIND_INT, ipDstID);
     if(!KSUCCESS(_status))
         return -1;
     return 0;
