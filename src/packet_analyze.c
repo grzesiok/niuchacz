@@ -53,19 +53,18 @@ uint64_t i_cmdPacketAnalyzeCacheEthStrToKey(struct ether_addr *ea) {
 }
 
 int i_cmdPacketAnalyzeCacheEthPopulate(void* param, sqlite3_stmt* stmt) {
-    struct ether_addr *ea;
+    struct ether_addr ea;
     int ethID, ret;
     struct timespec ts;
 
-    ea = ether_aton((const char*)sqlite3_column_text(stmt, 1));
-    if(ea == NULL) {
+    if(ether_aton_r((const char*)sqlite3_column_text(stmt, 1), &ea) == NULL) {
         SYSLOG(LOG_INFO, "[CACHE_ETH]: %s not loaded - error during parsing!", sqlite3_column_text(stmt, 1));
         return 0;
     }
     ethID = sqlite3_column_int(stmt, 0);
     timerGetRealCurrentTimestamp(&ts);
     ts.tv_sec += 60;
-    ret = bst_insert(g_EthCache, i_cmdPacketAnalyzeCacheEthStrToKey(ea), &ethID, sizeof(ethID), &ts);
+    ret = bst_insert(g_EthCache, i_cmdPacketAnalyzeCacheEthStrToKey(&ea), &ethID, sizeof(ethID), &ts);
     if(ret != sizeof(ethID))
         return 0;
     SYSLOG(LOG_INFO, "[CACHE_ETH]: %s(%d) loaded", sqlite3_column_text(stmt, 1), sqlite3_column_int(stmt, 0));
@@ -107,19 +106,8 @@ int i_cmdPacketAnalyzeCacheEthGet(struct ether_addr* ea) {
 int i_cmdPacketAnalyzeCacheIPPopulate(void* param, sqlite3_stmt* stmt) {
     uint64_t key;
     struct timespec ts;
-    struct hostent *hp;
-    struct in_addr ip;
     int ret, ipID;
 
-    if(inet_aton((const char*)sqlite3_column_text(stmt, 1), &ip) == 0) {
-        SYSLOG(LOG_INFO, "[CACHE_IP]: %s not loaded - error during parsing", sqlite3_column_text(stmt, 1));
-        return 0;
-    }
-    hp = gethostbyaddr((const void *)&ip, sizeof(ip), AF_INET);
-    if(hp == NULL || strncmp(hp->h_name, (const char*)sqlite3_column_text(stmt, 2), MAX(strlen((const char*)sqlite3_column_text(stmt, 2)), hp->h_length)) != 0) {
-        SYSLOG(LOG_INFO, "[CACHE_IP]: %s not loaded - hostname was changed", sqlite3_column_text(stmt, 1));
-        return 0;
-    }
     ipID = sqlite3_column_int(stmt, 0);
     key = ip.s_addr;
     timerGetRealCurrentTimestamp(&ts);
