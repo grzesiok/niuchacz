@@ -164,7 +164,7 @@ int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
                      DB_BIND_INT64, ts.tv_sec,
                      DB_BIND_INT64, ts.tv_nsec,
                      DB_BIND_TEXT, inet_ntoa(*ip),
-                     DB_BIND_TEXT, (hp) ? hp->h_name : "unknown",
+                     DB_BIND_TEXT, (hp) ? hp->h_name : "Host Not Found",
                      DB_BIND_INT, 1);
     _status = dbExecQuery(getNiuchaczPcapDB(), cgStmtIPFetchPK, 1, i_getPK, &ipID,
                           DB_BIND_TEXT, inet_ntoa(*ip));
