@@ -106,8 +106,13 @@ int i_cmdPacketAnalyzeCacheEthGet(struct ether_addr* ea) {
 int i_cmdPacketAnalyzeCacheIPPopulate(void* param, sqlite3_stmt* stmt) {
     uint64_t key;
     struct timespec ts;
+    struct in_addr ip;
     int ret, ipID;
 
+    if(inet_aton((const char*)sqlite3_column_text(stmt, 1), &ip) == 0) {
+        SYSLOG(LOG_INFO, "[CACHE_IP]: %s not loaded - error during parsing", sqlite3_column_text(stmt, 1));
+        return 0;
+    }
     ipID = sqlite3_column_int(stmt, 0);
     key = ip.s_addr;
     timerGetRealCurrentTimestamp(&ts);
@@ -174,8 +179,8 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
     	SYSLOG(LOG_ERR, "Error in parsing message!");
         return -1;
     }
-    ethSrcID = i_cmdPacketAnalyzeCacheEthGet((struct ether_addr*)&results._ethernet.eth_shost);
-    ethDstID = i_cmdPacketAnalyzeCacheEthGet((struct ether_addr*)&results._ethernet.eth_dhost);
+    ethSrcID = i_cmdPacketAnalyzeCacheEthGet(&results._ethernet.eth_shost);
+    ethDstID = i_cmdPacketAnalyzeCacheEthGet(&results._ethernet.eth_dhost);
     ipSrcID = i_cmdPacketAnalyzeCacheIPGet(&results._ip.ip_src);
     ipDstID = i_cmdPacketAnalyzeCacheIPGet(&results._ip.ip_dst);
     if(ethSrcID == 0 || ethDstID == 0 || ipSrcID == 0 || ipDstID == 0) {
