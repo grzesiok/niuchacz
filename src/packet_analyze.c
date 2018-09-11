@@ -33,7 +33,9 @@ static const char * cgStmtIPCreate =
 static const char * cgStmtIPFetchPK =
 		"select ip_id from ip where ip_addr = ? and activeflag = 1;";
 bst_t* g_IPCache;
+const static int gc_IPCacheExpireTimeEntry = 300;
 bst_t* g_EthCache;
+const static int gc_EthCacheExpireTimeEntry = 300;
 
 // internal API
 
@@ -63,7 +65,7 @@ int i_cmdPacketAnalyzeCacheEthPopulate(void* param, sqlite3_stmt* stmt) {
     }
     ethID = sqlite3_column_int(stmt, 0);
     timerGetRealCurrentTimestamp(&ts);
-    ts.tv_sec += 60;
+    ts.tv_sec += gc_EthCacheExpireTimeEntry;
     ret = bst_insert(g_EthCache, i_cmdPacketAnalyzeCacheEthStrToKey(&ea), &ethID, sizeof(ethID), &ts);
     if(ret != sizeof(ethID))
         return 0;
@@ -72,7 +74,7 @@ int i_cmdPacketAnalyzeCacheEthPopulate(void* param, sqlite3_stmt* stmt) {
 }
 
 int i_cmdPacketAnalyzeCacheEthExpireCheck(uint64_t key, void* ptr, size_t nBytes) {
-    return 60;
+    return gc_EthCacheExpireTimeEntry;
 }
 
 int i_cmdPacketAnalyzeCacheEthGet(struct ether_addr* ea) {
@@ -97,7 +99,7 @@ int i_cmdPacketAnalyzeCacheEthGet(struct ether_addr* ea) {
     _status = dbExecQuery(getNiuchaczPcapDB(), cgStmtEthFetchPK, 1, i_getPK, &ethID,
                           DB_BIND_TEXT, ether_ntoa_r(ea, buffEthStr));
     _status = dbTxnCommit(getNiuchaczPcapDB());
-    ts.tv_sec += 60;
+    ts.tv_sec += gc_EthCacheExpireTimeEntry;
     bst_insert(g_EthCache, i_cmdPacketAnalyzeCacheEthStrToKey(ea), &ethID, sizeof(ethID), &ts);
     SYSLOG(LOG_INFO, "[CACHE_ETH]: %s(%d) loaded", ether_ntoa_r(ea, buffEthStr), ethID);
     return ethID;
@@ -116,7 +118,7 @@ int i_cmdPacketAnalyzeCacheIPPopulate(void* param, sqlite3_stmt* stmt) {
     ipID = sqlite3_column_int(stmt, 0);
     key = ip.s_addr;
     timerGetRealCurrentTimestamp(&ts);
-    ts.tv_sec += 60;
+    ts.tv_sec += gc_IPCacheExpireTimeEntry;
     ret = bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
     if(ret != sizeof(ipID))
         return 0;
@@ -131,7 +133,7 @@ int i_cmdPacketAnalyzeCacheIPExpireCheck(uint64_t key, void* ptr, size_t nBytes)
     ip.s_addr = key;
     hp = gethostbyaddr((const void *)&ip, sizeof(ip), AF_INET);
     if(hp && strncmp(hp->h_name, ptr, MIN(nBytes, hp->h_length)) == 0) {
-        return 60;
+        return gc_IPCacheExpireTimeEntry;
     }
     return 0;
 }
@@ -162,7 +164,7 @@ int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
     _status = dbExecQuery(getNiuchaczPcapDB(), cgStmtIPFetchPK, 1, i_getPK, &ipID,
                           DB_BIND_TEXT, inet_ntoa(*ip));
     _status = dbTxnCommit(getNiuchaczPcapDB());
-    ts.tv_sec += 60;
+    ts.tv_sec += gc_IPCacheExpireTimeEntry;
     bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
     SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%d) loaded", inet_ntoa(*ip), ipID);
     return ipID;
