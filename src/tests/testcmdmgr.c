@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
         SYSLOG(LOG_ERR, "Error during preparing FIRST command");
         goto __exit;
     }
-    _status = cmdmgrJobExec(pjob, JobModeSynchronous);
+    _status = cmdmgrJobExec(pjob, JobModeSynchronous, JobQueueTypeNone);
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "Error during processing FIRST command");
         goto __exit;
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
         SYSLOG(LOG_ERR, "Error during preparing FIRST command");
         goto __exit;
     }
-    _status = cmdmgrJobExec(pjob, JobModeSynchronous);
+    _status = cmdmgrJobExec(pjob, JobModeSynchronous, JobQueueTypeNone);
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "Error during processing SECOND command");
         goto __exit;

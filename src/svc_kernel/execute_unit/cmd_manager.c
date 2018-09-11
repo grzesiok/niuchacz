@@ -12,9 +12,9 @@ static const char* cgInsertCommand =
 		"values (?, ?, ?, ?, ?, ?);";
 
 typedef struct {
-    queue_t *_pjobQueue;
+    queue_t *_pjobQueueShortOps;
+    queue_t *_pjobQueueLongOps;
     unsigned int _activeJobs;
-    pthread_t _cmdExecutorThreadId;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
@@ -88,15 +88,15 @@ KSTATUS i_cmdmgrJobExec(PJOB pjob) {
 KSTATUS i_cmdmgrExecutor(void* arg) {
     char buffer[100000];
     PJOB pjob = (PJOB)buffer;
+    queue_t* pqueue = (queue_t*)arg;
     int ret;
     static struct timespec time_to_wait = {0, 0};
 
     SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
-    gCmdManager._cmdExecutorThreadId = pthread_self();
     while(svcKernelIsRunning()) {
         timerGetRealCurrentTimestamp(&time_to_wait);
         time_to_wait.tv_sec += 1;
-        ret = queue_read(gCmdManager._pjobQueue, pjob, &time_to_wait);
+        ret = queue_read(pqueue, pjob, &time_to_wait);
         if(ret > 0) {
             i_cmdmgrJobExec(pjob);
         } else if(ret == QUEUE_RET_ERROR) {
@@ -115,19 +115,22 @@ KSTATUS cmdmgrStart(void) {
     _status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList, 0);
     if(!KSUCCESS(_status))
         return _status;
-    gCmdManager._pjobQueue = queue_create(1000000);
-    if(gCmdManager._pjobQueue == NULL)
+    gCmdManager._pjobQueueShortOps = queue_create(1000000);
+    if(gCmdManager._pjobQueueShortOps == NULL)
+        return KSTATUS_UNSUCCESS;
+    gCmdManager._pjobQueueLongOps = queue_create(1000000);
+    if(gCmdManager._pjobQueueLongOps == NULL)
         return KSTATUS_UNSUCCESS;
     gCmdManager._activeJobs = 0;
-    _status = psmgrCreateThread("cmdmgrExecutor", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, NULL);
+    _status = psmgrCreateThread("cmdmgrExecutorShortOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, &gCmdManager._pjobQueueShortOps);
+    _status = psmgrCreateThread("cmdmgrExecutorLongOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, &gCmdManager._pjobQueueLongOps);
     return _status;
 }
 
 void cmdmgrStop(void) {
     SYSLOG(LOG_INFO, "[CMDMGR] Stopping...");
-    queue_signal(gCmdManager._pjobQueue);
-    psmgrWaitForThread(gCmdManager._cmdExecutorThreadId);
-    queue_destroy(gCmdManager._pjobQueue);
+    queue_destroy(gCmdManager._pjobQueueShortOps);
+    queue_destroy(gCmdManager._pjobQueueLongOps);
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up commands...");
     dbExecQuery(svcKernelGetDb(), "select code from cmdmgr_cmdlist", 0, i_cmdmgrDestroySingleCommand, NULL);
 }
@@ -181,17 +184,28 @@ KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct t
 	return KSTATUS_SUCCESS;
 }
 
-KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode) {
-	KSTATUS _status = KSTATUS_UNSUCCESS;
-	switch(mode) {
-	//if mode == JobModeAsynchronous then function should back immediatelly and schedule job to future
-	case JobModeAsynchronous:
-		queue_write(gCmdManager._pjobQueue, pjob, pjob->_dataSize+sizeof(JOB), NULL);
-		return KSTATUS_SUCCESS;
-	//if mode == JobModeSynchronous then function should wait until execution is done
-	case JobModeSynchronous:
-		_status = i_cmdmgrJobExec(pjob);
-		FREE(pjob);
-	}
-	return _status;
+KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
+    KSTATUS _status = KSTATUS_UNSUCCESS;
+    int ret;
+    switch(mode) {
+    //if mode == JobModeAsynchronous then function should back immediatelly and schedule job to future
+    case JobModeAsynchronous:
+        switch(queueType) {
+        case JobQueueTypeShortOps:
+            ret = queue_write(gCmdManager._pjobQueueShortOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
+            break;
+        case JobQueueTypeLongOps:
+            ret = queue_write(gCmdManager._pjobQueueLongOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
+            break;
+        }
+        if(ret == pjob->_dataSize+sizeof(JOB))
+            _status = KSTATUS_SUCCESS;
+        break;
+    //if mode == JobModeSynchronous then function should wait until execution is done
+    case JobModeSynchronous:
+        _status = i_cmdmgrJobExec(pjob);
+        FREE(pjob);
+        break;
+    }
+    return _status;
 }

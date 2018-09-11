@@ -136,7 +136,7 @@ KSTATUS pcap_thread_routine(void* arg)
 				SYSLOG(LOG_ERR, "Couldn't prepare packet to analyze");
 				continue;
 			}
-			_status = cmdmgrJobExec(pjob, JobModeAsynchronous);
+			_status = cmdmgrJobExec(pjob, JobModeAsynchronous, JobQueueTypeShortOps);
 			if(!KSUCCESS(_status)) {
 				SYSLOG(LOG_ERR, "Couldn't execute job");
 				continue;
@@ -191,7 +191,7 @@ KSTATUS testExportFile(const char* file_name) {
         SYSLOG(LOG_ERR, "Error during preparing EXPORT_FILE command");
         return _status;
     }
-    _status = cmdmgrJobExec(pjob, JobModeSynchronous);
+    _status = cmdmgrJobExec(pjob, JobModeSynchronous, JobQueueTypeNone);
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "Error during processing EXPORT_FILE command");
         return _status;
