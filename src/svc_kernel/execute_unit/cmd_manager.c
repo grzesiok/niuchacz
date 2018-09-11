@@ -15,6 +15,8 @@ typedef struct {
     queue_t *_pjobQueueShortOps;
     queue_t *_pjobQueueLongOps;
     unsigned int _activeJobs;
+    pthread_cond_t _activeJobsCondVariable;
+    pthread_mutex_t _activeJobsMutex;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
@@ -75,9 +77,7 @@ KSTATUS i_cmdmgrJobExec(PJOB pjob) {
     pexec = i_cmdmgrFindExec(pjob->_cmd);
     if(pexec == NULL)
         return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
-    __atomic_add_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_ACQUIRE);
     ret = pexec(pjob->_ts, pjob->_data, pjob->_dataSize);
-    __atomic_sub_fetch(&gCmdManager._activeJobs, 1, __ATOMIC_RELEASE);
     if(ret != 0)
         //job should be rescheduled again
         //or job should be freed if rescheduled is not an option
@@ -93,6 +93,9 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
     static struct timespec time_to_wait = {0, 0};
 
     SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
+    pthread_mutex_lock(&gCmdManager._activeJobsMutex);
+    gCmdManager._activeJobs += 1;
+    pthread_mutex_unlock(&gCmdManager._activeJobsMutex);
     while(svcKernelIsRunning()) {
         timerGetRealCurrentTimestamp(&time_to_wait);
         time_to_wait.tv_sec += 1;
@@ -103,6 +106,10 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
             SYSLOG(LOG_ERR, "[CMDMGR] Error during dequeue job");
         }
     }
+    pthread_mutex_lock(&gCmdManager._activeJobsMutex);
+    gCmdManager._activeJobs -= 1;
+    pthread_mutex_unlock(&gCmdManager._activeJobsMutex);
+    pthread_cond_broadcast(&gCmdManager._activeJobsCondVariable);
     SYSLOG(LOG_INFO, "[CMDMGR] Stopping Job Executor");
     return KSTATUS_SUCCESS;
 }
@@ -122,7 +129,11 @@ KSTATUS cmdmgrStart(void) {
     if(gCmdManager._pjobQueueLongOps == NULL)
         return KSTATUS_UNSUCCESS;
     gCmdManager._activeJobs = 0;
+    if(pthread_cond_init(&gCmdManager._activeJobsCondVariable, NULL) != 0)
+        return KSTATUS_UNSUCCESS;
     _status = psmgrCreateThread("cmdmgrExecutorShortOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, &gCmdManager._pjobQueueShortOps);
+    if(!KSUCCESS(_status))
+        return _status;
     _status = psmgrCreateThread("cmdmgrExecutorLongOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, &gCmdManager._pjobQueueLongOps);
     return _status;
 }
@@ -133,12 +144,18 @@ void cmdmgrStop(void) {
     queue_destroy(gCmdManager._pjobQueueLongOps);
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up commands...");
     dbExecQuery(svcKernelGetDb(), "select code from cmdmgr_cmdlist", 0, i_cmdmgrDestroySingleCommand, NULL);
+    pthread_cond_destroy(&gCmdManager._activeJobsCondVariable);
+    pthread_mutex_destroy(&gCmdManager._activeJobsMutex);
 }
 
 void cmdmgrWaitForAllJobs(void) {
-    while(__atomic_load_n(&gCmdManager._activeJobs, __ATOMIC_ACQUIRE) > 0) {
-        sleep(1);
+    int ret;
+
+    pthread_mutex_lock(&gCmdManager._activeJobsMutex);
+    while(gCmdManager._activeJobs > 0) {
+        ret = pthread_cond_wait(&gCmdManager._activeJobsCondVariable, &gCmdManager._activeJobsMutex);
     }
+    pthread_mutex_unlock(&gCmdManager._activeJobsMutex);
 }
 
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version) {
@@ -166,22 +183,22 @@ __cleanup:
 }
 
 KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, PJOB* pjob) {
-	PJOB pjob2;
-	int cmdLength = strlen(cmd);
-	DPRINTF("Allocate %zuB memory for command %s", dataSize, cmd);
+    PJOB pjob2;
+    int cmdLength = strlen(cmd);
+    DPRINTF("Allocate %zuB memory for command %s", dataSize, cmd);
 
-	pjob2 = MALLOC2(JOB, 1, dataSize+cmdLength+1);
-	if(pjob2 == NULL)
-		return KSTATUS_OUT_OF_MEMORY;
-	pjob2->_cmd = memoryPtrMove(pjob2, sizeof(JOB));
-	memcpy(pjob2->_cmd, cmd, cmdLength);
-	pjob2->_cmd[cmdLength] = '\0';
-	pjob2->_ts = ts;
-	pjob2->_data = memoryPtrMove(pjob2->_cmd, cmdLength+1);
-	memcpy(pjob2->_data, pdata, dataSize);
-	pjob2->_dataSize = dataSize;
-	*pjob = pjob2;
-	return KSTATUS_SUCCESS;
+    pjob2 = MALLOC2(JOB, 1, dataSize+cmdLength+1);
+    if(pjob2 == NULL)
+        return KSTATUS_OUT_OF_MEMORY;
+    pjob2->_cmd = memoryPtrMove(pjob2, sizeof(JOB));
+    memcpy(pjob2->_cmd, cmd, cmdLength);
+    pjob2->_cmd[cmdLength] = '\0';
+    pjob2->_ts = ts;
+    pjob2->_data = memoryPtrMove(pjob2->_cmd, cmdLength+1);
+    memcpy(pjob2->_data, pdata, dataSize);
+    pjob2->_dataSize = dataSize;
+    *pjob = pjob2;
+    return KSTATUS_SUCCESS;
 }
 
 KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
@@ -191,6 +208,8 @@ KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
     //if mode == JobModeAsynchronous then function should back immediatelly and schedule job to future
     case JobModeAsynchronous:
         switch(queueType) {
+        case JobQueueTypeNone:
+            return KSTATUS_UNSUCCESS;
         case JobQueueTypeShortOps:
             ret = queue_write(gCmdManager._pjobQueueShortOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
             break;
