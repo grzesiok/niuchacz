@@ -26,7 +26,6 @@ typedef enum _JobQueueType {
 
 KSTATUS cmdmgrStart(void);
 void cmdmgrStop(void);
-void cmdmgrWaitForAllJobs(void);
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version);
 KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, PJOB* pjob);
 KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType);

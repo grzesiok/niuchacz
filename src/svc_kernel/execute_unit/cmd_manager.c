@@ -14,9 +14,6 @@ static const char* cgInsertCommand =
 typedef struct {
     queue_t *_pjobQueueShortOps;
     queue_t *_pjobQueueLongOps;
-    unsigned int _activeJobs;
-    pthread_cond_t _activeJobsCondVariable;
-    pthread_mutex_t _activeJobsMutex;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
@@ -93,9 +90,7 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
     static struct timespec time_to_wait = {0, 0};
 
     SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
-    pthread_mutex_lock(&gCmdManager._activeJobsMutex);
-    gCmdManager._activeJobs += 1;
-    pthread_mutex_unlock(&gCmdManager._activeJobsMutex);
+    queue_consumer_new(pqueue);
     while(svcKernelIsRunning()) {
         timerGetRealCurrentTimestamp(&time_to_wait);
         time_to_wait.tv_sec += 1;
@@ -106,10 +101,7 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
             SYSLOG(LOG_ERR, "[CMDMGR] Error during dequeue job");
         }
     }
-    pthread_mutex_lock(&gCmdManager._activeJobsMutex);
-    gCmdManager._activeJobs -= 1;
-    pthread_mutex_unlock(&gCmdManager._activeJobsMutex);
-    pthread_cond_broadcast(&gCmdManager._activeJobsCondVariable);
+    queue_consumer_free(pqueue);
     SYSLOG(LOG_INFO, "[CMDMGR] Stopping Job Executor");
     return KSTATUS_SUCCESS;
 }
@@ -128,13 +120,10 @@ KSTATUS cmdmgrStart(void) {
     gCmdManager._pjobQueueLongOps = queue_create(1024*1024*64);//64MB
     if(gCmdManager._pjobQueueLongOps == NULL)
         return KSTATUS_UNSUCCESS;
-    gCmdManager._activeJobs = 0;
-    if(pthread_cond_init(&gCmdManager._activeJobsCondVariable, NULL) != 0)
-        return KSTATUS_UNSUCCESS;
-    _status = psmgrCreateThread("cmdmgrExecutorShortOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, &gCmdManager._pjobQueueShortOps);
+    _status = psmgrCreateThread("cmdmgrExecutorShortOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueShortOps);
     if(!KSUCCESS(_status))
         return _status;
-    _status = psmgrCreateThread("cmdmgrExecutorLongOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, &gCmdManager._pjobQueueLongOps);
+    _status = psmgrCreateThread("cmdmgrExecutorLongOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueLongOps);
     return _status;
 }
 
@@ -144,18 +133,6 @@ void cmdmgrStop(void) {
     queue_destroy(gCmdManager._pjobQueueLongOps);
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up commands...");
     dbExecQuery(svcKernelGetDb(), "select code from cmdmgr_cmdlist", 0, i_cmdmgrDestroySingleCommand, NULL);
-    pthread_cond_destroy(&gCmdManager._activeJobsCondVariable);
-    pthread_mutex_destroy(&gCmdManager._activeJobsMutex);
-}
-
-void cmdmgrWaitForAllJobs(void) {
-    int ret;
-
-    pthread_mutex_lock(&gCmdManager._activeJobsMutex);
-    while(gCmdManager._activeJobs > 0) {
-        ret = pthread_cond_wait(&gCmdManager._activeJobsCondVariable, &gCmdManager._activeJobsMutex);
-    }
-    pthread_mutex_unlock(&gCmdManager._activeJobsMutex);
 }
 
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version) {
@@ -211,10 +188,14 @@ KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
         case JobQueueTypeNone:
             return KSTATUS_UNSUCCESS;
         case JobQueueTypeShortOps:
+            queue_producer_new(gCmdManager._pjobQueueShortOps);
             ret = queue_write(gCmdManager._pjobQueueShortOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
+            queue_producer_free(gCmdManager._pjobQueueShortOps);
             break;
         case JobQueueTypeLongOps:
+            queue_producer_new(gCmdManager._pjobQueueLongOps);
             ret = queue_write(gCmdManager._pjobQueueLongOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
+            queue_producer_free(gCmdManager._pjobQueueLongOps);
             break;
         }
         if(ret == pjob->_dataSize+sizeof(JOB))

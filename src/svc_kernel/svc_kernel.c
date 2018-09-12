@@ -75,6 +75,7 @@ void svcKernelExit(int code) {
 	SYSLOG(LOG_INFO, "[KERNEL] Stopping...");
         svcUpdateStop();
 	cmdmgrStop();
+	psmgrStopUserThreads();
 	psmgrStop();
 	dbStop(gKernelCfg._db);
 	statsStop();
@@ -88,11 +89,16 @@ void svcKernelExit(int code) {
 }
 
 void svcKernelMainLoop(void) {
+	//TODO: Possibility to check stats from sqlite
+	int i = 0;
 	while(svcKernelIsRunning()) {
 		psmgrIdle(1);
+		i++;
+		if(i > 60) {
+			i = 0;
+			//statsDump();
+		}
 	}
-	cmdmgrWaitForAllJobs();
-	psmgrStopUserThreads();
 }
 
 KSTATUS svcKernelStatus(int requested_status) {
