@@ -122,10 +122,10 @@ KSTATUS cmdmgrStart(void) {
     _status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList, 0);
     if(!KSUCCESS(_status))
         return _status;
-    gCmdManager._pjobQueueShortOps = queue_create(1000000);
+    gCmdManager._pjobQueueShortOps = queue_create(1024*1024);//1MB
     if(gCmdManager._pjobQueueShortOps == NULL)
         return KSTATUS_UNSUCCESS;
-    gCmdManager._pjobQueueLongOps = queue_create(1000000);
+    gCmdManager._pjobQueueLongOps = queue_create(1024*1024*64);//64MB
     if(gCmdManager._pjobQueueLongOps == NULL)
         return KSTATUS_UNSUCCESS;
     gCmdManager._activeJobs = 0;
