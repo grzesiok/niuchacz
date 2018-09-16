@@ -178,8 +178,12 @@ int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
     timerGetRealCurrentTimestamp(&ts);
     hp = gethostbyaddr((const void *)ip, sizeof(*ip), AF_INET);
     _status = dbTxnBegin(getNiuchaczPcapDB());
+    if(!KSUCCESS(_status))
+        return 0;
     _status = dbExec(getNiuchaczPcapDB(), cgStmtIPUpdateActiveFlag, 1,
                      DB_BIND_TEXT, inet_ntoa(*ip)); 
+    if(!KSUCCESS(_status))
+        goto __cleanup;
     _status = dbExec(getNiuchaczPcapDB(), cgStmtIPCreate, 6,
                      DB_BIND_NULL,
                      DB_BIND_INT64, ts.tv_sec,
@@ -187,12 +191,23 @@ int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
                      DB_BIND_TEXT, inet_ntoa(*ip),
                      DB_BIND_TEXT, (hp) ? hp->h_name : "Host Not Found",
                      DB_BIND_INT, 1);
+    if(!KSUCCESS(_status))
+        goto __cleanup;
     _status = dbExecQuery(getNiuchaczPcapDB(), cgStmtIPFetchPK, 1, i_getPK, &ipID,
                           DB_BIND_TEXT, inet_ntoa(*ip));
-    _status = dbTxnCommit(getNiuchaczPcapDB());
-    ts.tv_sec += gc_IPCacheExpireTimeEntry;
-    bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
-    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%"PRIu64") -> %s(%d) loaded", inet_ntoa(*ip), key, (hp) ? hp->h_name : "Host Not Found", ipID);
+__cleanup:
+    if(KSUCCESS(_status)) {
+        _status = dbTxnCommit(getNiuchaczPcapDB());
+        if(!KSUCCESS(_status))
+            goto __cleanup;
+        ts.tv_sec += gc_IPCacheExpireTimeEntry;
+        bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
+        SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%"PRIu64") -> %s(%d) loaded", inet_ntoa(*ip), key, (hp) ? hp->h_name : "Host Not Found", ipID);
+    } else {
+        dbTxnRollback(getNiuchaczPcapDB());
+        ipID = 0;
+        SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%d) error during loading: %s", inet_ntoa(*ip), ipID, dbGetErrmsg(getNiuchaczPcapDB()));
+    }
     return ipID;
 }
 
