@@ -84,10 +84,12 @@ void queue_destroy(queue_t* pqueue) {
     while(pqueue->_producers > 0) {
         pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
     }
+    pthread_mutex_unlock(&pqueue->_writeMutex);
     pthread_mutex_lock(&pqueue->_readMutex);
     while(pqueue->_consumers > 0) {
         pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
     }
+    pthread_mutex_unlock(&pqueue->_readMutex);
     pthread_mutex_destroy(&pqueue->_readMutex);
     pthread_cond_destroy(&pqueue->_readCondVariable);
     pthread_mutex_destroy(&pqueue->_writeMutex);
@@ -95,10 +97,15 @@ void queue_destroy(queue_t* pqueue) {
     free(pqueue);
 }
 
-void queue_consumer_new(queue_t* pqueue) {
+bool queue_consumer_new(queue_t* pqueue) {
+    bool success;
     pthread_mutex_lock(&pqueue->_readMutex);
-    pqueue->_consumers++;
+    if(pqueue->_isActive) {
+        pqueue->_consumers++;
+        success = true;
+    } else success = false;
     pthread_mutex_unlock(&pqueue->_readMutex);
+    return success;
 }
 
 void queue_consumer_free(queue_t* pqueue) {
@@ -108,10 +115,15 @@ void queue_consumer_free(queue_t* pqueue) {
     pthread_cond_broadcast(&pqueue->_readCondVariable);
 }
 
-void queue_producer_new(queue_t* pqueue) {
+bool queue_producer_new(queue_t* pqueue) {
+    bool success;
     pthread_mutex_lock(&pqueue->_writeMutex);
-    pqueue->_producers++;
+    if(pqueue->_isActive) {
+        pqueue->_producers++;
+        success = true;
+    } else success = false;
     pthread_mutex_unlock(&pqueue->_writeMutex);
+    return success;
 }
 
 void queue_producer_free(queue_t* pqueue) {

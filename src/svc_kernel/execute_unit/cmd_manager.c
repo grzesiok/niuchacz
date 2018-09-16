@@ -83,6 +83,7 @@ KSTATUS i_cmdmgrJobExec(PJOB pjob) {
 }
 
 KSTATUS i_cmdmgrExecutor(void* arg) {
+    KSTATUS _status = KSTATUS_SUCCESS;
     char buffer[100000];
     PJOB pjob = (PJOB)buffer;
     queue_t* pqueue = (queue_t*)arg;
@@ -90,7 +91,11 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
     static struct timespec time_to_wait = {0, 0};
 
     SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
-    queue_consumer_new(pqueue);
+    if(!queue_consumer_new(pqueue)) {
+        _status = KSTATUS_UNSUCCESS;
+        //TODO: Restrt cmdmgrExecutor and queue on the fly
+        goto __cleanup;
+    }
     while(svcKernelIsRunning()) {
         timerGetRealCurrentTimestamp(&time_to_wait);
         time_to_wait.tv_sec += 1;
@@ -102,8 +107,9 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
         }
     }
     queue_consumer_free(pqueue);
+__cleanup:
     SYSLOG(LOG_INFO, "[CMDMGR] Stopping Job Executor");
-    return KSTATUS_SUCCESS;
+    return _status;
 }
 
 /* External API */
@@ -180,7 +186,7 @@ KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct t
 
 KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
     KSTATUS _status = KSTATUS_UNSUCCESS;
-    int ret;
+    int ret = 0;
     switch(mode) {
     //if mode == JobModeAsynchronous then function should back immediatelly and schedule job to future
     case JobModeAsynchronous:
@@ -188,14 +194,16 @@ KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
         case JobQueueTypeNone:
             return KSTATUS_UNSUCCESS;
         case JobQueueTypeShortOps:
-            queue_producer_new(gCmdManager._pjobQueueShortOps);
-            ret = queue_write(gCmdManager._pjobQueueShortOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
-            queue_producer_free(gCmdManager._pjobQueueShortOps);
+            if(queue_producer_new(gCmdManager._pjobQueueShortOps)) {
+                ret = queue_write(gCmdManager._pjobQueueShortOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
+                queue_producer_free(gCmdManager._pjobQueueShortOps);
+            }
             break;
         case JobQueueTypeLongOps:
-            queue_producer_new(gCmdManager._pjobQueueLongOps);
-            ret = queue_write(gCmdManager._pjobQueueLongOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
-            queue_producer_free(gCmdManager._pjobQueueLongOps);
+            if(queue_producer_new(gCmdManager._pjobQueueLongOps)) {
+                ret = queue_write(gCmdManager._pjobQueueLongOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
+                queue_producer_free(gCmdManager._pjobQueueLongOps);
+            }
             break;
         }
         if(ret == pjob->_dataSize+sizeof(JOB))
