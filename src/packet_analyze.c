@@ -8,6 +8,8 @@
 #include "svc_kernel/database/database.h"
 #include "algorithms.h"
 #include "math.h"
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 static const char * cgStmtPackets =
 		"insert into packets(ts_sec, ts_usec,eth_src_id,eth_dst_id,eth_type,"
@@ -124,7 +126,7 @@ int i_cmdPacketAnalyzeCacheIPPopulate(void* param, sqlite3_stmt* stmt) {
     ret = bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
     if(ret != sizeof(ipID))
         return 0;
-    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%llu) -> %s(%d) loaded", sqlite3_column_text(stmt, 1), key, sqlite3_column_text(stmt, 2), sqlite3_column_int(stmt, 0));
+    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%"PRIu64") -> %s(%d) loaded", sqlite3_column_text(stmt, 1), key, sqlite3_column_text(stmt, 2), sqlite3_column_int(stmt, 0));
     return 0;
 }
 
@@ -140,7 +142,7 @@ int i_cmdPacketAnalyzeCacheIPExpireCheck(uint64_t key, void* ptr, size_t nBytes)
                           DB_BIND_TEXT, inet_ntoa(ip),
                           DB_BIND_TEXT, (hp) ? (hp->h_name) : "Host Not Found");
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[CACHE_IP]: %s(%llu) -> %s(%d) error during checking: %s", inet_ntoa(ip), key, (hp) ? hp->h_name : "Host Not Found", -1, dbGetErrmsg(getNiuchaczPcapDB()));
+        SYSLOG(LOG_ERR, "[CACHE_IP]: %s(%"PRIu64") -> %s(%d) error during checking: %s", inet_ntoa(ip), key, (hp) ? hp->h_name : "Host Not Found", -1, dbGetErrmsg(getNiuchaczPcapDB()));
     }
     if(ipID == 0)
         return 0;
@@ -175,7 +177,7 @@ int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
     _status = dbTxnCommit(getNiuchaczPcapDB());
     ts.tv_sec += gc_IPCacheExpireTimeEntry;
     bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
-    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%llu) -> %s(%d) loaded", inet_ntoa(*ip), key, (hp) ? hp->h_name : "Host Not Found", ipID);
+    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%"PRIu64") -> %s(%d) loaded", inet_ntoa(*ip), key, (hp) ? hp->h_name : "Host Not Found", ipID);
     return ipID;
 }
 
