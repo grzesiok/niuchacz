@@ -32,6 +32,8 @@ static const char * cgStmtIPCreate =
                 "values (?, ?, ?, ?, ?, ?);";
 static const char * cgStmtIPFetchPK =
 		"select ip_id from ip where ip_addr = ? and activeflag = 1;";
+static const char * cgStmtIPExpireCheck =
+		"select ip_id from ip where ip_addr = ? and hostname = ? and activeflag = 1;";
 bst_t* g_IPCache;
 const static int gc_IPCacheExpireTimeEntry = 300;
 bst_t* g_EthCache;
@@ -122,20 +124,27 @@ int i_cmdPacketAnalyzeCacheIPPopulate(void* param, sqlite3_stmt* stmt) {
     ret = bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
     if(ret != sizeof(ipID))
         return 0;
-    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%d) loaded", sqlite3_column_text(stmt, 1), sqlite3_column_int(stmt, 0));
+    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%llu) -> %s(%d) loaded", sqlite3_column_text(stmt, 1), key, sqlite3_column_text(stmt, 2), sqlite3_column_int(stmt, 0));
     return 0;
 }
 
 int i_cmdPacketAnalyzeCacheIPExpireCheck(uint64_t key, void* ptr, size_t nBytes) {
+    KSTATUS _status;
     struct in_addr ip;
     struct hostent *hp;
+    int ipID = 0;
 
     ip.s_addr = key;
     hp = gethostbyaddr((const void *)&ip, sizeof(ip), AF_INET);
-    if(hp && strncmp(hp->h_name, ptr, MIN(nBytes, hp->h_length)) == 0) {
-        return gc_IPCacheExpireTimeEntry;
+    _status = dbExecQuery(getNiuchaczPcapDB(), cgStmtIPExpireCheck, 2, i_getPK, &ipID,
+                          DB_BIND_TEXT, inet_ntoa(ip),
+                          DB_BIND_TEXT, (hp) ? (hp->h_name) : "Host Not Found");
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[CACHE_IP]: %s(%llu) -> %s(%d) error during checking: %s", inet_ntoa(ip), key, (hp) ? hp->h_name : "Host Not Found", -1, dbGetErrmsg(getNiuchaczPcapDB()));
     }
-    return 0;
+    if(ipID == 0)
+        return 0;
+    return gc_IPCacheExpireTimeEntry;
 }
 
 int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
@@ -145,7 +154,7 @@ int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
     struct timespec ts;
     struct hostent *hp;
 
-    key = ip->s_addr;
+    key = (uint64_t)ip->s_addr;
     ret = bst_search(g_IPCache, key, &ipID, sizeof(ipID));
     if(ret == sizeof(ipID))
         return ipID;
@@ -166,7 +175,7 @@ int i_cmdPacketAnalyzeCacheIPGet(struct in_addr* ip) {
     _status = dbTxnCommit(getNiuchaczPcapDB());
     ts.tv_sec += gc_IPCacheExpireTimeEntry;
     bst_insert(g_IPCache, key, &ipID, sizeof(ipID), &ts);
-    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%d) loaded", inet_ntoa(*ip), ipID);
+    SYSLOG(LOG_INFO, "[CACHE_IP]: %s(%llu) -> %s(%d) loaded", inet_ntoa(*ip), key, (hp) ? hp->h_name : "Host Not Found", ipID);
     return ipID;
 }
 
