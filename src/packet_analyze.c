@@ -92,20 +92,35 @@ int i_cmdPacketAnalyzeCacheEthGet(struct ether_addr* ea) {
         return ethID;
     timerGetRealCurrentTimestamp(&ts);
     _status = dbTxnBegin(getNiuchaczPcapDB());
+    if(!KSUCCESS(_status))
+        return 0;
     _status = dbExec(getNiuchaczPcapDB(), cgStmtEthUpdateActiveFlag, 1,
                      DB_BIND_TEXT, ether_ntoa_r(ea, buffEthStr)); 
+    if(!KSUCCESS(_status))
+        goto __cleanup;
     _status = dbExec(getNiuchaczPcapDB(), cgStmtEthCreate, 5,
                      DB_BIND_NULL,
                      DB_BIND_INT64, ts.tv_sec,
                      DB_BIND_INT64, ts.tv_nsec,
                      DB_BIND_TEXT, ether_ntoa_r(ea, buffEthStr),
                      DB_BIND_INT, 1);
+    if(!KSUCCESS(_status))
+        goto __cleanup;
     _status = dbExecQuery(getNiuchaczPcapDB(), cgStmtEthFetchPK, 1, i_getPK, &ethID,
                           DB_BIND_TEXT, ether_ntoa_r(ea, buffEthStr));
-    _status = dbTxnCommit(getNiuchaczPcapDB());
-    ts.tv_sec += gc_EthCacheExpireTimeEntry;
-    bst_insert(g_EthCache, i_cmdPacketAnalyzeCacheEthStrToKey(ea), &ethID, sizeof(ethID), &ts);
-    SYSLOG(LOG_INFO, "[CACHE_ETH]: %s(%d) loaded", ether_ntoa_r(ea, buffEthStr), ethID);
+__cleanup:
+    if(KSUCCESS(_status)) {
+        _status = dbTxnCommit(getNiuchaczPcapDB());
+        if(!KSUCCESS(_status))
+            goto __cleanup;
+        ts.tv_sec += gc_EthCacheExpireTimeEntry;
+        bst_insert(g_EthCache, i_cmdPacketAnalyzeCacheEthStrToKey(ea), &ethID, sizeof(ethID), &ts);
+        SYSLOG(LOG_INFO, "[CACHE_ETH]: %s(%d) loaded", ether_ntoa_r(ea, buffEthStr), ethID);
+    } else {
+        dbTxnRollback(getNiuchaczPcapDB());
+        ethID = 0;
+        SYSLOG(LOG_INFO, "[CACHE_ETH]: %s(%d) error during loading: %s", ether_ntoa_r(ea, buffEthStr), ethID, dbGetErrmsg(getNiuchaczPcapDB()));
+    }
     return ethID;
 }
 
