@@ -89,8 +89,9 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
     queue_t* pqueue = (queue_t*)arg;
     int ret;
     static struct timespec time_to_wait = {0, 0};
+    const char* queueName = (arg == (void*)gCmdManager._pjobQueueShortOps) ? "QUEUE_SHORT_OPS" : "QUEUE_LONG_OPS";
 
-    SYSLOG(LOG_INFO, "[CMDMGR] Starting Job Executor");
+    SYSLOG(LOG_INFO, "[CMDMGR][%s] Starting Job Executor", queueName);
     if(!queue_consumer_new(pqueue)) {
         _status = KSTATUS_UNSUCCESS;
         //TODO: Restrt cmdmgrExecutor and queue on the fly
@@ -103,12 +104,12 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
         if(ret > 0) {
             i_cmdmgrJobExec(pjob);
         } else if(ret == QUEUE_RET_ERROR) {
-            SYSLOG(LOG_ERR, "[CMDMGR] Error during dequeue job");
+            SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during dequeue job", queueName);
         }
     }
     queue_consumer_free(pqueue);
 __cleanup:
-    SYSLOG(LOG_INFO, "[CMDMGR] Stopping Job Executor");
+    SYSLOG(LOG_INFO, "[CMDMGR][%s] Stopping Job Executor", queueName);
     return _status;
 }
 
@@ -123,7 +124,7 @@ KSTATUS cmdmgrStart(void) {
     gCmdManager._pjobQueueShortOps = queue_create(1024*1024);//1MB
     if(gCmdManager._pjobQueueShortOps == NULL)
         return KSTATUS_UNSUCCESS;
-    gCmdManager._pjobQueueLongOps = queue_create(1024*1024*64);//64MB
+    gCmdManager._pjobQueueLongOps = queue_create(1024*1024/*1024*/);//1GB (should be 1MB at the beginning) TODO: dynamically increase queue_size
     if(gCmdManager._pjobQueueLongOps == NULL)
         return KSTATUS_UNSUCCESS;
     _status = psmgrCreateThread("cmdmgrExecutorShortOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueShortOps);
