@@ -78,7 +78,7 @@ struct mapper_icmp {
 typedef struct _MAPPER_RESULTS {
 	struct mapper_ethernet _ethernet;
 	struct mapper_ip _ip;
-        char _payload_16b[17];
+        char _payload[33];
 } MAPPER_RESULTS, *PMAPPER_RESULTS;
 
 bool mapFrame(unsigned char *frame, size_t framelen, PMAPPER_RESULTS presults);
