@@ -36,6 +36,7 @@ FILECOBJ_TESTDOUBLYLINKEDLIST=\
     
 FILECOBJ_TESTQUEUE=\
     tests/testqueue.o\
+    src/algorithms/timer/timer.o\
     src/algorithms/queue/queue.o
 
 FILECOBJ_TESTBST=\

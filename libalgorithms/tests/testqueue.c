@@ -28,68 +28,54 @@ int randomGet(int min, int max) {
     return max ? (rand() % max + min) : min;
 }
 
-void timerTimespecDiff(struct timespec *start, struct timespec *stop, struct timespec *result) {
-    if ((stop->tv_nsec - start->tv_nsec) < 0) {
-        result->tv_sec = stop->tv_sec - start->tv_sec - 1;
-        result->tv_nsec = stop->tv_nsec - start->tv_nsec + 1000000000;
-    } else {
-        result->tv_sec = stop->tv_sec - start->tv_sec;
-        result->tv_nsec = stop->tv_nsec - start->tv_nsec;
-    }
-}
-
-size_t timerTimespecToLongLongNs(struct timespec currentTime) {
-    return currentTime.tv_sec*1000000000 + currentTime.tv_nsec;
-}
-
 void* routineWrite(void* arg) {
-	char buffer[1000];
-	size_t i = 0;
-	size_t ret, size;
-	struct timespec writeTimeStart, writeTimeEnd, writeTime;
-	clock_gettime(CLOCK_REALTIME, &writeTimeStart);
-	while(1) {
-		i = __atomic_add_fetch(&actualWriteI, 1, __ATOMIC_RELEASE);
-		if(i >= numElements)
-			break;
-		size = randomGet(sizeof(i), 1000);
-		*((size_t*)buffer) = i;
-		writeArray[i] = size;
-		ret = queue_write(gpQueue, buffer, size, NULL);
-		if(ret != size){
-			printf("WrongSize[WRITE, i=%zu, orig=%zu, curr=%zu]\n", i, size, ret);
-		}
-	}
-	clock_gettime(CLOCK_REALTIME, &writeTimeEnd);
-	timerTimespecDiff(&writeTimeStart, &writeTimeEnd, &writeTime);
-	return (void*)timerTimespecToLongLongNs(writeTime);
+    char buffer[1000];
+    size_t i = 0;
+    size_t ret, size, writeTime = 0;
+    struct timespec startTime;
+
+    timerWatchStart(&startTime);
+    while(1) {
+        i = __atomic_add_fetch(&actualWriteI, 1, __ATOMIC_RELEASE);
+        if(i >= numElements)
+            break;
+        size = randomGet(sizeof(i), 1000);
+        *((size_t*)buffer) = i;
+        writeArray[i] = size;
+        ret = queue_write(gpQueue, buffer, size, NULL);
+        if(ret != size){
+            printf("WrongSize[WRITE, i=%zu, orig=%zu, curr=%zu]\n", i, size, ret);
+        }
+    }
+    writeTime += timerWatchStop(startTime);
+    return (void*)writeTime;
 }
 
 void* routineRead(void* arg) {
-	char buffer[1000];
-	size_t readedI, readedSizeI;
-	struct timespec readTimeStart, readTimeEnd, readTime;
-	clock_gettime(CLOCK_REALTIME, &readTimeStart);
-	while(1) {
-		if(__atomic_add_fetch(&actualReadI, 1, __ATOMIC_RELEASE) >= numElements)
-			break;
-		readedSizeI = queue_read(gpQueue, buffer, NULL);
-		if(readedSizeI == -1) {
-			printf("readedSizeI=%zu\n", readedSizeI);
-			continue;
-		}
-		readedI = *((size_t*)buffer);
-		if(readedI >= numElements) {
-			printf("readedI=%zu\n", readedI);
-		}
-		if(readedSizeI != writeArray[readedI]) {
-			printf("WrongSize[READ, i=%zu, orig=%zu, curr=%zu]\n", readedI, writeArray[readedI], readedSizeI);
-		}
-		__atomic_add_fetch(&readArray[readedI], 1, __ATOMIC_RELEASE);
-	}
-	clock_gettime(CLOCK_REALTIME, &readTimeEnd);
-	timerTimespecDiff(&readTimeStart, &readTimeEnd, &readTime);
-	return (void*)timerTimespecToLongLongNs(readTime);
+    char buffer[1000];
+    size_t readedI, readedSizeI, readTime = 0;
+    struct timespec startTime;
+
+    timerWatchStart(&startTime);
+    while(1) {
+        if(__atomic_add_fetch(&actualReadI, 1, __ATOMIC_RELEASE) >= numElements)
+            break;
+        readedSizeI = queue_read(gpQueue, buffer, NULL);
+        if(readedSizeI == -1) {
+            printf("readedSizeI=%zu\n", readedSizeI);
+            continue;
+        }
+        readedI = *((size_t*)buffer);
+        if(readedI >= numElements) {
+            printf("readedI=%zu\n", readedI);
+        }
+        if(readedSizeI != writeArray[readedI]) {
+            printf("WrongSize[READ, i=%zu, orig=%zu, curr=%zu]\n", readedI, writeArray[readedI], readedSizeI);
+        }
+        __atomic_add_fetch(&readArray[readedI], 1, __ATOMIC_RELEASE);
+    }
+    readTime += timerWatchStop(startTime);
+    return (void*)readTime;
 }
 
 int main() {
