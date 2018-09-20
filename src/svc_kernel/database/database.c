@@ -38,6 +38,11 @@ bool i_dbExecBindVariables(sqlite3_stmt *pStmt, va_list args, int bindCnt) {
                 return false;
             }
             break;
+        case DB_BIND_STEXT:
+            if(sqlite3_bind_text(pStmt, i+1, va_arg(args, const char*), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+                return false;
+            }
+            break;
         default:
             SYSLOG(LOG_ERR, "[DB] Error during binding variable.");
             return false;
