@@ -46,6 +46,7 @@ static const char * cgCreateSchemaPackets =
                     "ip_sum int,"
                     "ip_src_id int,"
                     "ip_dst_id int,"
+                    "payload text,"
                     "foreign key(eth_src_id) references eth(eth_id),"
                     "foreign key(eth_dst_id) references eth(eth_id),"
                     "foreign key(ip_src_id) references ip(ip_id),"
@@ -155,6 +156,7 @@ KSTATUS pcap_thread_routine(void* arg)
 KSTATUS schema_sync(void)
 {
 	KSTATUS _status;
+	SYSLOG(LOG_INFO, "SYNC DB START");
 	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaEth, 0);
 	if(!KSUCCESS(_status))
 		return _status;
@@ -162,6 +164,7 @@ KSTATUS schema_sync(void)
 	if(!KSUCCESS(_status))
 		return _status;
 	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaPackets, 0);
+	SYSLOG(LOG_INFO, "SYNC DB STOP");
 	return _status;
 }
 

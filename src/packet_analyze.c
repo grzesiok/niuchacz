@@ -13,9 +13,9 @@
 
 static const char * cgStmtPackets =
 		"insert into packets(ts_sec, ts_usec,eth_src_id,eth_dst_id,eth_type,"
-		"ip_vhl,ip_tos,ip_len,ip_id,ip_off,ip_ttl,ip_p,ip_sum,ip_src_id,ip_dst_id)"
+		"ip_vhl,ip_tos,ip_len,ip_id,ip_off,ip_ttl,ip_p,ip_sum,ip_src_id,ip_dst_id,payload)"
 		"values (?,?,?,?,?,"
-		"?,?,?,?,?,?,?,?,?,?);";
+		"?,?,?,?,?,?,?,?,?,?,?);";
 static const char * cgStmtEthPopulate =
                 "select eth_id, eth_addr from eth where activeflag = 1;";
 static const char * cgStmtEthUpdateActiveFlag =
@@ -230,7 +230,7 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
     	SYSLOG(LOG_ERR, "Error in translating message!");
         return -2;
     }
-    _status = dbExec(getNiuchaczPcapDB(), cgStmtPackets, 15, 
+    _status = dbExec(getNiuchaczPcapDB(), cgStmtPackets, 16, 
                      //ts_sec since Epoch (1970) timestamp						  /* Timestamp of packet */
                      DB_BIND_INT64, ts.tv_sec,
                      //ts_usec /* Microseconds */
@@ -260,7 +260,9 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
                      //struct  in_addr ip_src;  		  /* source address */
                      DB_BIND_INT, ipSrcID,
                      //struct  in_addr ip_dst;  		  /* dest address */
-                     DB_BIND_INT, ipDstID);
+                     DB_BIND_INT, ipDstID,
+                     //Payload with next 16B after IP header
+                     DB_BIND_TEXT, results._payload);
     if(!KSUCCESS(_status))
         return -1;
     return 0;
