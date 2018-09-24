@@ -20,26 +20,22 @@ uint32_t sse42_crc32(const uint8_t *bytes, size_t len) {
     return hash;
 }
 
-static void* i_queue_memcpy_to(queue_t *pqueue, volatile void* dst, const void* src, size_t size) {
-    unsigned char* pdst = (unsigned char*)dst;
+static void i_queue_write(queue_t *pqueue, const void* src, size_t size) {
     unsigned char* psrc = (unsigned char*)src;
     while(size-- > 0) {
-        *pdst++ = *psrc++;
-        if(pdst == pqueue->_rightborder)
-            pdst = pqueue->_leftborder;
+        *pqueue->_head++ = *psrc++;
+        if(pqueue->_head == pqueue->_rightborder)
+            pqueue->_head = pqueue->_leftborder;
     }
-    return pdst;
 }
 
-static void* i_queue_memcpy_from(queue_t *pqueue, const void* dst, volatile void* src, size_t size) {
+static void i_queue_read(queue_t *pqueue, void* dst, size_t size) {
     unsigned char* pdst = (unsigned char*)dst;
-    unsigned char* psrc = (unsigned char*)src;
     while(size-- > 0) {
-        *pdst++ = *psrc++;
-        if(psrc == pqueue->_rightborder)
-            psrc = pqueue->_leftborder;
+        *pdst++ = *pqueue->_tail++;
+        if(pqueue->_tail == pqueue->_rightborder)
+            pqueue->_tail = pqueue->_leftborder;
     }
-    return psrc;
 }
 
 queue_t* queue_create(size_t size) {
@@ -149,9 +145,9 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
         }
     }
     // copy header as first bytes)
-    pqueue->_tail = i_queue_memcpy_from(pqueue, &header, pqueue->_tail, sizeof(queue_entry_t));
+    i_queue_read(pqueue, &header, sizeof(queue_entry_t));
     // then copy data
-    pqueue->_tail = i_queue_memcpy_from(pqueue, pbuf, pqueue->_tail, header._size);
+    i_queue_read(pqueue, pbuf, header._size);
     __atomic_add_fetch(&pqueue->_leftsize, header._size+sizeof(queue_entry_t), __ATOMIC_RELEASE);
     pthread_mutex_unlock(&pqueue->_readMutex);
     // and broadcast changes to other threads
@@ -184,9 +180,9 @@ int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct t
         }
     }
     // copy header
-    pqueue->_head = i_queue_memcpy_to(pqueue, pqueue->_head, &header, sizeof(queue_entry_t));
+    i_queue_write(pqueue, &header, sizeof(queue_entry_t));
     // and data
-    pqueue->_head = i_queue_memcpy_to(pqueue, pqueue->_head, pbuf, header._size);
+    i_queue_write(pqueue, pbuf, header._size);
     __atomic_sub_fetch(&pqueue->_leftsize, entrySize, __ATOMIC_RELEASE);
     pthread_mutex_unlock(&pqueue->_writeMutex);
     pthread_cond_broadcast(&pqueue->_readCondVariable);

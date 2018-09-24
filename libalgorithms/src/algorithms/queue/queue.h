@@ -7,8 +7,8 @@
 #include <stdbool.h>
 
 typedef struct {
-    volatile void* _head;
-    volatile void* _tail;
+    char* _head;
+    char* _tail;
     size_t _maxsize;
     volatile size_t _leftsize;
     void* _leftborder;
