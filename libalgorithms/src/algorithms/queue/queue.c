@@ -136,7 +136,9 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
     pthread_mutex_lock(&pqueue->_readMutex);
     // if tail and head are the same => no entries in queue waiting for read
     while(pqueue->_leftsize == pqueue->_maxsize) {
-        ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);
+        if(timeout != NULL) {
+            ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);
+        } else ret = pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
         if(!pqueue->_isActive)
             return QUEUE_RET_DESTROYING;
         if(ret == ETIMEDOUT) {
@@ -171,7 +173,9 @@ int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct t
     pthread_mutex_lock(&pqueue->_writeMutex);
     // check if we have enough room to store data
     while(pqueue->_leftsize < entrySize) {
-        ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
+        if(timeout != NULL) {
+            ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
+        } else ret = pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
         if(!pqueue->_isActive)
             return QUEUE_RET_DESTROYING;
         if(ret == ETIMEDOUT) {
