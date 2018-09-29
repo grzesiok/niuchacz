@@ -10,7 +10,8 @@ FILECOBJ=\
     src/algorithms/doublylinkedlist/doublylinkedlist.o\
     src/algorithms/queue/queue.o\
     src/algorithms/timer/timer.o\
-    src/algorithms/tree/bst.o
+    src/algorithms/tree/bst.o\
+    src/algorithms/perf/perf.o
 
 #plik wynikowy
 OUTFILE=libalgorithms.so
@@ -18,13 +19,6 @@ OUTFILE=libalgorithms.so
 FILECOBJ_TESTHLL=\
     tests/testhll.o\
     src/algorithms/stream/cardinality/hyperloglog.o\
-    src/ext/murmur/MurmurHash2.o\
-    src/ext/murmur/MurmurHash2_64.o\
-    src/algorithms/hash/hash.o
-    
-FILECOBJ_TESTBLOOMFILTER=\
-    tests/testbloomfilter.o\
-    src/algorithms/stream/membership/bloomfilter.o\
     src/ext/murmur/MurmurHash2.o\
     src/ext/murmur/MurmurHash2_64.o\
     src/algorithms/hash/hash.o
@@ -37,7 +31,8 @@ FILECOBJ_TESTDOUBLYLINKEDLIST=\
 FILECOBJ_TESTQUEUE=\
     tests/testqueue.o\
     src/algorithms/timer/timer.o\
-    src/algorithms/queue/queue.o
+    src/algorithms/queue/queue.o\
+    src/algorithms/perf/perf.o
 
 FILECOBJ_TESTBST=\
     tests/testbst.o\
