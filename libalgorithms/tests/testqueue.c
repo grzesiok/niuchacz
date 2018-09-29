@@ -6,7 +6,7 @@
 #include <errno.h>
 
 queue_t *gpQueue;
-size_t numElements = 50000000;
+size_t numElements = 3000000;
 volatile size_t readArray[50000000];
 volatile size_t writeArray[50000000];
 size_t numReadThreads = 3;
@@ -35,6 +35,7 @@ void* routineWrite(void* arg) {
     struct timespec startTime;
 
     timerWatchStart(&startTime);
+    queue_producer_new(gpQueue);
     while(1) {
         i = __atomic_add_fetch(&actualWriteI, 1, __ATOMIC_RELEASE);
         if(i >= numElements)
@@ -47,6 +48,7 @@ void* routineWrite(void* arg) {
             printf("WrongSize[WRITE, i=%zu, orig=%zu, curr=%zu]\n", i, size, ret);
         }
     }
+    queue_producer_free(gpQueue);
     writeTime += timerWatchStop(startTime);
     return (void*)writeTime;
 }
@@ -57,6 +59,7 @@ void* routineRead(void* arg) {
     struct timespec startTime;
 
     timerWatchStart(&startTime);
+    queue_consumer_new(gpQueue);
     while(1) {
         if(__atomic_add_fetch(&actualReadI, 1, __ATOMIC_RELEASE) >= numElements)
             break;
@@ -74,6 +77,7 @@ void* routineRead(void* arg) {
         }
         __atomic_add_fetch(&readArray[readedI], 1, __ATOMIC_RELEASE);
     }
+    queue_consumer_free(gpQueue);
     readTime += timerWatchStop(startTime);
     return (void*)readTime;
 }
@@ -121,7 +125,7 @@ int main() {
 	}
 	printf("Queue:DESTROY\n");
 	queue_destroy(gpQueue);
-	for(i = 0;i < numElements;i++) {
+	for(i = 1;i <= numElements;i++) {
 		if(readArray[i] != 1)
 			printf("readArray[%zu] read %zu times insted once\n", i, readArray[i]);
 	}
