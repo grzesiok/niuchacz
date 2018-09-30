@@ -37,7 +37,7 @@ static const char * cgStmtIPFetchPK =
 static const char * cgStmtIPExpireCheck =
 		"select ip_id from ip where ip_addr = ? and hostname = ? and activeflag = 1;";
 bst_t* g_IPCache;
-const static int gc_IPCacheExpireTimeEntry = 300;
+const static int gc_IPCacheExpireTimeEntry = 3600;
 bst_t* g_EthCache;
 const static int gc_EthCacheExpireTimeEntry = 300;
 
