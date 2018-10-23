@@ -68,9 +68,12 @@ static void* i_psmgrExecRoutine(void* p_arg) {
     pthread_cond_destroy(&p_threadCtxOld->_startExecCondVariable);
     FREE(p_threadCtxOld);
     if(svcKernelIsRunning()) {
-        SYSLOG(LOG_INFO, "[PSMGR] ENTER threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
-        ret = p_threadCtx->_p_execRoutine(p_threadCtx->_p_arg);
-        SYSLOG(LOG_INFO, "[PSMGR] RET threadName=%s threadId=%lu p_execRoutine=%p ret=%d", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine, ret);
+        ret = pthread_setname_np(pthread_self(), p_threadCtx->_fullThreadName);
+        if(ret == 0) {
+            SYSLOG(LOG_INFO, "[PSMGR] ENTER threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
+            ret = p_threadCtx->_p_execRoutine(p_threadCtx->_p_arg);
+            SYSLOG(LOG_INFO, "[PSMGR] RET threadName=%s threadId=%lu p_execRoutine=%p ret=%d", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine, ret);
+        } else SYSLOG(LOG_ERR, "[PSMGR] ERROR_SETNAME threadName=%s threadId=%lu", p_threadCtx->_fullThreadName, pthread_self());
     }
     //release lock from execRoutine
     doublylinkedlistDel(g_psmgrCfg._threadList, p_threadCtx);
