@@ -56,7 +56,7 @@ static const char * cgCreateSchemaEth =
                 "create table if not exists eth("
                     "eth_id integer primary key,"
                     "ts_sec unsigned big int,"
-                    "ts_usec unsigned bit int,"
+                    "ts_usec unsigned int,"
                     "eth_addr text,"
                     "activeflag int"
                 ");";
@@ -64,7 +64,7 @@ static const char * cgCreateSchemaIP =
                 "create table if not exists ip("
                     "ip_id integer primary key,"
                     "ts_sec unsigned big int,"
-                    "ts_usec unsigned big int,"
+                    "ts_usec unsigned int,"
                     "ip_addr text,"
                     "hostname text,"
                     "activeflag int"
