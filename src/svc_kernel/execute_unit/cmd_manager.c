@@ -18,6 +18,9 @@ typedef struct {
 
 CMD_MANAGER gCmdManager;
 
+const char *cg_CmdMgr_ShortOps = "CMDMGR_SHORTOPS";
+const char *cg_CmdMgr_LongOps = "CMDMGR_LONGOPS";
+
 /* Internal API */
 
 int i_cmdmgrFindPtr_GetVal(void *retVal, sqlite3_stmt* stmt) {
@@ -89,7 +92,7 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
     queue_t* pqueue = (queue_t*)arg;
     int ret;
     static struct timespec time_to_wait = {0, 0};
-    const char* queueName = (arg == (void*)gCmdManager._pjobQueueShortOps) ? "QUEUE_SHORT_OPS" : "QUEUE_LONG_OPS";
+    const char* queueName = (arg == (void*)gCmdManager._pjobQueueShortOps) ? cg_CmdMgr_ShortOps : cg_CmdMgr_LongOps;
 
     SYSLOG(LOG_INFO, "[CMDMGR][%s] Starting Job Executor", queueName);
     if(!queue_consumer_new(pqueue)) {
@@ -127,10 +130,10 @@ KSTATUS cmdmgrStart(void) {
     gCmdManager._pjobQueueLongOps = queue_create(1024*1024/*1024*/);//1GB (should be 1MB at the beginning) TODO: dynamically increase queue_size
     if(gCmdManager._pjobQueueLongOps == NULL)
         return KSTATUS_UNSUCCESS;
-    _status = psmgrCreateThread("cmdmgrExecutorShortOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueShortOps);
+    _status = psmgrCreateThread(cg_CmdMgr_ShortOps, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueShortOps);
     if(!KSUCCESS(_status))
         return _status;
-    _status = psmgrCreateThread("cmdmgrExecutorLongOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueLongOps);
+    _status = psmgrCreateThread(cg_CmdMgr_LongOps, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueLongOps);
     return _status;
 }
 

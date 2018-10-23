@@ -159,6 +159,8 @@ KSTATUS psmgrCreateThread(const char* c_threadName, int threadType, psmgr_execRo
     PPSMGR_THREAD p_threadCtx;
     int ret;
 
+    if(strlen(c_threadName) > 15)
+        return KSTATUS_INVALID_PARAMETERS;
     p_threadCtx = MALLOC(PSMGR_THREAD, 1);
     if(p_threadCtx == NULL)
         return KSTATUS_OUT_OF_MEMORY;
