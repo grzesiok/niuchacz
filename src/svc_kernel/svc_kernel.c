@@ -89,6 +89,7 @@ void svcKernelExit(int code) {
 }
 
 void svcKernelMainLoop(void) {
+	SYSLOG(LOG_INFO, "[KERNEL] Idle Loop Starting...");
 	//TODO: Possibility to check stats from sqlite
 	int i = 0;
 	while(svcKernelIsRunning()) {
@@ -99,6 +100,7 @@ void svcKernelMainLoop(void) {
 			//statsDump();
 		}
 	}
+	SYSLOG(LOG_INFO, "[KERNEL] Idle Loop Stopping...");
 }
 
 KSTATUS svcKernelStatus(int requested_status) {
