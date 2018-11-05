@@ -18,8 +18,12 @@ typedef struct {
 
 CMD_MANAGER gCmdManager;
 
-const char *cg_CmdMgr_ShortOps = "CMDMGR_SHORTOPS";
-const char *cg_CmdMgr_LongOps = "CMDMGR_LONGOPS";
+const char *cg_CmdMgr_ShortOps_ShortName = "NIUCH_CMD_SHRT";
+const char *cg_CmdMgr_LongOps_ShortName = "NIUCH_CMD_LONG";
+const char *cg_CmdMgr_ShortOps = "Short Operation Queue";
+const char *cg_CmdMgr_LongOps = "Long Operation Queue";
+const char *cg_CmdMgr_ShortOps_FullName = "Command Manager - Short Operation Queue";
+const char *cg_CmdMgr_LongOps_FullName = "Command Manager - Long Operation Queue";
 
 /* Internal API */
 
@@ -130,10 +134,10 @@ KSTATUS cmdmgrStart(void) {
     gCmdManager._pjobQueueLongOps = queue_create(1024*1024/*1024*/);//1GB (should be 1MB at the beginning) TODO: dynamically increase queue_size
     if(gCmdManager._pjobQueueLongOps == NULL)
         return KSTATUS_UNSUCCESS;
-    _status = psmgrCreateThread(cg_CmdMgr_ShortOps, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueShortOps);
+    _status = psmgrCreateThread(cg_CmdMgr_ShortOps_ShortName, cg_CmdMgr_ShortOps_FullName, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueShortOps);
     if(!KSUCCESS(_status))
         return _status;
-    _status = psmgrCreateThread(cg_CmdMgr_LongOps, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueLongOps);
+    _status = psmgrCreateThread(cg_CmdMgr_LongOps_ShortName, cg_CmdMgr_LongOps_FullName, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueLongOps);
     return _status;
 }
 

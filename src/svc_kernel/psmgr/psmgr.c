@@ -16,6 +16,7 @@ typedef struct _PSMGR_THREAD {
 #define THREAD_STATUS_RUNNING 1
         };
     };
+    char _shortThreadName[8];
     const char* _fullThreadName;
     psmgr_execRoutine _p_execRoutine;
     psmgr_cancelRoutine _p_cancelRoutine;
@@ -68,9 +69,9 @@ static void* i_psmgrExecRoutine(void* p_arg) {
     pthread_cond_destroy(&p_threadCtxOld->_startExecCondVariable);
     FREE(p_threadCtxOld);
     if(svcKernelIsRunning()) {
-        ret = pthread_setname_np(pthread_self(), p_threadCtx->_fullThreadName);
+        ret = pthread_setname_np(pthread_self(), p_threadCtx->_shortThreadName);
         if(ret == 0) {
-            SYSLOG(LOG_INFO, "[PSMGR] ENTER threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
+            SYSLOG(LOG_INFO, "[PSMGR] ENTER threadName=%s(%s) threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
             ret = p_threadCtx->_p_execRoutine(p_threadCtx->_p_arg);
             SYSLOG(LOG_INFO, "[PSMGR] RET threadName=%s threadId=%lu p_execRoutine=%p ret=%d", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine, ret);
         } else SYSLOG(LOG_ERR, "[PSMGR] ERROR_SETNAME threadName=%s threadId=%lu", p_threadCtx->_fullThreadName, pthread_self());
@@ -155,11 +156,11 @@ void psmgrStopUserThreads(void) {
     }
 }
 
-KSTATUS psmgrCreateThread(const char* c_threadName, int threadType, psmgr_execRoutine p_execRoutine, psmgr_cancelRoutine p_cancelRoutine, void *p_arg) {
+KSTATUS psmgrCreateThread(const char* c_shortThreadName, const char* c_fullThreadName, int threadType, psmgr_execRoutine p_execRoutine, psmgr_cancelRoutine p_cancelRoutine, void *p_arg) {
     PPSMGR_THREAD p_threadCtx;
     int ret;
 
-    if(strlen(c_threadName) > 15)
+    if(strlen(c_shortThreadName) > 15)
         return KSTATUS_INVALID_PARAMETERS;
     p_threadCtx = MALLOC(PSMGR_THREAD, 1);
     if(p_threadCtx == NULL)
@@ -171,13 +172,14 @@ KSTATUS psmgrCreateThread(const char* c_threadName, int threadType, psmgr_execRo
     } else {
         p_threadCtx->_p_cancelRoutine = i_psmgrCancelRoutineEmpty;
     }
-    p_threadCtx->_fullThreadName = c_threadName;
+    p_threadCtx->_fullThreadName = c_fullThreadName;
+    strcpy(p_threadCtx->_shortThreadName, c_shortThreadName);
     p_threadCtx->_threadType = threadType;
     pthread_cond_init(&p_threadCtx->_startExecCondVariable, NULL);
     pthread_mutex_init(&p_threadCtx->_mutex, NULL);
     pthread_mutex_lock(&p_threadCtx->_mutex);
     ret = pthread_create(&p_threadCtx->_threadId, NULL, i_psmgrExecRoutine, p_threadCtx);
-    SYSLOG(LOG_INFO, "[PSMGR] CREATE threadName=%s threadId=%lu p_execRoutine=%p p_cancelRoutine=%p", c_threadName, p_threadCtx->_threadId, p_execRoutine, p_cancelRoutine);
+    SYSLOG(LOG_INFO, "[PSMGR] CREATE threadName=%s threadId=%lu p_execRoutine=%p p_cancelRoutine=%p", c_fullThreadName, p_threadCtx->_threadId, p_execRoutine, p_cancelRoutine);
     if(ret != 0) {
         pthread_mutex_unlock(&p_threadCtx->_mutex);
         pthread_cond_destroy(&p_threadCtx->_startExecCondVariable);
