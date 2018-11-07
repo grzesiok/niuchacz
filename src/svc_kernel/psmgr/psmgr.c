@@ -110,14 +110,13 @@ static void i_psmgrDumpList(void) {
 
 KSTATUS psmgrStart(void) {
     int i;
-    bool all_signals_handled = true;
     SYSLOG(LOG_INFO, "[PSMGR] Starting ...");
     for(i = 0;i < sizeof(g_psmgrHandledSignalsMainNew)/sizeof(g_psmgrHandledSignalsMainNew[0]);i++) {
-        if(sigaction(g_psmgrHandledSignalsMainNew[i]._signo, &g_psmgrHandledSignalsMainNew[i]._sigcfg, &g_psmgrHandledSignalsMainOld[i]._sigcfg) != 0)
-            all_signals_handled = false;
+        if(sigaction(g_psmgrHandledSignalsMainNew[i]._signo, &g_psmgrHandledSignalsMainNew[i]._sigcfg, &g_psmgrHandledSignalsMainOld[i]._sigcfg) != 0) {
+            SYSLOG(LOG_ERR, "[PSMGR] Signal (%d) was not handled properly !", g_psmgrHandledSignalsMainNew[i]._signo);
+            return KSTATUS_UNSUCCESS;
+        }
     }
-    if(!all_signals_handled)
-        return KSTATUS_UNSUCCESS;
     g_psmgrCfg._threadList = doublylinkedlistAlloc();
     if(g_psmgrCfg._threadList == NULL)
         return KSTATUS_UNSUCCESS;
