@@ -18,8 +18,8 @@ typedef struct {
 
 CMD_MANAGER gCmdManager;
 
-const char *cg_CmdMgr_ShortOps_ShortName = "NIUCH_CMD_SHRT";
-const char *cg_CmdMgr_LongOps_ShortName = "NIUCH_CMD_LONG";
+const char *cg_CmdMgr_ShortOps_ShortName = "niuch_cmdshrt";
+const char *cg_CmdMgr_LongOps_ShortName = "niuch_cmdlong";
 const char *cg_CmdMgr_ShortOps = "Short Operation Queue";
 const char *cg_CmdMgr_LongOps = "Long Operation Queue";
 const char *cg_CmdMgr_ShortOps_FullName = "Command Manager - Short Operation Queue";

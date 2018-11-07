@@ -242,7 +242,7 @@ int main(int argc, char* argv[])
 			goto __database_stop_andexit;
 		}
 		SYSLOG(LOG_INFO, "Prepare listen on device=%s", deviceName);
-		_status = psmgrCreateThread("NIUCH_PCAPLSNR", "Pcap Listener", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
+		_status = psmgrCreateThread("niuch_pcaplsnr", "Pcap Listener", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
 		if(!KSUCCESS(_status))
 			goto __database_stop_andexit;
 	} else {

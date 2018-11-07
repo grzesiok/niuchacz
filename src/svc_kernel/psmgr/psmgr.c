@@ -16,7 +16,7 @@ typedef struct _PSMGR_THREAD {
 #define THREAD_STATUS_RUNNING 1
         };
     };
-    char _shortThreadName[8];
+    char _shortThreadName[15];
     const char* _fullThreadName;
     psmgr_execRoutine _p_execRoutine;
     psmgr_cancelRoutine _p_cancelRoutine;
@@ -59,8 +59,8 @@ static void* i_psmgrExecRoutine(void* p_arg) {
     int ret;
     PPSMGR_THREAD p_threadCtx = (PPSMGR_THREAD)p_arg, p_threadCtxOld = (PPSMGR_THREAD)p_arg;
 
-    SYSLOG(LOG_INFO, "[PSMGR] INIT threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
     p_threadCtx = doublylinkedlistAdd(g_psmgrCfg._threadList, pthread_self(), p_threadCtx, sizeof(PSMGR_THREAD));
+    SYSLOG(LOG_INFO, "[PSMGR] INIT threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
     pthread_mutex_lock(&p_threadCtxOld->_mutex);
     p_threadCtxOld->_threadStatus = THREAD_STATUS_RUNNING;
     pthread_cond_broadcast(&p_threadCtxOld->_startExecCondVariable);
@@ -160,7 +160,7 @@ KSTATUS psmgrCreateThread(const char* c_shortThreadName, const char* c_fullThrea
     PPSMGR_THREAD p_threadCtx;
     int ret;
 
-    if(strlen(c_shortThreadName) > 15)
+    if(strlen(c_shortThreadName) >= 15)
         return KSTATUS_INVALID_PARAMETERS;
     p_threadCtx = MALLOC(PSMGR_THREAD, 1);
     if(p_threadCtx == NULL)
