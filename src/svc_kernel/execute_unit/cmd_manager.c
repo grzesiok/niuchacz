@@ -100,6 +100,7 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
 
     SYSLOG(LOG_INFO, "[CMDMGR][%s] Starting Job Executor", queueName);
     if(!queue_consumer_new(pqueue)) {
+        SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during attaching queue", queueName);
         _status = KSTATUS_UNSUCCESS;
         //TODO: Restrt cmdmgrExecutor and queue on the fly
         goto __cleanup;
@@ -114,6 +115,7 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
             SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during dequeue job", queueName);
         }
     }
+    SYSLOG(LOG_INFO, "[CMDMGR][%s] Detaching queue", queueName);
     queue_consumer_free(pqueue);
 __cleanup:
     SYSLOG(LOG_INFO, "[CMDMGR][%s] Stopping Job Executor", queueName);
