@@ -142,8 +142,9 @@ KSTATUS cmdmgrStart(void) {
 }
 
 void cmdmgrStop(void) {
-    SYSLOG(LOG_INFO, "[CMDMGR] Stopping...");
+    SYSLOG(LOG_INFO, "[CMDMGR] Stopping %s...", cg_CmdMgr_ShortOps);
     queue_destroy(gCmdManager._pjobQueueShortOps);
+    SYSLOG(LOG_INFO, "[CMDMGR] Stopping %s...", cg_CmdMgr_LongOps);
     queue_destroy(gCmdManager._pjobQueueLongOps);
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up commands...");
     dbExecQuery(svcKernelGetDb(), "select code from cmdmgr_cmdlist", 0, i_cmdmgrDestroySingleCommand, NULL);
