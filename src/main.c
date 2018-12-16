@@ -69,6 +69,10 @@ static const char * cgCreateSchemaIP =
                     "hostname text,"
                     "activeflag int"
                 ");";
+static const char * cgCreateView_PacketsPerDate =
+                "create view if not exists report$packetsperdate"
+                " as "
+                "select report_date, count(*) cnt, sum(ip_len) as bytes from (select date(datetime(ts_sec, 'unixepoch')) as report_date, ip_len from packets) group by report_date order by report_date desc;";
 sqlite3* getNiuchaczPcapDB() {
 	return g_Main._db;
 }
@@ -150,17 +154,20 @@ KSTATUS pcap_thread_routine(void* arg)
 
 KSTATUS schema_sync(void)
 {
-	KSTATUS _status;
-	SYSLOG(LOG_INFO, "SYNC DB START");
-	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaEth, 0);
-	if(!KSUCCESS(_status))
-		return _status;
-	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaIP, 0);
-	if(!KSUCCESS(_status))
-		return _status;
-	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaPackets, 0);
-	SYSLOG(LOG_INFO, "SYNC DB STOP");
-	return _status;
+    KSTATUS _status;
+    SYSLOG(LOG_INFO, "SYNC DB START");
+    _status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaEth, 0);
+    if(!KSUCCESS(_status))
+        return _status;
+    _status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaIP, 0);
+    if(!KSUCCESS(_status))
+        return _status;
+    _status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaPackets, 0);
+    if(!KSUCCESS(_status))
+        return _status;
+    _status = dbExec(getNiuchaczPcapDB(), cgCreateView_PacketsPerDate, 0);
+    SYSLOG(LOG_INFO, "SYNC DB STOP");
+    return _status;
 }
 
 KSTATUS cmd_sync(void) {
