@@ -86,12 +86,16 @@ KSTATUS statsAlloc(const char* statsName, int type, stats_key *p_key) {
 }
 
 void statsFree(stats_key key) {
+	if(key == NULL)
+		return;
 	PSTATS_ENTRY p_entry = (PSTATS_ENTRY)key;
 	SYSLOG(LOG_INFO, "statsFree(%s)", p_entry->_statsName);
 	p_entry->_flags = STATS_ENTRY_FLAGS_FREE;
 }
 
 unsigned long long statsUpdate(stats_key key, unsigned long long value) {
+	if(key == NULL)
+		return 0;
 	PSTATS_ENTRY p_entry = (PSTATS_ENTRY)key;
 	switch(p_entry->_type) {
 	case STATS_TYPE_SUM:
@@ -120,6 +124,23 @@ stats_key statsFind(const char* statsName) {
 }
 
 unsigned long long statsGetValue(stats_key key) {
+	if(key == NULL)
+		return 0;
 	PSTATS_ENTRY p_entry = (PSTATS_ENTRY)key;
 	return p_entry->_value;
+}
+
+void statsDump(void) {
+	SYSLOG(LOG_INFO, "STATS_DUMP: START");
+	LOCK(&g_StatsRootBlock, STATS_ROOTBLOCK);
+	PSTATS_LEAFBLOCK p_leafBlock = &g_StatsRootBlock._leafBlock;
+	while(p_leafBlock != NULL) {
+		PSTATS_ENTRY p_entry = i_statsFindEntry(p_leafBlock, STATS_ENTRY_FLAGS_USED, STATS_ENTRY_FLAGS_USED);
+                if(p_entry != NULL) {
+			SYSLOG(LOG_INFO, "STAT[%s]=%llu", p_entry->_statsName, p_entry->_value);
+		}
+		p_leafBlock = p_leafBlock->_p_nextBlock;
+	}
+	UNLOCK(&g_StatsRootBlock, STATS_ROOTBLOCK);
+	SYSLOG(LOG_INFO, "STATS_DUMP: STOP");
 }

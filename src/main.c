@@ -24,7 +24,7 @@ typedef struct _NIUCHACZ_CTX {
 
 typedef struct _NIUCHACZ_MAIN {
 	NIUCHACZ_CTX _threads[2];
-	sqlite3 *_db;
+	database_t* _db;
 } NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
 
 NIUCHACZ_MAIN g_Main;
@@ -73,7 +73,7 @@ static const char * cgCreateView_PacketsPerDate =
                 "create view if not exists report$packetsperdate"
                 " as "
                 "select report_date, count(*) cnt, sum(ip_len) as bytes from (select date(datetime(ts_sec, 'unixepoch')) as report_date, ip_len from packets) group by report_date order by report_date desc;";
-sqlite3* getNiuchaczPcapDB() {
+database_t* getNiuchaczPcapDB() {
 	return g_Main._db;
 }
 
@@ -220,7 +220,7 @@ int main(int argc, char* argv[])
 		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
 		goto __exit;
 	}
-	_status = dbStart(dbFileName, &g_Main._db);
+	_status = dbStart(dbFileName, "DB_LIVE0", &g_Main._db);
 	if(!KSUCCESS(_status))
 		goto __exit;
 	_status = schema_sync();//svcUpdateSync(getNiuchaczPcapDB());

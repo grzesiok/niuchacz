@@ -139,11 +139,14 @@ KSTATUS psmgrIdle(unsigned long long waitTimeInSec) {
     if(!doublylinkedlistIsEmpty(g_psmgrCfg._threadList)) {
         sleep(waitTimeInSec);
     }
+    doublylinkedlistFreeDeletedEntries(g_psmgrCfg._threadList);
     return KSTATUS_SUCCESS;
 }
 
 void psmgrStopUserThreads(void) {
     SYSLOG(LOG_INFO, "[PSMGR] Stopping User Threads ...");
+    if(g_psmgrCfg._threadList == NULL)
+        return;
     while(!doublylinkedlistIsEmpty(g_psmgrCfg._threadList)) {
         /*PPSMGR_THREAD p_threadCtx = (PPSMGR_THREAD)doublylinkedlistGetFirst(g_psmgrCfg._threadList);
         if(p_threadCtx->_threadType == PSMGR_THREAD_USER) {

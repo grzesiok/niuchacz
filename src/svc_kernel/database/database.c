@@ -1,20 +1,22 @@
 #include "database.h"
 #include "algorithms.h"
 
+const char* gc_statsKey_DbExec = "db exec";
+const char* gc_statsKey_DbExecFail = "db exec fail";
 const char* gc_statsKey_DbPrepareTime = "db prepare time";
-stats_key g_statsKey_DbPrepareTime;
 const char* gc_statsKey_DbBindTime = "db bind time";
-stats_key g_statsKey_DbBindTime;
 const char* gc_statsKey_DbExecTime = "db exec time";
-stats_key g_statsKey_DbExecTime;
 const char* gc_statsKey_DbFinalizeTime = "db finalize time";
-stats_key g_statsKey_DbFinalizeTime;
 const char* gc_statsKey_DbCallbackTime = "db callback time";
-stats_key g_statsKey_DbCallbackTime;
 
+typedef struct {
+	PDOUBLYLINKEDLIST _DBList;
+} dbmgr_t;
+
+static dbmgr_t g_dbCfg;
 // Internal API
 
-bool i_dbExecBindVariables(sqlite3_stmt *pStmt, va_list args, int bindCnt) {
+bool i_dbExecBindVariables(database_t *p_db, sqlite3_stmt *pStmt, va_list args, int bindCnt) {
     int i;
     for(i = 0;i < bindCnt;i++) {
         switch(va_arg(args, int)) {
@@ -44,7 +46,7 @@ bool i_dbExecBindVariables(sqlite3_stmt *pStmt, va_list args, int bindCnt) {
             }
             break;
         default:
-            SYSLOG(LOG_ERR, "[DB] Error during binding variable.");
+            SYSLOG(LOG_ERR, "[DB][%s] Error during binding variable.", p_db->_shortname_8b);
             return false;
         }
     }
@@ -55,37 +57,38 @@ int i_dbExecEmptyCallback(void* param, sqlite3_stmt* stmt) {
     return 0;
 }
 
-KSTATUS i_dbExec(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(void*, sqlite3_stmt*), void* param, va_list args) {
+KSTATUS i_dbExec(database_t* p_db, const char* stmt, int bindCnt, int (*callback)(void*, sqlite3_stmt*), void* param, va_list args) {
     int rc;
     KSTATUS _status = KSTATUS_SUCCESS;
     struct timespec startTime;
     sqlite3_stmt *pStmt;
     unsigned int rowCount = 0;
+    unsigned long long l_DbPrepareTime, l_DbBindTime, l_DbExecTime = 0, l_DbCallbackTime = 0, l_DbFinalizeTime;
 
     if(callback == NULL)
         callback = i_dbExecEmptyCallback;
     timerWatchStart(&startTime);
-    rc = sqlite3_prepare_v2(db, stmt, -1, &pStmt, 0);
-    statsUpdate(g_statsKey_DbPrepareTime, timerWatchStop(startTime));
+    rc = sqlite3_prepare_v2(p_db->_db, stmt, -1, &pStmt, 0);
+    l_DbPrepareTime = timerWatchStop(startTime);
     if(rc != SQLITE_OK) {
-    	SYSLOG(LOG_ERR, "[DB] Failed to prepare cursor: %s", dbGetErrmsg(db));
+    	SYSLOG(LOG_ERR, "[DB][%s] Failed to prepare cursor: %s", p_db->_shortname_8b, dbGetErrmsg(p_db));
         return KSTATUS_UNSUCCESS;
     }
     timerWatchStart(&startTime);
-    _status = (i_dbExecBindVariables(pStmt, args, bindCnt)) ? KSTATUS_SUCCESS : KSTATUS_UNSUCCESS;
-    statsUpdate(g_statsKey_DbBindTime, timerWatchStop(startTime));
+    _status = (i_dbExecBindVariables(p_db, pStmt, args, bindCnt)) ? KSTATUS_SUCCESS : KSTATUS_UNSUCCESS;
+    l_DbBindTime = timerWatchStop(startTime);
     if(!KSUCCESS(_status)) {
-    	SYSLOG(LOG_ERR, "[DB] Failed to bind variables to cursor: %s", dbGetErrmsg(db));
+    	SYSLOG(LOG_ERR, "[DB][%s] Failed to bind variables to cursor: %s", p_db->_shortname_8b, dbGetErrmsg(p_db));
         return KSTATUS_UNSUCCESS;
     }
     while(1) {
         timerWatchStart(&startTime);
         rc = sqlite3_step(pStmt);
-        statsUpdate(g_statsKey_DbExecTime, timerWatchStop(startTime));
+        l_DbExecTime += timerWatchStop(startTime);
         if(rc == SQLITE_DONE || rc == SQLITE_ROW) {
             rowCount++;
         } else {
-            SYSLOG(LOG_ERR, "[DB] Error during cursor executing: %s", dbGetErrmsg(db));
+            SYSLOG(LOG_ERR, "[DB][%s] Error during cursor executing: %s", p_db->_shortname_8b, dbGetErrmsg(p_db));
             break;
         }
         if(rc == SQLITE_DONE) {
@@ -93,127 +96,173 @@ KSTATUS i_dbExec(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(voi
         } else {
             timerWatchStart(&startTime);
             rc = callback(param, pStmt);
-            statsUpdate(g_statsKey_DbCallbackTime, timerWatchStop(startTime));
+            l_DbCallbackTime += timerWatchStop(startTime);
             if(rc != 0) {
-                SYSLOG(LOG_ERR, "[DB] Callback return with error!");
+                SYSLOG(LOG_ERR, "[DB][%s] Callback return with error!", p_db->_shortname_8b);
                 break;
             }
         }
     }
     if(rowCount == 0) {
-        SYSLOG(LOG_ERR, "[DB] Failed to execute cursor: %s", dbGetErrmsg(db));
+        SYSLOG(LOG_ERR, "[DB][%s] Failed to execute cursor: %s", p_db->_shortname_8b, dbGetErrmsg(p_db));
         _status = KSTATUS_DB_EXEC_ERROR;
     }
     timerWatchStart(&startTime);
     rc = sqlite3_finalize(pStmt);
-    statsUpdate(g_statsKey_DbFinalizeTime, timerWatchStop(startTime));
+    l_DbFinalizeTime = timerWatchStop(startTime);
     if(rc != SQLITE_OK) {
-        SYSLOG(LOG_ERR, "[DB] Failed to clear cursor: %s", dbGetErrmsg(db));
+        SYSLOG(LOG_ERR, "[DB][%s] Failed to clear cursor: %s", p_db->_shortname_8b, dbGetErrmsg(p_db));
         _status = KSTATUS_DB_EXEC_ERROR;
+        statsUpdate(p_db->_statsKey_DbExecFail, 1);
     }
+    statsUpdate(p_db->_statsKey_DbExec, 1);
+    statsUpdate(p_db->_statsKey_DbPrepareTime, l_DbPrepareTime);
+    statsUpdate(p_db->_statsKey_DbBindTime, l_DbBindTime);
+    statsUpdate(p_db->_statsKey_DbExecTime, l_DbExecTime);
+    statsUpdate(p_db->_statsKey_DbCallbackTime, l_DbCallbackTime);
+    statsUpdate(p_db->_statsKey_DbFinalizeTime, l_DbFinalizeTime);
     return _status;
 }
 
 // External API
 
-KSTATUS dbStart(const char* p_path, sqlite3** p_db)
-{
-    int  rc;
-    KSTATUS _status;
-    sqlite3* db;
-
-    SYSLOG(LOG_INFO, "[DB] Starting FileName(%s) Version(%s)...", p_path, sqlite3_libversion());
-    _status = statsAlloc(gc_statsKey_DbExecTime, STATS_TYPE_SUM, &g_statsKey_DbExecTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
+KSTATUS dbmgrStart(void) {
+    SYSLOG(LOG_INFO, "[DBMGR] Start...");
+    g_dbCfg._DBList = doublylinkedlistAlloc();
+    if(g_dbCfg._DBList == NULL)
         return KSTATUS_UNSUCCESS;
-    }
-    _status = statsAlloc(gc_statsKey_DbPrepareTime, STATS_TYPE_SUM, &g_statsKey_DbPrepareTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
-        return KSTATUS_UNSUCCESS;
-    }
-    _status = statsAlloc(gc_statsKey_DbBindTime, STATS_TYPE_SUM, &g_statsKey_DbBindTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
-        return KSTATUS_UNSUCCESS;
-    }
-    _status = statsAlloc(gc_statsKey_DbFinalizeTime, STATS_TYPE_SUM, &g_statsKey_DbFinalizeTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
-        return KSTATUS_UNSUCCESS;
-    }
-    _status = statsAlloc(gc_statsKey_DbCallbackTime, STATS_TYPE_SUM, &g_statsKey_DbCallbackTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB] Error during allocation StatsKey!");
-        return KSTATUS_UNSUCCESS;
-    }
-    SYSLOG(LOG_INFO, "[DB] Openning FileName(%s) Version(%s)...", p_path, sqlite3_libversion());
-    rc = sqlite3_open(p_path, &db);
-    if(rc) {
-        SYSLOG(LOG_ERR, "[DB] Error during opening DB(%s): %s!", p_path, dbGetErrmsg(db));
-        *p_db = db;
-        return KSTATUS_DB_OPEN_ERROR;
-    }
-    _status = dbExec(db, "PRAGMA journal_mode = WAL;", 0);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB] Error during enabling WAL journal_mode for DB(%s): %s!", p_path, dbGetErrmsg(db));
-        return _status;
-    }
-    _status = dbExec(db, "PRAGMA synchronous = NORMAL;", 0);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB] Error during switching synchronous to NORMAL for DB(%s): %s!", p_path, dbGetErrmsg(db));
-        return _status;
-    }
-    SYSLOG(LOG_INFO, "[DB] Opened FileName(%s) Version(%s)", p_path, sqlite3_libversion());
-    *p_db = db;
     return KSTATUS_SUCCESS;
 }
 
-void dbStop(sqlite3* db)
-{
-    SYSLOG(LOG_INFO, "[DB] Stopping(%s)...", sqlite3_db_filename(db, "main"));
-    sqlite3_close(db);
-    statsFree(g_statsKey_DbPrepareTime);
-    statsFree(g_statsKey_DbBindTime);
-    statsFree(g_statsKey_DbExecTime);
-    statsFree(g_statsKey_DbFinalizeTime);
-    statsFree(g_statsKey_DbCallbackTime);
+void dbmgrStop(void) {
+    SYSLOG(LOG_INFO, "[DBMGR] Cleaning up...");
+    doublylinkedlistFreeDeletedEntries(g_dbCfg._DBList);
+    doublylinkedlistFree(g_dbCfg._DBList);
 }
 
-KSTATUS dbExec(sqlite3* db, const char* stmt, int bindCnt, ...) {
+KSTATUS dbStart(const char* p_path, const char* p_shortname_8b, database_t** p_out_db) {
+    int  rc;
+    KSTATUS _status;
+    database_t db;
+    database_t* p_db;
+
+    memset(&db, 0, sizeof(database_t));
+    strncpy(db._shortname_8b, p_shortname_8b, sizeof(db._shortname_8b)/sizeof(db._shortname_8b[0]));
+    SYSLOG(LOG_INFO, "[DB][%s] Openning DB FileName(%s) Version(%s)...", p_shortname_8b, p_path, sqlite3_libversion());
+    rc = sqlite3_open(p_path, &db._db);
+    if(rc) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during opening DB(%s): %s!", p_shortname_8b, p_path, sqlite3_errmsg(db._db));
+        return KSTATUS_DB_OPEN_ERROR;
+    }
+    *p_out_db = doublylinkedlistAdd(g_dbCfg._DBList, *((uint64_t*)db._shortname_8b), &db, sizeof(database_t));
+    p_db = *p_out_db;
+    SYSLOG(LOG_INFO, "[DB][%s] Starting FileName(%s) Version(%s)...", p_shortname_8b, p_path, sqlite3_libversion());
+    _status = statsAlloc(gc_statsKey_DbExec, STATS_TYPE_SUM, &p_db->_statsKey_DbExec);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbExec);
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(gc_statsKey_DbExecFail, STATS_TYPE_SUM, &p_db->_statsKey_DbExecFail);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbExecFail);
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(gc_statsKey_DbExecTime, STATS_TYPE_SUM, &p_db->_statsKey_DbExecTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbExecTime);
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(gc_statsKey_DbPrepareTime, STATS_TYPE_SUM, &p_db->_statsKey_DbPrepareTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbPrepareTime);
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(gc_statsKey_DbBindTime, STATS_TYPE_SUM, &p_db->_statsKey_DbBindTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbBindTime);
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(gc_statsKey_DbFinalizeTime, STATS_TYPE_SUM, &p_db->_statsKey_DbFinalizeTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbFinalizeTime);
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(gc_statsKey_DbCallbackTime, STATS_TYPE_SUM, &p_db->_statsKey_DbCallbackTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbCallbackTime);
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = dbExec(p_db, "PRAGMA journal_mode = WAL;", 0);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during enabling WAL journal_mode for DB(%s): %s!", p_shortname_8b, p_path, dbGetErrmsg(p_db));
+        return _status;
+    }
+    _status = dbExec(p_db, "PRAGMA synchronous = NORMAL;", 0);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during switching synchronous to NORMAL for DB(%s): %s!", p_shortname_8b, p_path, dbGetErrmsg(p_db));
+        return _status;
+    }
+    SYSLOG(LOG_INFO, "[DB][%s] Opened FileName(%s) Version(%s)", p_shortname_8b, p_path, sqlite3_libversion());
+    return KSTATUS_SUCCESS;
+}
+
+void dbStop(database_t* p_db)
+{
+    if(p_db == NULL)
+        return;
+    SYSLOG(LOG_INFO, "[DB][%s] Stopping...", p_db->_shortname_8b);
+    doublylinkedlistDel(g_dbCfg._DBList, p_db);
+    sqlite3_close(p_db->_db);
+    SYSLOG(LOG_INFO, "[DB][%s][DbExec] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbExec));
+    SYSLOG(LOG_INFO, "[DB][%s][DbExecFail] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbExecFail));
+    SYSLOG(LOG_INFO, "[DB][%s][DbPrepareTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbPrepareTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbBindTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbBindTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbExecTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbExecTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbFinalizeTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbFinalizeTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbCallbackTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbCallbackTime));
+    statsFree(p_db->_statsKey_DbExec);
+    statsFree(p_db->_statsKey_DbExecFail);
+    statsFree(p_db->_statsKey_DbPrepareTime);
+    statsFree(p_db->_statsKey_DbBindTime);
+    statsFree(p_db->_statsKey_DbExecTime);
+    statsFree(p_db->_statsKey_DbFinalizeTime);
+    statsFree(p_db->_statsKey_DbCallbackTime);
+    doublylinkedlistRelease(p_db);
+}
+
+KSTATUS dbExec(database_t* p_db, const char* stmt, int bindCnt, ...) {
     KSTATUS _status;
     va_list args;
     va_start(args, bindCnt);
-    _status = i_dbExec(db, stmt, bindCnt, NULL, NULL, args);
+    _status = i_dbExec(p_db, stmt, bindCnt, NULL, NULL, args);
     va_end(args);
     return _status;
 }
 
-KSTATUS dbExecQuery(sqlite3* db, const char* stmt, int bindCnt, int (*callback)(void*, sqlite3_stmt*), void* param, ...) {
+KSTATUS dbExecQuery(database_t* p_db, const char* stmt, int bindCnt, int (*callback)(void*, sqlite3_stmt*), void* param, ...) {
     KSTATUS _status;
     va_list args;
     va_start(args, param);
-    _status = i_dbExec(db, stmt, bindCnt, callback, param, args);
+    _status = i_dbExec(p_db, stmt, bindCnt, callback, param, args);
     va_end(args);
     return _status;
 }
 
-KSTATUS dbTxnBegin(sqlite3* db) {
-    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+KSTATUS dbTxnBegin(database_t* p_db) {
+    sqlite3_exec(p_db->_db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
     return KSTATUS_SUCCESS;
 }
 
-KSTATUS dbTxnCommit(sqlite3* db) {
-    sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+KSTATUS dbTxnCommit(database_t* p_db) {
+    sqlite3_exec(p_db->_db, "COMMIT;", NULL, NULL, NULL);
     return KSTATUS_SUCCESS;
 }
 
-KSTATUS dbTxnRollback(sqlite3* db) {
-    sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+KSTATUS dbTxnRollback(database_t* p_db) {
+    sqlite3_exec(p_db->_db, "ROLLBACK;", NULL, NULL, NULL);
     return KSTATUS_SUCCESS;
 }
 
-const char* dbGetErrmsg(sqlite3* db) {
-    return sqlite3_errmsg(db);
+const char* dbGetErrmsg(database_t* p_db) {
+    return sqlite3_errmsg(p_db->_db);
 }

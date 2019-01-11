@@ -19,4 +19,5 @@ void statsFree(stats_key key);
 unsigned long long statsUpdate(stats_key key, unsigned long long value);
 stats_key statsFind(const char* statsName);
 unsigned long long statsGetValue(stats_key key);
+void statsDump(void);
 #endif
