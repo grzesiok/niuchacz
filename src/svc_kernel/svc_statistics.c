@@ -113,7 +113,7 @@ stats_key statsFind(const char* statsName) {
 	PSTATS_LEAFBLOCK p_leafBlock = &g_StatsRootBlock._leafBlock;
 	while(p_leafBlock != NULL) {
 		PSTATS_ENTRY p_entry = i_statsFindEntry(p_leafBlock, STATS_ENTRY_FLAGS_USED, STATS_ENTRY_FLAGS_USED);
-		if(p_entry != NULL && strncmp(p_entry->_statsName, statsName, strlen(p_entry->_statsName)) == 0) {
+		if(p_entry != NULL && strlen(p_entry->_statsName) == strlen(statsName) && strncmp(p_entry->_statsName, statsName, strlen(p_entry->_statsName)) == 0) {
 			statsKey = p_entry;
 			break;
 		}
