@@ -54,13 +54,13 @@ KSTATUS svcKernelInit(const char* confFileName) {
     _status = statsStart();
     if(!KSUCCESS(_status))
         return _status;
+    _status = psmgrStart();
+    if(!KSUCCESS(_status))
+        return _status;
     _status = dbmgrStart();
     if(!KSUCCESS(_status))
         return _status;
     _status = dbStart(":memory:", "DB_KRNL0", &gKernelCfg._db);
-    if(!KSUCCESS(_status))
-        return _status;
-    _status = psmgrStart();
     if(!KSUCCESS(_status))
         return _status;
     _status = cmdmgrStart();
@@ -78,10 +78,10 @@ void svcKernelExit(int code) {
     SYSLOG(LOG_INFO, "[KERNEL] Stopping...");
     svcUpdateStop();
     cmdmgrStop();
-    psmgrStopUserThreads();
-    psmgrStop();
     dbStop(gKernelCfg._db);
     dbmgrStop();
+    psmgrStopUserThreads();
+    psmgrStop();
     statsStop();
     config_destroy(&gKernelCfg._cfg);
 
