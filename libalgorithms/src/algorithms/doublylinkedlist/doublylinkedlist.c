@@ -207,7 +207,7 @@ void doublylinkedlistRelease(void* ptr) {
 }
 
 bool doublylinkedlistIsEmpty(PDOUBLYLINKEDLIST pdoublylinkedlist) {
-	return i_doublylinkedlistEntryHeaderIsEmpty(&pdoublylinkedlist->_activeEntries) || i_doublylinkedlistEntryHeaderIsEmpty(&pdoublylinkedlist->_deletedEntries);
+	return i_doublylinkedlistEntryHeaderIsEmpty(&pdoublylinkedlist->_activeEntries);
 }
 
 #define movePtrToQueryUserData(ptr) ((void*)((size_t)ptr+sizeof(DOUBLYLINKEDLIST_QUERY)))
