@@ -63,7 +63,7 @@ KSTATUS i_dbExec(database_t* p_db, const char* stmt, int bindCnt, int (*callback
     struct timespec startTime;
     sqlite3_stmt *pStmt;
     unsigned int rowCount = 0;
-    unsigned long long l_DbPrepareTime, l_DbBindTime, l_DbExecTime = 0, l_DbCallbackTime = 0, l_DbFinalizeTime;
+    unsigned long long l_DbPrepareTime = 0, l_DbBindTime = 0, l_DbExecTime = 0, l_DbCallbackTime = 0, l_DbFinalizeTime = 0;
 
     if(callback == NULL)
         callback = i_dbExecEmptyCallback;
