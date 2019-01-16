@@ -72,14 +72,15 @@ KSTATUS i_dbExec(database_t* p_db, const char* stmt, int bindCnt, int (*callback
     l_DbPrepareTime = timerWatchStop(startTime);
     if(rc != SQLITE_OK) {
     	SYSLOG(LOG_ERR, "[DB][%s] Failed to prepare cursor: %s", p_db->_shortname_8b, dbGetErrmsg(p_db));
-        return KSTATUS_UNSUCCESS;
+        _status = KSTATUS_UNSUCCESS;
+	goto __dbExec_cleanup;
     }
     timerWatchStart(&startTime);
     _status = (i_dbExecBindVariables(p_db, pStmt, args, bindCnt)) ? KSTATUS_SUCCESS : KSTATUS_UNSUCCESS;
     l_DbBindTime = timerWatchStop(startTime);
     if(!KSUCCESS(_status)) {
     	SYSLOG(LOG_ERR, "[DB][%s] Failed to bind variables to cursor: %s", p_db->_shortname_8b, dbGetErrmsg(p_db));
-        return KSTATUS_UNSUCCESS;
+        goto __dbExec_cleanup;
     }
     while(1) {
         timerWatchStart(&startTime);
@@ -113,6 +114,9 @@ KSTATUS i_dbExec(database_t* p_db, const char* stmt, int bindCnt, int (*callback
     if(rc != SQLITE_OK) {
         SYSLOG(LOG_ERR, "[DB][%s] Failed to clear cursor: %s", p_db->_shortname_8b, dbGetErrmsg(p_db));
         _status = KSTATUS_DB_EXEC_ERROR;
+    }
+__dbExec_cleanup:
+    if(!KSUCCESS(_status)) {
         statsUpdate(p_db->_statsKey_DbExecFail, 1);
     }
     statsUpdate(p_db->_statsKey_DbExec, 1);
