@@ -8,6 +8,19 @@ create or replace PACKAGE BODY PKG_ACTIONS AS
     end loop;
   END;
 
+  procedure p_exec(i_action o_action) as
+    l_action o_action := i_action;
+  begin
+    if(l_action is null) then
+      return;
+    end if;
+    l_action.p_create;
+    l_action.p_execbefore;
+    l_action.p_exec;
+    l_action.p_execafter;
+    l_action.p_destroy;
+  end;
+
   procedure p_consume_single_action(i_queue_name varchar2,
                                     i_consumer varchar2 default sys_context('userenv', 'session_user'),
                                     i_waittime number) as
@@ -18,14 +31,7 @@ create or replace PACKAGE BODY PKG_ACTIONS AS
                           i_consumer => i_consumer,
                           i_autocommit => false,
                           i_waittime => 1);
-    if(l_action is null) then
-      return;
-    end if;
-    l_action.p_create;
-    l_action.p_execbefore;
-    l_action.p_exec;
-    l_action.p_execafter;
-    l_action.p_destroy;
+    p_exec(i_action => l_action);
     commit;
   exception
     --when e_dbmsaq_timeout then null;
