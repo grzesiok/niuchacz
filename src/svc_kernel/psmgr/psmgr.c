@@ -82,7 +82,7 @@ static void* i_psmgrExecRoutine(void* p_arg) {
     doublylinkedlistRelease(p_threadCtx);
     // free memory
     doublylinkedlistRelease(p_threadCtx);
-    return (void*)ret;
+    return (void*)(uint64_t)ret;
 }
 
 static void i_psmgrDumpList(void) {
