@@ -76,10 +76,11 @@ static void* i_psmgrExecRoutine(void* p_arg) {
             SYSLOG(LOG_INFO, "[PSMGR] RET threadName=%s threadId=%lu p_execRoutine=%p ret=%d", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine, ret);
         } else SYSLOG(LOG_ERR, "[PSMGR] ERROR_SETNAME threadName=%s threadId=%lu", p_threadCtx->_fullThreadName, pthread_self());
     }
-    //release lock from execRoutine
     doublylinkedlistDel(g_psmgrCfg._threadList, p_threadCtx);
     SYSLOG(LOG_INFO, "[PSMGR] EXIT threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
-    //free object
+    // release lock for execRoutine
+    doublylinkedlistRelease(p_threadCtx);
+    // free memory
     doublylinkedlistRelease(p_threadCtx);
     return (void*)ret;
 }
