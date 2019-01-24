@@ -117,14 +117,14 @@ KSTATUS i_dbExec(database_t* p_db, const char* stmt, int bindCnt, int (*callback
     }
 __dbExec_cleanup:
     if(!KSUCCESS(_status)) {
-        statsUpdate(p_db->_statsKey_DbExecFail, 1);
+        statsUpdate(&p_db->_statsEntry_DbExecFail, 1);
     }
-    statsUpdate(p_db->_statsKey_DbExec, 1);
-    statsUpdate(p_db->_statsKey_DbPrepareTime, l_DbPrepareTime);
-    statsUpdate(p_db->_statsKey_DbBindTime, l_DbBindTime);
-    statsUpdate(p_db->_statsKey_DbExecTime, l_DbExecTime);
-    statsUpdate(p_db->_statsKey_DbCallbackTime, l_DbCallbackTime);
-    statsUpdate(p_db->_statsKey_DbFinalizeTime, l_DbFinalizeTime);
+    statsUpdate(&p_db->_statsEntry_DbExec, 1);
+    statsUpdate(&p_db->_statsEntry_DbPrepareTime, l_DbPrepareTime);
+    statsUpdate(&p_db->_statsEntry_DbBindTime, l_DbBindTime);
+    statsUpdate(&p_db->_statsEntry_DbExecTime, l_DbExecTime);
+    statsUpdate(&p_db->_statsEntry_DbCallbackTime, l_DbCallbackTime);
+    statsUpdate(&p_db->_statsEntry_DbFinalizeTime, l_DbFinalizeTime);
     return _status;
 }
 
@@ -161,52 +161,57 @@ KSTATUS dbStart(const char* p_path, const char* p_shortname_8b, database_t** p_o
     *p_out_db = doublylinkedlistAdd(g_dbCfg._DBList, *((uint64_t*)db._shortname_8b), &db, sizeof(database_t));
     p_db = *p_out_db;
     SYSLOG(LOG_INFO, "[DB][%s] Starting FileName(%s) Version(%s)...", p_shortname_8b, p_path, sqlite3_libversion());
-    _status = statsAlloc(gc_statsKey_DbExec, STATS_TYPE_SUM, &p_db->_statsKey_DbExec);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbExec);
+    p_db->_stats_list = statsCreate(p_db->_shortname_8b);
+    if(p_db->_stats_list == NULL) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsList(%s)!", p_shortname_8b, p_shortname_8b);
         return KSTATUS_UNSUCCESS;
     }
-    _status = statsAlloc(gc_statsKey_DbExecFail, STATS_TYPE_SUM, &p_db->_statsKey_DbExecFail);
+    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbExec, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExec);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbExecFail);
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbExec);
         return KSTATUS_UNSUCCESS;
     }
-    _status = statsAlloc(gc_statsKey_DbExecTime, STATS_TYPE_SUM, &p_db->_statsKey_DbExecTime);
+    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbExecFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecFail);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbExecTime);
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbExecFail);
         return KSTATUS_UNSUCCESS;
     }
-    _status = statsAlloc(gc_statsKey_DbPrepareTime, STATS_TYPE_SUM, &p_db->_statsKey_DbPrepareTime);
+    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbExecTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecTime);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbPrepareTime);
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbExecTime);
         return KSTATUS_UNSUCCESS;
     }
-    _status = statsAlloc(gc_statsKey_DbBindTime, STATS_TYPE_SUM, &p_db->_statsKey_DbBindTime);
+    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbPrepareTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbPrepareTime);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbBindTime);
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbPrepareTime);
         return KSTATUS_UNSUCCESS;
     }
-    _status = statsAlloc(gc_statsKey_DbFinalizeTime, STATS_TYPE_SUM, &p_db->_statsKey_DbFinalizeTime);
+    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbBindTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbBindTime);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbFinalizeTime);
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbBindTime);
         return KSTATUS_UNSUCCESS;
     }
-    _status = statsAlloc(gc_statsKey_DbCallbackTime, STATS_TYPE_SUM, &p_db->_statsKey_DbCallbackTime);
+    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbFinalizeTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbFinalizeTime);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_shortname_8b, gc_statsKey_DbCallbackTime);
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbFinalizeTime);
+        return KSTATUS_UNSUCCESS;
+    }
+    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbCallbackTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbCallbackTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbCallbackTime);
         return KSTATUS_UNSUCCESS;
     }
     _status = dbExec(p_db, "PRAGMA journal_mode = WAL;", 0);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during enabling WAL journal_mode for DB(%s): %s!", p_shortname_8b, p_path, dbGetErrmsg(p_db));
+        SYSLOG(LOG_ERR, "[DB][%s] Error during enabling WAL journal_mode for DB(%s): %s!", p_db->_shortname_8b, p_path, dbGetErrmsg(p_db));
         return _status;
     }
     _status = dbExec(p_db, "PRAGMA synchronous = NORMAL;", 0);
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during switching synchronous to NORMAL for DB(%s): %s!", p_shortname_8b, p_path, dbGetErrmsg(p_db));
+        SYSLOG(LOG_ERR, "[DB][%s] Error during switching synchronous to NORMAL for DB(%s): %s!", p_db->_shortname_8b, p_path, dbGetErrmsg(p_db));
         return _status;
     }
-    SYSLOG(LOG_INFO, "[DB][%s] Opened FileName(%s) Version(%s)", p_shortname_8b, p_path, sqlite3_libversion());
+    SYSLOG(LOG_INFO, "[DB][%s] Opened FileName(%s) Version(%s)", p_db->_shortname_8b, p_path, sqlite3_libversion());
     return KSTATUS_SUCCESS;
 }
 
@@ -217,20 +222,14 @@ void dbStop(database_t* p_db)
     SYSLOG(LOG_INFO, "[DB][%s] Stopping...", p_db->_shortname_8b);
     doublylinkedlistDel(g_dbCfg._DBList, p_db);
     sqlite3_close(p_db->_db);
-    SYSLOG(LOG_INFO, "[DB][%s][DbExec] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbExec));
-    SYSLOG(LOG_INFO, "[DB][%s][DbExecFail] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbExecFail));
-    SYSLOG(LOG_INFO, "[DB][%s][DbPrepareTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbPrepareTime));
-    SYSLOG(LOG_INFO, "[DB][%s][DbBindTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbBindTime));
-    SYSLOG(LOG_INFO, "[DB][%s][DbExecTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbExecTime));
-    SYSLOG(LOG_INFO, "[DB][%s][DbFinalizeTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbFinalizeTime));
-    SYSLOG(LOG_INFO, "[DB][%s][DbCallbackTime] = %llu", p_db->_shortname_8b, statsGetValue(p_db->_statsKey_DbCallbackTime));
-    statsFree(p_db->_statsKey_DbExec);
-    statsFree(p_db->_statsKey_DbExecFail);
-    statsFree(p_db->_statsKey_DbPrepareTime);
-    statsFree(p_db->_statsKey_DbBindTime);
-    statsFree(p_db->_statsKey_DbExecTime);
-    statsFree(p_db->_statsKey_DbFinalizeTime);
-    statsFree(p_db->_statsKey_DbCallbackTime);
+    SYSLOG(LOG_INFO, "[DB][%s][DbExec] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbExec));
+    SYSLOG(LOG_INFO, "[DB][%s][DbExecFail] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbExecFail));
+    SYSLOG(LOG_INFO, "[DB][%s][DbPrepareTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbPrepareTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbBindTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbBindTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbExecTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbExecTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbFinalizeTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbFinalizeTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbCallbackTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbCallbackTime));
+    statsDestroy(p_db->_stats_list);
     doublylinkedlistRelease(p_db);
 }
 

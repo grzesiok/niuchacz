@@ -6,14 +6,15 @@
 
 typedef struct {
     sqlite3* _db;
+    stats_list_t* _stats_list;
     char _shortname_8b[9];
-    stats_key _statsKey_DbExec;
-    stats_key _statsKey_DbExecFail;
-    stats_key _statsKey_DbPrepareTime;
-    stats_key _statsKey_DbBindTime;
-    stats_key _statsKey_DbExecTime;
-    stats_key _statsKey_DbFinalizeTime;
-    stats_key _statsKey_DbCallbackTime;
+    stats_entry_t _statsEntry_DbExec;
+    stats_entry_t _statsEntry_DbExecFail;
+    stats_entry_t _statsEntry_DbPrepareTime;
+    stats_entry_t _statsEntry_DbBindTime;
+    stats_entry_t _statsEntry_DbExecTime;
+    stats_entry_t _statsEntry_DbFinalizeTime;
+    stats_entry_t _statsEntry_DbCallbackTime;
 } database_t;
 
 KSTATUS dbmgrStart(void);

@@ -19,7 +19,6 @@
 
 typedef struct _NIUCHACZ_CTX {
 	const char* _p_deviceName;
-	stats_key _statsKey;
 } NIUCHACZ_CTX, *PNIUCHACZ_CTX;
 
 typedef struct _NIUCHACZ_MAIN {
@@ -93,7 +92,6 @@ KSTATUS pcap_thread_routine(void* arg)
 	char errbuf[PCAP_ERRBUF_SIZE];
 	struct pcap_pkthdr header;
 	void* packet;
-	struct timespec startTime;
 	char filter_exp[] = "ip"; /* filter expression (only IP packets) */
 	struct bpf_program fp; /* compiled filter program (expression) */
 	bpf_u_int32 net;
@@ -132,7 +130,6 @@ KSTATUS pcap_thread_routine(void* arg)
 	while(svcKernelIsRunning()) {
 		packet = (void*)pcap_next(gp_PcapHandle, &header);
 		if(packet != NULL) {
-			timerWatchStart(&startTime);
 			_status = cmdmgrJobPrepare("PACKET_ANALYZE", packet, header.caplen, header.ts, &pjob);
 			if(!KSUCCESS(_status)) {
 				SYSLOG(LOG_ERR, "Couldn't prepare packet to analyze");
@@ -143,7 +140,6 @@ KSTATUS pcap_thread_routine(void* arg)
 				SYSLOG(LOG_ERR, "Couldn't execute job");
 				continue;
 			}
-			statsUpdate(p_ctx->_statsKey, timerWatchStop(startTime));
 		}
 	}
 	/* cleanup */
@@ -232,17 +228,7 @@ int main(int argc, char* argv[])
 		goto __database_stop_andexit;
 	if(config_lookup(svcKernelGetCfg(), "NIUCHACZ.testMode") == NULL) {
 		g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
-		_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
-		if(!KSUCCESS(_status)) {
-			SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
-			goto __database_stop_andexit;
-		}
 		g_Main._threads[MAIN_THREAD_CONSUMER]._p_deviceName = deviceName;
-		_status = statsAlloc("consumerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
-		if(!KSUCCESS(_status)) {
-			SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
-			goto __database_stop_andexit;
-		}
 		SYSLOG(LOG_INFO, "Prepare listen on device=%s", deviceName);
 		_status = psmgrCreateThread("niuch_pcaplsnr", "Pcap Listener", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
 		if(!KSUCCESS(_status))
@@ -254,10 +240,6 @@ int main(int argc, char* argv[])
 		svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
 	}
 	svcKernelMainLoop();
-	if(config_lookup(svcKernelGetCfg(), "NIUCHACZ.testMode") == NULL) {
-		statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
-		statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
-	}
 __database_stop_andexit:
 	dbStop(getNiuchaczPcapDB());
 __exit:
