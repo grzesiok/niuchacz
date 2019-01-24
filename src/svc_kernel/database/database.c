@@ -18,30 +18,30 @@ static dbmgr_t g_dbCfg;
 
 bool i_dbExecBindVariables(database_t *p_db, sqlite3_stmt *pStmt, va_list args, int bindCnt) {
     int i;
-    for(i = 0;i < bindCnt;i++) {
+    for(i = 1;i <= bindCnt;i++) {
         switch(va_arg(args, int)) {
         case DB_BIND_NULL:
-            if(sqlite3_bind_null(pStmt, i+1) != SQLITE_OK) {
+            if(sqlite3_bind_null(pStmt, i) != SQLITE_OK) {
                 return false;
             }
             break;
         case DB_BIND_INT:
-            if(sqlite3_bind_int(pStmt, i+1, va_arg(args, int)) != SQLITE_OK) {
+            if(sqlite3_bind_int(pStmt, i, va_arg(args, int)) != SQLITE_OK) {
                 return false;
             }
             break;
         case DB_BIND_INT64:
-            if(sqlite3_bind_int64(pStmt, i+1, va_arg(args, sqlite_int64)) != SQLITE_OK) {
+            if(sqlite3_bind_int64(pStmt, i, va_arg(args, sqlite_int64)) != SQLITE_OK) {
                 return false;
             }
             break;
         case DB_BIND_TEXT:
-            if(sqlite3_bind_text(pStmt, i+1, va_arg(args, const char*), -1, SQLITE_STATIC) != SQLITE_OK) {
+            if(sqlite3_bind_text(pStmt, i, va_arg(args, const char*), -1, SQLITE_STATIC) != SQLITE_OK) {
                 return false;
             }
             break;
         case DB_BIND_STEXT:
-            if(sqlite3_bind_text(pStmt, i+1, va_arg(args, const char*), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+            if(sqlite3_bind_text(pStmt, i, va_arg(args, const char*), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
                 return false;
             }
             break;
