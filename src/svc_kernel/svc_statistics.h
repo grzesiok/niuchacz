@@ -22,6 +22,7 @@ typedef struct {
 // Statistics Manager
 KSTATUS statsmgrStart(void);
 void statsmgrStop(void);
+KSTATUS statsmgrDump(void);
 // Statistics List
 stats_list_t* statsCreate(const char* listName);
 void statsDestroy(stats_list_t* p_stats);

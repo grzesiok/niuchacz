@@ -1,6 +1,8 @@
 #include "svc_kernel/svc_statistics.h"
 #include "svc_kernel/svc_lock.h"
 #include "algorithms.h"
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 typedef struct {
     PDOUBLYLINKEDLIST _statsList;
@@ -10,6 +12,18 @@ stats_mgr_t g_statsMgr;
 
 
 //internal API
+int i_statsmgrDumpSingleListCallback(void *data, const unsigned char *key, uint32_t key_len, void *value) {
+    stats_entry_t *p_entry = (stats_entry_t*)value;
+    SYSLOG(LOG_DEBUG, "[STATSMGR] Entry name=%.*s flags=%08x value=%llu", key_len, key, p_entry->_flags, p_entry->_value);
+    return 0;
+}
+
+KSTATUS i_statsmgrDumpSingleList(stats_list_t* p_stats) {
+    SYSLOG(LOG_DEBUG, "[STATSMGR] List name=%s entries=%"PRIu64"", p_stats->_name, art_size(&p_stats->_tree));
+    if(art_iter(&p_stats->_tree, i_statsmgrDumpSingleListCallback, NULL) != 0)
+        return KSTATUS_UNSUCCESS;
+    return KSTATUS_SUCCESS;
+}
 
 //external API
 KSTATUS statsmgrStart(void) {
@@ -25,6 +39,29 @@ void statsmgrStop(void) {
     SYSLOG(LOG_INFO, "[STATSMGR] Cleaning up...");
     doublylinkedlistFreeDeletedEntries(g_statsMgr._statsList);
     doublylinkedlistFree(g_statsMgr._statsList);
+}
+
+KSTATUS statsmgrDump(void) {
+    char buff[4096];
+    PDOUBLYLINKEDLIST_QUERY pquery;
+    const size_t current_size = sizeof(buff);
+    size_t required_size;
+
+    SYSLOG(LOG_INFO, "[STATSMGR] DUMP START ...");
+    pquery = (PDOUBLYLINKEDLIST_QUERY)buff;
+    required_size = current_size;
+    if(!doublylinkedlistQuery(g_statsMgr._statsList, pquery, &required_size)) {
+        SYSLOG(LOG_DEBUG, "[STATSMGR] Too much entries!");
+        return KSTATUS_UNSUCCESS;
+    }
+    SYSLOG(LOG_DEBUG, "[STATSMGR] curr_size=%lu required_size=%lu", current_size, required_size);
+    while(!doublylinkedlistQueryIsEnd(pquery)) {
+        SYSLOG(LOG_DEBUG, "[STATSMGR] Entry key=%lu references=%u isDeleted=%c size=%lu", pquery->_key, pquery->_references, (pquery->_isDeleted) ? 'Y' : 'N', pquery->_size);
+        i_statsmgrDumpSingleList((stats_list_t*)pquery->_p_userData);
+        pquery = doublylinkedlistQueryNext(pquery);
+    }
+    SYSLOG(LOG_INFO, "[STATSMGR] DUMP STOP ...");
+    return KSTATUS_SUCCESS;
 }
 
 stats_list_t* statsCreate(const char* listName) {
