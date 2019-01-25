@@ -14,12 +14,12 @@ stats_mgr_t g_statsMgr;
 //internal API
 int i_statsmgrDumpSingleListCallback(void *data, const unsigned char *key, uint32_t key_len, void *value) {
     stats_entry_t *p_entry = (stats_entry_t*)value;
-    SYSLOG(LOG_DEBUG, "[STATSMGR] Entry name=%.*s flags=%08x value=%llu", key_len, key, p_entry->_flags, p_entry->_value);
+    SYSLOG(LOG_INFO, "[STATSMGR] Entry flags=%08x value=%llu name=%.*s", p_entry->_flags, p_entry->_value, key_len, key);
     return 0;
 }
 
 KSTATUS i_statsmgrDumpSingleList(stats_list_t* p_stats) {
-    SYSLOG(LOG_DEBUG, "[STATSMGR] List name=%s entries=%"PRIu64"", p_stats->_name, art_size(&p_stats->_tree));
+    SYSLOG(LOG_INFO, "[STATSMGR] List name=%s entries=%"PRIu64"", p_stats->_name, art_size(&p_stats->_tree));
     if(art_iter(&p_stats->_tree, i_statsmgrDumpSingleListCallback, NULL) != 0)
         return KSTATUS_UNSUCCESS;
     return KSTATUS_SUCCESS;
@@ -54,9 +54,9 @@ KSTATUS statsmgrDump(void) {
         SYSLOG(LOG_DEBUG, "[STATSMGR] Too much entries!");
         return KSTATUS_UNSUCCESS;
     }
-    SYSLOG(LOG_DEBUG, "[STATSMGR] curr_size=%lu required_size=%lu", current_size, required_size);
+    SYSLOG(LOG_INFO, "[STATSMGR] curr_size=%lu required_size=%lu", current_size, required_size);
     while(!doublylinkedlistQueryIsEnd(pquery)) {
-        SYSLOG(LOG_DEBUG, "[STATSMGR] Entry key=%lu references=%u isDeleted=%c size=%lu", pquery->_key, pquery->_references, (pquery->_isDeleted) ? 'Y' : 'N', pquery->_size);
+        SYSLOG(LOG_INFO, "[STATSMGR] Entry key=%lu references=%u isDeleted=%c size=%lu", pquery->_key, pquery->_references, (pquery->_isDeleted) ? 'Y' : 'N', pquery->_size);
         i_statsmgrDumpSingleList((stats_list_t*)pquery->_p_userData);
         pquery = doublylinkedlistQueryNext(pquery);
     }

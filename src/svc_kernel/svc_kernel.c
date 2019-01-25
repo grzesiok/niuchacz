@@ -101,7 +101,7 @@ void svcKernelMainLoop(void) {
         i++;
         if(i > 60) {
             i = 0;
-            //statsDump();
+            statsmgrDump();
         }
     }
     SYSLOG(LOG_INFO, "[KERNEL] Idle Loop Stopping...");
