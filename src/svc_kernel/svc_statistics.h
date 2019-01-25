@@ -20,8 +20,8 @@ typedef struct {
 #define STATS_FLAGS_TYPE_LAST 2
 
 // Statistics Manager
-KSTATUS statsMgrStart(void);
-void statsMgrStop(void);
+KSTATUS statsmgrStart(void);
+void statsmgrStop(void);
 // Statistics List
 stats_list_t* statsCreate(const char* listName);
 void statsDestroy(stats_list_t* p_stats);

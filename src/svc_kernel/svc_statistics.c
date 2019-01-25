@@ -12,7 +12,7 @@ stats_mgr_t g_statsMgr;
 //internal API
 
 //external API
-KSTATUS statsMgrStart(void) {
+KSTATUS statsmgrStart(void) {
     SYSLOG(LOG_INFO, "[STATSMGR] Starting ...");
     g_statsMgr._statsList = doublylinkedlistAlloc();
     if(g_statsMgr._statsList == NULL)
@@ -20,7 +20,7 @@ KSTATUS statsMgrStart(void) {
     return KSTATUS_SUCCESS;
 }
 
-void statsMgrStop(void) {
+void statsmgrStop(void) {
     SYSLOG(LOG_INFO, "[STATSMGR] Stopping ...");
     SYSLOG(LOG_INFO, "[STATSMGR] Cleaning up...");
     doublylinkedlistFreeDeletedEntries(g_statsMgr._statsList);
