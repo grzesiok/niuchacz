@@ -132,6 +132,7 @@ KSTATUS pcap_thread_routine(void* arg)
             _status = cmdmgrJobExec(pjob, JobModeAsynchronous, JobQueueTypeShortOps);
             if(!KSUCCESS(_status)) {
                 SYSLOG(LOG_ERR, "Couldn't execute job");
+                cmdmgrJobCleanup(pjob);
                 continue;
             }
         }

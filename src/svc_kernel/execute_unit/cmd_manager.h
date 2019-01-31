@@ -28,5 +28,6 @@ KSTATUS cmdmgrStart(void);
 void cmdmgrStop(void);
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version);
 KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, PJOB* pjob);
+void cmdmgrJobCleanup(PJOB pjob);
 KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType);
 #endif /* _CMD_MANAGER_H */
