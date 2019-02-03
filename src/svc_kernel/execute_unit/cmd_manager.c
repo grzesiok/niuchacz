@@ -5,15 +5,22 @@
 
 static const char* cgCreateSchemaCmdList =
 		"create table if not exists cmdmgr_cmdlist ("
-		"code text, description text, version integer, pexec integer, pcreate integer, pdestroy integer"
+		"code text, description text, version integer, pjobdef integer, pexec integer, pcreate integer, pdestroy integer"
 		");";
 static const char* cgInsertCommand =
-		"insert into cmdmgr_cmdlist(code, description, version, pexec, pcreate, pdestroy)"
-		"values (?, ?, ?, ?, ?, ?);";
+		"insert into cmdmgr_cmdlist(code, description, version, pjobdef, pexec, pcreate, pdestroy)"
+		"values (?, ?, ?, ?, ?, ?, ?);";
+
+typedef struct {
+    stats_entry_t _statsEntry_JobFindRoutine;
+    stats_entry_t _statsEntry_JobExec;
+} job_def_t;
 
 typedef struct {
     queue_t *_pjobQueueShortOps;
     queue_t *_pjobQueueLongOps;
+    PDOUBLYLINKEDLIST _jobDefList;
+    stats_list_t* _stats_list;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
@@ -89,8 +96,10 @@ KSTATUS i_cmdmgrJobExec(PJOB pjob) {
         return KSTATUS_SVC_IS_STOPPING;
     }
     pexec = i_cmdmgrFindExec(pjob->_cmd);
-    if(pexec == NULL)
+    if(pexec == NULL) {
+        SYSLOG(LOG_ERR, "[CMDMGR] Command not found %s", pjob->_cmd);
         return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
+    }
     ret = pexec(pjob->_ts, pjob->_data, pjob->_dataSize);
     if(ret != 0)
         //job should be rescheduled again
@@ -154,6 +163,9 @@ KSTATUS cmdmgrStart(void) {
     _status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList, 0);
     if(!KSUCCESS(_status))
         return _status;
+    gCmdManager._jobDefList = doublylinkedlistAlloc();
+    if(gCmdManager._jobDefList == NULL)
+        return KSTATUS_UNSUCCESS;
     gCmdManager._pjobQueueShortOps = queue_create(1024*1024);//1MB
     if(gCmdManager._pjobQueueShortOps == NULL)
         return KSTATUS_UNSUCCESS;
@@ -174,6 +186,9 @@ void cmdmgrStop(void) {
     queue_destroy(gCmdManager._pjobQueueLongOps);
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up commands...");
     dbExecQuery(svcKernelGetDb(), "select code from cmdmgr_cmdlist", 0, i_cmdmgrDestroySingleCommand, NULL);
+    SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up...");
+    doublylinkedlistFreeDeletedEntries(gCmdManager._jobDefList);
+    doublylinkedlistFree(gCmdManager._jobDefList);
 }
 
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version) {
@@ -193,10 +208,10 @@ KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pex
 __cleanup:
     if(!KSUCCESS(_status)) {
         pdestroy();
-        SYSLOG(LOG_ERR, "Failed to create command=%s: %d", cmd, ret);
+        SYSLOG(LOG_ERR, "[CMDMGR] Failed to create command=%s: %d", cmd, ret);
         return _status;
     }
-    SYSLOG(LOG_INFO, "Command %s(%p, %p, %p) added successfully", cmd, pexec, pcreate, pdestroy);
+    SYSLOG(LOG_INFO, "[CMDMGR] Command %s(%p, %p, %p) added successfully", cmd, pexec, pcreate, pdestroy);
     return KSTATUS_SUCCESS;
 }
 
