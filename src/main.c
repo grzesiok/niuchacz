@@ -166,7 +166,7 @@ KSTATUS cmd_sync(void) {
 	_status = cmdmgrAddCommand("PACKET_ANALYZE", "Analyze network packets and store it in DB file", cmdPacketAnalyzeExec, cmdPacketAnalyzeCreate, cmdPacketAnalyzeDestroy, 1);
 	if(!KSUCCESS(_status))
 		return _status;
-	_status = cmdmgrAddCommand("IMPORT_FILE", "Import PCAP file to DB", cmdImportFileExec, cmdImportFileCreate, cmdImportFileDestroy, 1);
+	_status = cmdmgrAddCommand("IMPORT_PCAP", "Import PCAP file to DB", cmdImportFileExec, cmdImportFileCreate, cmdImportFileDestroy, 1);
 	if(!KSUCCESS(_status))
 		return _status;
 	_status = cmdmgrAddCommand("EXPORT_FILE", "Export DB to file", cmdExportFileExec, cmdExportFileCreate, cmdExportFileDestroy, 1);
@@ -181,6 +181,7 @@ KSTATUS testExportFile(const char* file_name) {
     struct timeval ts;
     cmd_export_cfg_t cfg;
 
+    SYSLOG(LOG_INFO, "Exporting file=%s", file_name);
     strcpy(cfg._file_name, file_name);
     _status = cmdmgrJobPrepare("EXPORT_FILE", &cfg, sizeof(cmd_export_cfg_t), ts, &pjob);
     if(!KSUCCESS(_status)) {
@@ -190,6 +191,27 @@ KSTATUS testExportFile(const char* file_name) {
     _status = cmdmgrJobExec(pjob, JobModeSynchronous, JobQueueTypeNone);
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "Error during processing EXPORT_FILE command");
+        return _status;
+    }
+    return KSTATUS_SUCCESS;
+}
+
+KSTATUS testImportPcap(const char* file_name) {
+    KSTATUS _status;
+    PJOB pjob;
+    struct timeval ts;
+    cmd_export_cfg_t cfg;
+
+    SYSLOG(LOG_INFO, "Importing PCAP file=%s", file_name);
+    strcpy(cfg._file_name, file_name);
+    _status = cmdmgrJobPrepare("IMPORT_PCAP", &cfg, sizeof(cmd_export_cfg_t), ts, &pjob);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during preparing IMPORT_PCAP command");
+        return _status;
+    }
+    _status = cmdmgrJobExec(pjob, JobModeSynchronous, JobQueueTypeNone);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during processing IMPORT_PCAP command");
         return _status;
     }
     return KSTATUS_SUCCESS;
@@ -229,7 +251,9 @@ int main(int argc, char* argv[])
 	} else {
 		if(strcmp(argv[2], "EXPORT_FILE") == 0) {
 			testExportFile(argv[3]);
-		}
+		} else if(strcmp(argv[2], "IMPORT_PCAP") == 0) {
+			testImportPcap(argv[3]);
+                }
 		svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
 	}
 	svcKernelMainLoop();

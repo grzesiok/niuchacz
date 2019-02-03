@@ -24,6 +24,7 @@ int i_importFile(const char* pfile_name, PJOB_EXEC pcallback) {
 }
 
 int cmdImportFileExec(struct timeval ts, void* pdata, size_t dataSize) {
+	SYSLOG(LOG_INFO, "[CMDMGR][IMPORT_FILE]Exec");
 	if(dataSize != sizeof(cmd_import_cfg_t))
 		return -1;
 	cmd_import_cfg_t* pcfg = (cmd_import_cfg_t*)pdata;
@@ -32,9 +33,11 @@ int cmdImportFileExec(struct timeval ts, void* pdata, size_t dataSize) {
 }
 
 int cmdImportFileCreate(void) {
+	SYSLOG(LOG_INFO, "[CMDMGR][IMPORT_FILE]Create");
 	return 0;
 }
 
 int cmdImportFileDestroy(void) {
+	SYSLOG(LOG_INFO, "[CMDMGR][IMPORT_FILE]Destroy");
 	return 0;
 }
