@@ -202,6 +202,7 @@ KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pex
                      DB_BIND_TEXT, cmd,
                      DB_BIND_TEXT, description, 
                      DB_BIND_INT, version,
+                     DB_BIND_INT, (sqlite_int64)NULL,/* TODO: job definition not implemented */
                      DB_BIND_INT64, (sqlite_int64)pexec,
                      DB_BIND_INT64, (sqlite_int64)pcreate,
                      DB_BIND_INT64, (sqlite_int64)pdestroy);
