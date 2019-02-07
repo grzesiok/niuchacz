@@ -214,7 +214,7 @@ __cleanup:
 // external API
 
 int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
-    MAPPER_RESULTS results;
+    mapper_t results;
     KSTATUS _status;
     int ethSrcID, ethDstID, ipSrcID, ipDstID;
 
@@ -241,8 +241,8 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
                      DB_BIND_INT, ethDstID,
                      //u_short eth_type;                       /* IP? ARP? RARP? etc */
                      DB_BIND_INT, results._ethernet.eth_type,
-                     //u_char  ip_vhl;                 		  /* version << 4 | header length >> 2 */
-                     DB_BIND_INT, results._ip.ip_vhl,
+                     //u_char  ip_ihl;                 		  /* header length */
+                     DB_BIND_INT, results._ip.ip_ihl,
                      //u_char  ip_tos;                 		  /* type of service */
                      DB_BIND_INT, results._ip.ip_tos,
                      //u_short ip_len;                 		  /* total length */
@@ -253,8 +253,8 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
                      DB_BIND_INT, results._ip.ip_off,
                      //u_char  ip_ttl;                 		  /* time to live */
                      DB_BIND_INT, results._ip.ip_ttl,
-                     //u_char  ip_p;                   		  /* protocol */
-                     DB_BIND_INT, results._ip.ip_p,
+                     //u_char  ip_protocol;          		  /* protocol */
+                     DB_BIND_INT, results._ip.ip_protocol,
                      //u_short ip_sum;                 		  /* checksum */
                      DB_BIND_INT, results._ip.ip_sum,
                      //struct  in_addr ip_src;  		  /* source address */
