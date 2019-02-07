@@ -13,12 +13,6 @@ bool mapFrame(unsigned char *frame, size_t framelen, mapper_t* presults) {
     memset(presults, 0, sizeof(mapper_t));
     /* map header to ethernet structure */
     memcpy(&presults->_ethernet, frame, sizeof(mapper_ethernet_t)+sizeof(mapper_ip_t));
-    /* Ethernet frames are sent through network in Big Endian format */
-    presults->_ethernet.eth_type = be16toh(presults->_ethernet.eth_type);
-    presults->_ip.ip_len = be16toh(presults->_ip.ip_len);
-    presults->_ip.ip_id = be16toh(presults->_ip.ip_id);
-    presults->_ip.ip_off = be16toh(presults->_ip.ip_off);
-    presults->_ip.ip_sum = be16toh(presults->_ip.ip_sum);
     /* map header (after applying offset) to ip structure */
     size_ip = presults->_ip.ip_ihl*4;
     if(size_ip < 20) {
