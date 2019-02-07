@@ -13,6 +13,6 @@ KSTATUS psmgrIdle(unsigned long long waitTimeInSec);
 
 #define PSMGR_THREAD_KERNEL 1
 #define PSMGR_THREAD_USER 2
-KSTATUS psmgrCreateThread(const char* c_threadName, int threadType, psmgr_execRoutine p_execRoutine, psmgr_cancelRoutine p_cancelRoutine, void *p_arg);
+KSTATUS psmgrCreateThread(const char* c_shortThreadName, const char* c_fullThreadName, int threadType, psmgr_execRoutine p_execRoutine, psmgr_cancelRoutine p_cancelRoutine, void *p_arg);
 KSTATUS psmgrWaitForThread(pthread_t threadId);
 #endif

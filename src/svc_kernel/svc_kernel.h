@@ -13,7 +13,7 @@
 typedef struct _KERNEL
 {
 	volatile int _status;
-	sqlite3* _db;
+	database_t* _db;
 	config_t _cfg;
 } KERNEL, *PKERNEL;
 
@@ -26,7 +26,7 @@ void svcKernelExit(int code) NORETURN;
 void svcKernelMainLoop(void);
 KSTATUS svcKernelStatus(int requested_status);
 int svcKernelGetCurrentStatus(void);
-sqlite3* svcKernelGetDb(void);
+database_t* svcKernelGetDb(void);
 config_t* svcKernelGetCfg(void);
 #define svcKernelIsRunning() (svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_RUNNING || svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_START_PENDING)
 #endif

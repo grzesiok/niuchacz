@@ -5,18 +5,32 @@
 
 static const char* cgCreateSchemaCmdList =
 		"create table if not exists cmdmgr_cmdlist ("
-		"code text, description text, version integer, pexec integer, pcreate integer, pdestroy integer"
+		"code text, description text, version integer, pjobdef integer, pexec integer, pcreate integer, pdestroy integer"
 		");";
 static const char* cgInsertCommand =
-		"insert into cmdmgr_cmdlist(code, description, version, pexec, pcreate, pdestroy)"
-		"values (?, ?, ?, ?, ?, ?);";
+		"insert into cmdmgr_cmdlist(code, description, version, pjobdef, pexec, pcreate, pdestroy)"
+		"values (?, ?, ?, ?, ?, ?, ?);";
+
+typedef struct {
+    stats_entry_t _statsEntry_JobFindRoutine;
+    stats_entry_t _statsEntry_JobExec;
+} job_def_t;
 
 typedef struct {
     queue_t *_pjobQueueShortOps;
     queue_t *_pjobQueueLongOps;
+    PDOUBLYLINKEDLIST _jobDefList;
+    stats_list_t* _stats_list;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
+
+const char *cg_CmdMgr_ShortOps_ShortName = "niuch_cmdshrt";
+const char *cg_CmdMgr_LongOps_ShortName = "niuch_cmdlong";
+const char *cg_CmdMgr_ShortOps = "Short Operation Queue";
+const char *cg_CmdMgr_LongOps = "Long Operation Queue";
+const char *cg_CmdMgr_ShortOps_FullName = "Command Manager - Short Operation Queue";
+const char *cg_CmdMgr_LongOps_FullName = "Command Manager - Long Operation Queue";
 
 /* Internal API */
 
@@ -64,6 +78,16 @@ int i_cmdmgrDestroySingleCommand(void *NotUsed, sqlite3_stmt* stmt) {
     return 0;
 }
 
+void i_cmdmgrJobStructInitialize(PJOB pjob, const char* cmd) {
+    pjob->_cmd = memoryPtrMove(pjob, sizeof(JOB));
+    pjob->_data = memoryPtrMove(pjob->_cmd, strlen(cmd)+1);
+}
+
+void i_cmdmgrJobStructFormat(PJOB pjob) {
+    pjob->_cmd = memoryPtrMove(pjob, sizeof(JOB));
+    pjob->_data = memoryPtrMove(pjob->_cmd, strlen(pjob->_cmd)+1);
+}
+
 KSTATUS i_cmdmgrJobExec(PJOB pjob) {
     int ret;
     PJOB_EXEC pexec;
@@ -72,8 +96,10 @@ KSTATUS i_cmdmgrJobExec(PJOB pjob) {
         return KSTATUS_SVC_IS_STOPPING;
     }
     pexec = i_cmdmgrFindExec(pjob->_cmd);
-    if(pexec == NULL)
+    if(pexec == NULL) {
+        SYSLOG(LOG_ERR, "[CMDMGR] Command not found %s", pjob->_cmd);
         return KSTATUS_CMDMGR_COMMAND_NOT_FOUND;
+    }
     ret = pexec(pjob->_ts, pjob->_data, pjob->_dataSize);
     if(ret != 0)
         //job should be rescheduled again
@@ -84,30 +110,46 @@ KSTATUS i_cmdmgrJobExec(PJOB pjob) {
 
 KSTATUS i_cmdmgrExecutor(void* arg) {
     KSTATUS _status = KSTATUS_SUCCESS;
-    char buffer[100000];
-    PJOB pjob = (PJOB)buffer;
+    void* buffer;
+    PJOB pjob;
     queue_t* pqueue = (queue_t*)arg;
     int ret;
     static struct timespec time_to_wait = {0, 0};
-    const char* queueName = (arg == (void*)gCmdManager._pjobQueueShortOps) ? "QUEUE_SHORT_OPS" : "QUEUE_LONG_OPS";
+    const char* queueName = (arg == (void*)gCmdManager._pjobQueueShortOps) ? cg_CmdMgr_ShortOps : cg_CmdMgr_LongOps;
 
     SYSLOG(LOG_INFO, "[CMDMGR][%s] Starting Job Executor", queueName);
-    if(!queue_consumer_new(pqueue)) {
+    buffer = MALLOC(char, 1024*1024); //Allocating 1MB per each executor
+    if(buffer == NULL) {
+        SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during allocating local memory", queueName);
         _status = KSTATUS_UNSUCCESS;
         //TODO: Restrt cmdmgrExecutor and queue on the fly
         goto __cleanup;
+    }
+    pjob = (PJOB)buffer;
+    if(!queue_consumer_new(pqueue)) {
+        SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during attaching queue", queueName);
+        _status = KSTATUS_UNSUCCESS;
+        //TODO: Restrt cmdmgrExecutor and queue on the fly
+        goto __cleanup_free_tls;
     }
     while(svcKernelIsRunning()) {
         timerGetRealCurrentTimestamp(&time_to_wait);
         time_to_wait.tv_sec += 1;
         ret = queue_read(pqueue, pjob, &time_to_wait);
         if(ret > 0) {
-            i_cmdmgrJobExec(pjob);
+            /* Reformat structure after pulling it from queue */
+            i_cmdmgrJobStructFormat(pjob);
+            if(!KSUCCESS(i_cmdmgrJobExec(pjob))) {
+                SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during executing job(%s, %d)", queueName, pjob->_cmd, ret);
+            }
         } else if(ret == QUEUE_RET_ERROR) {
             SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during dequeue job", queueName);
         }
     }
+    SYSLOG(LOG_INFO, "[CMDMGR][%s] Detaching queue", queueName);
     queue_consumer_free(pqueue);
+__cleanup_free_tls:
+    FREE(buffer);
 __cleanup:
     SYSLOG(LOG_INFO, "[CMDMGR][%s] Stopping Job Executor", queueName);
     return _status;
@@ -121,25 +163,32 @@ KSTATUS cmdmgrStart(void) {
     _status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList, 0);
     if(!KSUCCESS(_status))
         return _status;
+    gCmdManager._jobDefList = doublylinkedlistAlloc();
+    if(gCmdManager._jobDefList == NULL)
+        return KSTATUS_UNSUCCESS;
     gCmdManager._pjobQueueShortOps = queue_create(1024*1024);//1MB
     if(gCmdManager._pjobQueueShortOps == NULL)
         return KSTATUS_UNSUCCESS;
     gCmdManager._pjobQueueLongOps = queue_create(1024*1024/*1024*/);//1GB (should be 1MB at the beginning) TODO: dynamically increase queue_size
     if(gCmdManager._pjobQueueLongOps == NULL)
         return KSTATUS_UNSUCCESS;
-    _status = psmgrCreateThread("cmdmgrExecutorShortOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueShortOps);
+    _status = psmgrCreateThread(cg_CmdMgr_ShortOps_ShortName, cg_CmdMgr_ShortOps_FullName, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueShortOps);
     if(!KSUCCESS(_status))
         return _status;
-    _status = psmgrCreateThread("cmdmgrExecutorLongOps", PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueLongOps);
+    _status = psmgrCreateThread(cg_CmdMgr_LongOps_ShortName, cg_CmdMgr_LongOps_FullName, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueLongOps);
     return _status;
 }
 
 void cmdmgrStop(void) {
-    SYSLOG(LOG_INFO, "[CMDMGR] Stopping...");
+    SYSLOG(LOG_INFO, "[CMDMGR] Stopping %s...", cg_CmdMgr_ShortOps);
     queue_destroy(gCmdManager._pjobQueueShortOps);
+    SYSLOG(LOG_INFO, "[CMDMGR] Stopping %s...", cg_CmdMgr_LongOps);
     queue_destroy(gCmdManager._pjobQueueLongOps);
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up commands...");
     dbExecQuery(svcKernelGetDb(), "select code from cmdmgr_cmdlist", 0, i_cmdmgrDestroySingleCommand, NULL);
+    SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up...");
+    doublylinkedlistFreeDeletedEntries(gCmdManager._jobDefList);
+    doublylinkedlistFree(gCmdManager._jobDefList);
 }
 
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version) {
@@ -153,68 +202,74 @@ KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pex
                      DB_BIND_TEXT, cmd,
                      DB_BIND_TEXT, description, 
                      DB_BIND_INT, version,
+                     DB_BIND_INT, (sqlite_int64)NULL,/* TODO: job definition not implemented */
                      DB_BIND_INT64, (sqlite_int64)pexec,
                      DB_BIND_INT64, (sqlite_int64)pcreate,
                      DB_BIND_INT64, (sqlite_int64)pdestroy);
 __cleanup:
     if(!KSUCCESS(_status)) {
         pdestroy();
-        SYSLOG(LOG_ERR, "Failed to create command=%s: %d", cmd, ret);
+        SYSLOG(LOG_ERR, "[CMDMGR] Failed to create command=%s: %d", cmd, ret);
         return _status;
     }
-    SYSLOG(LOG_INFO, "Command %s(%p, %p, %p) added successfully", cmd, pexec, pcreate, pdestroy);
+    SYSLOG(LOG_INFO, "[CMDMGR] Command %s(%p, %p, %p) added successfully", cmd, pexec, pcreate, pdestroy);
     return KSTATUS_SUCCESS;
 }
 
 KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, PJOB* pjob) {
     PJOB pjob2;
-    int cmdLength = strlen(cmd);
-    DPRINTF("Allocate %zuB memory for command %s", dataSize, cmd);
-
-    pjob2 = MALLOC2(JOB, 1, dataSize+cmdLength+1);
+    size_t additionalMemorySize = dataSize+strlen(cmd)+1;
+    
+    pjob2 = MALLOC2(JOB, 1, dataSize+strlen(cmd)+1);
     if(pjob2 == NULL)
         return KSTATUS_OUT_OF_MEMORY;
-    pjob2->_cmd = memoryPtrMove(pjob2, sizeof(JOB));
-    memcpy(pjob2->_cmd, cmd, cmdLength);
-    pjob2->_cmd[cmdLength] = '\0';
+    i_cmdmgrJobStructInitialize(pjob2, cmd);
+    strcpy(pjob2->_cmd, cmd);
     pjob2->_ts = ts;
-    pjob2->_data = memoryPtrMove(pjob2->_cmd, cmdLength+1);
     memcpy(pjob2->_data, pdata, dataSize);
     pjob2->_dataSize = dataSize;
     *pjob = pjob2;
     return KSTATUS_SUCCESS;
 }
 
+void cmdmgrJobCleanup(PJOB pjob) {
+    FREE(pjob);
+}
+
 KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
     KSTATUS _status = KSTATUS_UNSUCCESS;
     int ret = 0;
+    size_t queueEntrySize;
+
     switch(mode) {
     //if mode == JobModeAsynchronous then function should back immediatelly and schedule job to future
     case JobModeAsynchronous:
+        queueEntrySize = pjob->_dataSize+strlen(pjob->_cmd)+1+sizeof(JOB);
         switch(queueType) {
         case JobQueueTypeNone:
             return KSTATUS_UNSUCCESS;
         case JobQueueTypeShortOps:
             if(queue_producer_new(gCmdManager._pjobQueueShortOps)) {
-                ret = queue_write(gCmdManager._pjobQueueShortOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
+                ret = queue_write(gCmdManager._pjobQueueShortOps, pjob, queueEntrySize, NULL);
                 queue_producer_free(gCmdManager._pjobQueueShortOps);
             }
             break;
         case JobQueueTypeLongOps:
             if(queue_producer_new(gCmdManager._pjobQueueLongOps)) {
-                ret = queue_write(gCmdManager._pjobQueueLongOps, pjob, pjob->_dataSize+sizeof(JOB), NULL);
+                ret = queue_write(gCmdManager._pjobQueueLongOps, pjob, queueEntrySize, NULL);
                 queue_producer_free(gCmdManager._pjobQueueLongOps);
             }
             break;
         }
-        if(ret == pjob->_dataSize+sizeof(JOB))
+        if(ret > 0 && (size_t)ret == queueEntrySize) {
             _status = KSTATUS_SUCCESS;
+        }
         break;
     //if mode == JobModeSynchronous then function should wait until execution is done
     case JobModeSynchronous:
         _status = i_cmdmgrJobExec(pjob);
-        FREE(pjob);
         break;
     }
+    FREE(pjob);
     return _status;
 }

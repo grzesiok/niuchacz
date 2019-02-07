@@ -139,8 +139,10 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
         if(timeout != NULL) {
             ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);
         } else ret = pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
-        if(!pqueue->_isActive)
+        if(!pqueue->_isActive) {
+            pthread_mutex_unlock(&pqueue->_readMutex);
             return QUEUE_RET_DESTROYING;
+        }
         if(ret == ETIMEDOUT) {
             pthread_mutex_unlock(&pqueue->_readMutex);
             return QUEUE_RET_TIMEOUT;
@@ -176,8 +178,10 @@ int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct t
         if(timeout != NULL) {
             ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
         } else ret = pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
-        if(!pqueue->_isActive)
+        if(!pqueue->_isActive) {
+            pthread_mutex_unlock(&pqueue->_writeMutex);
             return QUEUE_RET_DESTROYING;
+        }
         if(ret == ETIMEDOUT) {
             pthread_mutex_unlock(&pqueue->_writeMutex);
             return QUEUE_RET_TIMEOUT;

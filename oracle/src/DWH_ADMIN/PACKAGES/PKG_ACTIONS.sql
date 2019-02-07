@@ -6,6 +6,7 @@ create or replace PACKAGE PKG_ACTIONS authid current_user AS
   g_queue_coreactions constant varchar2(128) := 'Q_CORE_ACTIONS';
 
   procedure p_job_handler;
+  procedure p_exec(i_action o_action);
   procedure p_consume_single_action(i_queue_name varchar2,
                                     i_consumer varchar2 default sys_context('userenv', 'session_user'),
                                     i_waittime number);

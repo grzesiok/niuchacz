@@ -14,17 +14,9 @@
 #include "import_file.h"
 #include "export_file.h"
 
-#define MAIN_THREAD_PRODUCER 0
-#define MAIN_THREAD_CONSUMER 1
-
-typedef struct _NIUCHACZ_CTX {
-	const char* _p_deviceName;
-	stats_key _statsKey;
-} NIUCHACZ_CTX, *PNIUCHACZ_CTX;
-
 typedef struct _NIUCHACZ_MAIN {
-	NIUCHACZ_CTX _threads[2];
-	sqlite3 *_db;
+    const char* _p_deviceName;
+    database_t* _db;
 } NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
 
 NIUCHACZ_MAIN g_Main;
@@ -56,7 +48,7 @@ static const char * cgCreateSchemaEth =
                 "create table if not exists eth("
                     "eth_id integer primary key,"
                     "ts_sec unsigned big int,"
-                    "ts_usec unsigned bit int,"
+                    "ts_usec unsigned int,"
                     "eth_addr text,"
                     "activeflag int"
                 ");";
@@ -64,108 +56,109 @@ static const char * cgCreateSchemaIP =
                 "create table if not exists ip("
                     "ip_id integer primary key,"
                     "ts_sec unsigned big int,"
-                    "ts_usec unsigned big int,"
+                    "ts_usec unsigned int,"
                     "ip_addr text,"
                     "hostname text,"
                     "activeflag int"
                 ");";
-sqlite3* getNiuchaczPcapDB() {
-	return g_Main._db;
+static const char * cgCreateView_PacketsPerDate =
+                "create view if not exists report$packetsperdate"
+                " as "
+                "select report_date, count(*) cnt, sum(ip_len) as bytes from (select date(datetime(ts_sec, 'unixepoch')) as report_date, ip_len from packets) group by report_date order by report_date desc;";
+
+database_t* getNiuchaczPcapDB() {
+    return g_Main._db;
 }
 
 pcap_t *gp_PcapHandle;
 void pcap_thread_cancelRoutine(void* ptr) {
-	pcap_breakloop(gp_PcapHandle);
+    printf("pcap_thread_cancelRoutine\n");
+    pcap_breakloop(gp_PcapHandle);
 }
 void pcap_thread_ExitRoutine(int signo) {
-	pcap_breakloop(gp_PcapHandle);
+    printf("pcap_thread_ExitRoutine\n");
+    pcap_breakloop(gp_PcapHandle);
 }
 
 KSTATUS pcap_thread_routine(void* arg)
 {
-	PNIUCHACZ_CTX p_ctx = (PNIUCHACZ_CTX)arg;
-	char errbuf[PCAP_ERRBUF_SIZE];
-	struct pcap_pkthdr header;
-	void* packet;
-	struct timespec startTime;
-	char filter_exp[] = "ip"; /* filter expression (only IP packets) */
-	struct bpf_program fp; /* compiled filter program (expression) */
-	bpf_u_int32 net;
-	bpf_u_int32 mask;
-	KSTATUS _status;
-	PJOB pjob;
+    char errbuf[PCAP_ERRBUF_SIZE];
+    struct pcap_pkthdr header;
+    void* packet;
+    char filter_exp[] = "ip"; /* filter expression (only IP packets) */
+    struct bpf_program fp; /* compiled filter program (expression) */
+    bpf_u_int32 net;
+    bpf_u_int32 mask;
+    KSTATUS _status;
+    PJOB pjob;
+    const char* p_deviceName = g_Main._p_deviceName;
 
-	SYSLOG(LOG_INFO, "PCAP init signals");
-	if(signal(SIGTERM, pcap_thread_ExitRoutine) == SIG_ERR)
-		return KSTATUS_UNSUCCESS;
-	if(signal(SIGINT, pcap_thread_ExitRoutine) == SIG_ERR)
-		return KSTATUS_UNSUCCESS;
-	SYSLOG(LOG_INFO, "Listen on device=%s", p_ctx->_p_deviceName);
-	/* get network number and mask associated with capture device */
-	if (pcap_lookupnet(p_ctx->_p_deviceName, &net, &mask, errbuf) == -1) {
-		SYSLOG(LOG_ERR, "Couldn't get netmask for device %s: %s", p_ctx->_p_deviceName, errbuf);
-		net = 0;
-		mask = 0;
-	}
-	/* open capture device */
-	gp_PcapHandle = pcap_open_live(p_ctx->_p_deviceName, BUFSIZ, 0, 1000, errbuf);
-	if(gp_PcapHandle == NULL) {
-		SYSLOG(LOG_ERR, "Couldn't open device %s: %s", p_ctx->_p_deviceName, errbuf);
-		return KSTATUS_UNSUCCESS;
-	}
-	/* make sure we're capturing on an Ethernet device */
-	if(pcap_datalink(gp_PcapHandle) != DLT_EN10MB) {
-		SYSLOG(LOG_ERR, "%s is not an Ethernet", p_ctx->_p_deviceName);
-		return KSTATUS_UNSUCCESS;
-	}
-	/* compile the filter expression */
-	if(pcap_compile(gp_PcapHandle, &fp, filter_exp, 0, net) == -1) {
-		SYSLOG(LOG_ERR, "Couldn't parse filter %s: %s", filter_exp, pcap_geterr(gp_PcapHandle));
-		return KSTATUS_UNSUCCESS;
-	}
-	/* apply the compiled filter */
-	if (pcap_setfilter(gp_PcapHandle, &fp) == -1) {
-		SYSLOG(LOG_ERR, "Couldn't install filter %s: %s", filter_exp, pcap_geterr(gp_PcapHandle));
-		return KSTATUS_UNSUCCESS;
-	}
-	while(svcKernelIsRunning()) {
-		packet = (void*)pcap_next(gp_PcapHandle, &header);
-		if(packet != NULL) {
-			timerWatchStart(&startTime);
-			_status = cmdmgrJobPrepare("PACKET_ANALYZE", packet, header.caplen, header.ts, &pjob);
-			if(!KSUCCESS(_status)) {
-				SYSLOG(LOG_ERR, "Couldn't prepare packet to analyze");
-				continue;
-			}
-			_status = cmdmgrJobExec(pjob, JobModeAsynchronous, JobQueueTypeShortOps);
-			if(!KSUCCESS(_status)) {
-				SYSLOG(LOG_ERR, "Couldn't execute job");
-				continue;
-			}
-			statsUpdate(p_ctx->_statsKey, timerWatchStop(startTime));
-		}
-	}
-	/* cleanup */
-	pcap_freecode(&fp);
-	pcap_close(gp_PcapHandle);
-	signal(SIGTERM, SIG_DFL);
-	signal(SIGINT, SIG_DFL);
-	return KSTATUS_SUCCESS;
+    SYSLOG(LOG_INFO, "Listen on device=%s", p_deviceName);
+    /* get network number and mask associated with capture device */
+    if(pcap_lookupnet(p_deviceName, &net, &mask, errbuf) == -1) {
+        SYSLOG(LOG_ERR, "Couldn't get netmask for device %s: %s", p_deviceName, errbuf);
+        net = 0;
+        mask = 0;
+    }
+    /* open capture device */
+    gp_PcapHandle = pcap_open_live(p_deviceName, BUFSIZ, 0, 1000, errbuf);
+    if(gp_PcapHandle == NULL) {
+        SYSLOG(LOG_ERR, "Couldn't open device %s: %s", p_deviceName, errbuf);
+        return KSTATUS_UNSUCCESS;
+    }
+    /* make sure we're capturing on an Ethernet device */
+    if(pcap_datalink(gp_PcapHandle) != DLT_EN10MB) {
+        SYSLOG(LOG_ERR, "%s is not an Ethernet", p_deviceName);
+        return KSTATUS_UNSUCCESS;
+    }
+    /* compile the filter expression */
+    if(pcap_compile(gp_PcapHandle, &fp, filter_exp, 0, net) == -1) {
+        SYSLOG(LOG_ERR, "Couldn't parse filter %s: %s", filter_exp, pcap_geterr(gp_PcapHandle));
+        return KSTATUS_UNSUCCESS;
+    }
+    /* apply the compiled filter */
+    if(pcap_setfilter(gp_PcapHandle, &fp) == -1) {
+        SYSLOG(LOG_ERR, "Couldn't install filter %s: %s", filter_exp, pcap_geterr(gp_PcapHandle));
+        return KSTATUS_UNSUCCESS;
+    }
+    while(svcKernelIsRunning()) {
+        packet = (void*)pcap_next(gp_PcapHandle, &header);
+        if(packet != NULL) {
+            _status = cmdmgrJobPrepare("PACKET_ANALYZE", packet, header.caplen, header.ts, &pjob);
+            if(!KSUCCESS(_status)) {
+                SYSLOG(LOG_ERR, "Couldn't prepare packet to analyze");
+                continue;
+            }
+            _status = cmdmgrJobExec(pjob, JobModeAsynchronous, JobQueueTypeShortOps);
+            if(!KSUCCESS(_status)) {
+                SYSLOG(LOG_ERR, "Couldn't execute job");
+                cmdmgrJobCleanup(pjob);
+                continue;
+            }
+        }
+    }
+    /* cleanup */
+    pcap_freecode(&fp);
+    pcap_close(gp_PcapHandle);
+    return KSTATUS_SUCCESS;
 }
 
 KSTATUS schema_sync(void)
 {
-	KSTATUS _status;
-	SYSLOG(LOG_INFO, "SYNC DB START");
-	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaEth, 0);
-	if(!KSUCCESS(_status))
-		return _status;
-	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaIP, 0);
-	if(!KSUCCESS(_status))
-		return _status;
-	_status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaPackets, 0);
-	SYSLOG(LOG_INFO, "SYNC DB STOP");
-	return _status;
+    KSTATUS _status;
+    SYSLOG(LOG_INFO, "SYNC DB START");
+    _status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaEth, 0);
+    if(!KSUCCESS(_status))
+        return _status;
+    _status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaIP, 0);
+    if(!KSUCCESS(_status))
+        return _status;
+    _status = dbExec(getNiuchaczPcapDB(), cgCreateSchemaPackets, 0);
+    if(!KSUCCESS(_status))
+        return _status;
+    _status = dbExec(getNiuchaczPcapDB(), cgCreateView_PacketsPerDate, 0);
+    SYSLOG(LOG_INFO, "SYNC DB STOP");
+    return _status;
 }
 
 KSTATUS cmd_sync(void) {
@@ -173,7 +166,7 @@ KSTATUS cmd_sync(void) {
 	_status = cmdmgrAddCommand("PACKET_ANALYZE", "Analyze network packets and store it in DB file", cmdPacketAnalyzeExec, cmdPacketAnalyzeCreate, cmdPacketAnalyzeDestroy, 1);
 	if(!KSUCCESS(_status))
 		return _status;
-	_status = cmdmgrAddCommand("IMPORT_FILE", "Import PCAP file to DB", cmdImportFileExec, cmdImportFileCreate, cmdImportFileDestroy, 1);
+	_status = cmdmgrAddCommand("IMPORT_PCAP", "Import PCAP file to DB", cmdImportFileExec, cmdImportFileCreate, cmdImportFileDestroy, 1);
 	if(!KSUCCESS(_status))
 		return _status;
 	_status = cmdmgrAddCommand("EXPORT_FILE", "Export DB to file", cmdExportFileExec, cmdExportFileCreate, cmdExportFileDestroy, 1);
@@ -188,6 +181,7 @@ KSTATUS testExportFile(const char* file_name) {
     struct timeval ts;
     cmd_export_cfg_t cfg;
 
+    SYSLOG(LOG_INFO, "Exporting file=%s", file_name);
     strcpy(cfg._file_name, file_name);
     _status = cmdmgrJobPrepare("EXPORT_FILE", &cfg, sizeof(cmd_export_cfg_t), ts, &pjob);
     if(!KSUCCESS(_status)) {
@@ -202,10 +196,31 @@ KSTATUS testExportFile(const char* file_name) {
     return KSTATUS_SUCCESS;
 }
 
+KSTATUS testImportPcap(const char* file_name) {
+    KSTATUS _status;
+    PJOB pjob;
+    struct timeval ts;
+    cmd_export_cfg_t cfg;
+
+    SYSLOG(LOG_INFO, "Importing PCAP file=%s", file_name);
+    strcpy(cfg._file_name, file_name);
+    _status = cmdmgrJobPrepare("IMPORT_PCAP", &cfg, sizeof(cmd_export_cfg_t), ts, &pjob);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during preparing IMPORT_PCAP command");
+        return _status;
+    }
+    _status = cmdmgrJobExec(pjob, JobModeSynchronous, JobQueueTypeNone);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "Error during processing IMPORT_PCAP command");
+        return _status;
+    }
+    return KSTATUS_SUCCESS;
+}
+
 int main(int argc, char* argv[])
 {
 	KSTATUS _status;
-	const char *dbFileName, *deviceName;
+	const char *dbFileName;
 
 	_status = svcKernelInit(argv[1]);
 	if(!KSUCCESS(_status))
@@ -214,11 +229,11 @@ int main(int argc, char* argv[])
 		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
 		goto __exit;
 	}
-	if(!config_lookup_string(svcKernelGetCfg(), "NIUCHACZ.deviceName", &deviceName)) {
+	if(!config_lookup_string(svcKernelGetCfg(), "NIUCHACZ.deviceName", &g_Main._p_deviceName)) {
 		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
 		goto __exit;
 	}
-	_status = dbStart(dbFileName, &g_Main._db);
+	_status = dbStart(dbFileName, "DB_LIVE0", &g_Main._db);
 	if(!KSUCCESS(_status))
 		goto __exit;
 	_status = schema_sync();//svcUpdateSync(getNiuchaczPcapDB());
@@ -229,33 +244,19 @@ int main(int argc, char* argv[])
 	if(!KSUCCESS(_status))
 		goto __database_stop_andexit;
 	if(config_lookup(svcKernelGetCfg(), "NIUCHACZ.testMode") == NULL) {
-		g_Main._threads[MAIN_THREAD_PRODUCER]._p_deviceName = deviceName;
-		_status = statsAlloc("producerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
-		if(!KSUCCESS(_status)) {
-			SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
-			goto __database_stop_andexit;
-		}
-		g_Main._threads[MAIN_THREAD_CONSUMER]._p_deviceName = deviceName;
-		_status = statsAlloc("consumerThread", STATS_TYPE_SUM, &g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
-		if(!KSUCCESS(_status)) {
-			SYSLOG(LOG_ERR, "Error during allocation StatsKey!");
-			goto __database_stop_andexit;
-		}
-		SYSLOG(LOG_INFO, "Prepare listen on device=%s", deviceName);
-		_status = psmgrCreateThread("pcapThreadRoutine", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, &g_Main._threads[MAIN_THREAD_PRODUCER]);
+		SYSLOG(LOG_INFO, "Prepare listen on device=%s", g_Main._p_deviceName);
+		_status = psmgrCreateThread("niuch_pcaplsnr", "Pcap Listener", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, NULL);
 		if(!KSUCCESS(_status))
 			goto __database_stop_andexit;
 	} else {
 		if(strcmp(argv[2], "EXPORT_FILE") == 0) {
 			testExportFile(argv[3]);
-		}
+		} else if(strcmp(argv[2], "IMPORT_PCAP") == 0) {
+			testImportPcap(argv[3]);
+                }
 		svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
 	}
 	svcKernelMainLoop();
-	if(config_lookup(svcKernelGetCfg(), "NIUCHACZ.testMode") == NULL) {
-		statsFree(g_Main._threads[MAIN_THREAD_PRODUCER]._statsKey);
-		statsFree(g_Main._threads[MAIN_THREAD_CONSUMER]._statsKey);
-	}
 __database_stop_andexit:
 	dbStop(getNiuchaczPcapDB());
 __exit:

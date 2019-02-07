@@ -16,6 +16,7 @@ typedef struct _PSMGR_THREAD {
 #define THREAD_STATUS_RUNNING 1
         };
     };
+    char _shortThreadName[15];
     const char* _fullThreadName;
     psmgr_execRoutine _p_execRoutine;
     psmgr_cancelRoutine _p_cancelRoutine;
@@ -58,8 +59,8 @@ static void* i_psmgrExecRoutine(void* p_arg) {
     int ret;
     PPSMGR_THREAD p_threadCtx = (PPSMGR_THREAD)p_arg, p_threadCtxOld = (PPSMGR_THREAD)p_arg;
 
-    SYSLOG(LOG_INFO, "[PSMGR] INIT threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
     p_threadCtx = doublylinkedlistAdd(g_psmgrCfg._threadList, pthread_self(), p_threadCtx, sizeof(PSMGR_THREAD));
+    SYSLOG(LOG_INFO, "[PSMGR] INIT threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
     pthread_mutex_lock(&p_threadCtxOld->_mutex);
     p_threadCtxOld->_threadStatus = THREAD_STATUS_RUNNING;
     pthread_cond_broadcast(&p_threadCtxOld->_startExecCondVariable);
@@ -68,16 +69,20 @@ static void* i_psmgrExecRoutine(void* p_arg) {
     pthread_cond_destroy(&p_threadCtxOld->_startExecCondVariable);
     FREE(p_threadCtxOld);
     if(svcKernelIsRunning()) {
-        SYSLOG(LOG_INFO, "[PSMGR] ENTER threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
-        ret = p_threadCtx->_p_execRoutine(p_threadCtx->_p_arg);
-        SYSLOG(LOG_INFO, "[PSMGR] RET threadName=%s threadId=%lu p_execRoutine=%p ret=%d", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine, ret);
+        ret = pthread_setname_np(pthread_self(), p_threadCtx->_shortThreadName);
+        if(ret == 0) {
+            SYSLOG(LOG_INFO, "[PSMGR] ENTER threadName=%s(%s) threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
+            ret = p_threadCtx->_p_execRoutine(p_threadCtx->_p_arg);
+            SYSLOG(LOG_INFO, "[PSMGR] RET threadName=%s threadId=%lu p_execRoutine=%p ret=%d", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine, ret);
+        } else SYSLOG(LOG_ERR, "[PSMGR] ERROR_SETNAME threadName=%s threadId=%lu", p_threadCtx->_fullThreadName, pthread_self());
     }
-    //release lock from execRoutine
     doublylinkedlistDel(g_psmgrCfg._threadList, p_threadCtx);
     SYSLOG(LOG_INFO, "[PSMGR] EXIT threadName=%s threadId=%lu p_execRoutine=%p", p_threadCtx->_fullThreadName, pthread_self(), p_threadCtx->_p_execRoutine);
-    //free object
+    // release lock for execRoutine
     doublylinkedlistRelease(p_threadCtx);
-    return (void*)ret;
+    // free memory
+    doublylinkedlistRelease(p_threadCtx);
+    return (void*)(uint64_t)ret;
 }
 
 static void i_psmgrDumpList(void) {
@@ -106,14 +111,13 @@ static void i_psmgrDumpList(void) {
 
 KSTATUS psmgrStart(void) {
     int i;
-    bool all_signals_handled = true;
     SYSLOG(LOG_INFO, "[PSMGR] Starting ...");
     for(i = 0;i < sizeof(g_psmgrHandledSignalsMainNew)/sizeof(g_psmgrHandledSignalsMainNew[0]);i++) {
-        if(sigaction(g_psmgrHandledSignalsMainNew[i]._signo, &g_psmgrHandledSignalsMainNew[i]._sigcfg, &g_psmgrHandledSignalsMainOld[i]._sigcfg) != 0)
-            all_signals_handled = false;
+        if(sigaction(g_psmgrHandledSignalsMainNew[i]._signo, &g_psmgrHandledSignalsMainNew[i]._sigcfg, &g_psmgrHandledSignalsMainOld[i]._sigcfg) != 0) {
+            SYSLOG(LOG_ERR, "[PSMGR] Signal (%d) was not handled properly !", g_psmgrHandledSignalsMainNew[i]._signo);
+            return KSTATUS_UNSUCCESS;
+        }
     }
-    if(!all_signals_handled)
-        return KSTATUS_UNSUCCESS;
     g_psmgrCfg._threadList = doublylinkedlistAlloc();
     if(g_psmgrCfg._threadList == NULL)
         return KSTATUS_UNSUCCESS;
@@ -136,11 +140,14 @@ KSTATUS psmgrIdle(unsigned long long waitTimeInSec) {
     if(!doublylinkedlistIsEmpty(g_psmgrCfg._threadList)) {
         sleep(waitTimeInSec);
     }
+    doublylinkedlistFreeDeletedEntries(g_psmgrCfg._threadList);
     return KSTATUS_SUCCESS;
 }
 
 void psmgrStopUserThreads(void) {
     SYSLOG(LOG_INFO, "[PSMGR] Stopping User Threads ...");
+    if(g_psmgrCfg._threadList == NULL)
+        return;
     while(!doublylinkedlistIsEmpty(g_psmgrCfg._threadList)) {
         /*PPSMGR_THREAD p_threadCtx = (PPSMGR_THREAD)doublylinkedlistGetFirst(g_psmgrCfg._threadList);
         if(p_threadCtx->_threadType == PSMGR_THREAD_USER) {
@@ -152,10 +159,12 @@ void psmgrStopUserThreads(void) {
     }
 }
 
-KSTATUS psmgrCreateThread(const char* c_threadName, int threadType, psmgr_execRoutine p_execRoutine, psmgr_cancelRoutine p_cancelRoutine, void *p_arg) {
+KSTATUS psmgrCreateThread(const char* c_shortThreadName, const char* c_fullThreadName, int threadType, psmgr_execRoutine p_execRoutine, psmgr_cancelRoutine p_cancelRoutine, void *p_arg) {
     PPSMGR_THREAD p_threadCtx;
     int ret;
 
+    if(strlen(c_shortThreadName) >= 15)
+        return KSTATUS_INVALID_PARAMETERS;
     p_threadCtx = MALLOC(PSMGR_THREAD, 1);
     if(p_threadCtx == NULL)
         return KSTATUS_OUT_OF_MEMORY;
@@ -166,13 +175,14 @@ KSTATUS psmgrCreateThread(const char* c_threadName, int threadType, psmgr_execRo
     } else {
         p_threadCtx->_p_cancelRoutine = i_psmgrCancelRoutineEmpty;
     }
-    p_threadCtx->_fullThreadName = c_threadName;
+    p_threadCtx->_fullThreadName = c_fullThreadName;
+    strcpy(p_threadCtx->_shortThreadName, c_shortThreadName);
     p_threadCtx->_threadType = threadType;
     pthread_cond_init(&p_threadCtx->_startExecCondVariable, NULL);
     pthread_mutex_init(&p_threadCtx->_mutex, NULL);
     pthread_mutex_lock(&p_threadCtx->_mutex);
     ret = pthread_create(&p_threadCtx->_threadId, NULL, i_psmgrExecRoutine, p_threadCtx);
-    SYSLOG(LOG_INFO, "[PSMGR] CREATE threadName=%s threadId=%lu p_execRoutine=%p p_cancelRoutine=%p", c_threadName, p_threadCtx->_threadId, p_execRoutine, p_cancelRoutine);
+    SYSLOG(LOG_INFO, "[PSMGR] CREATE threadName=%s threadId=%lu p_execRoutine=%p p_cancelRoutine=%p", c_fullThreadName, p_threadCtx->_threadId, p_execRoutine, p_cancelRoutine);
     if(ret != 0) {
         pthread_mutex_unlock(&p_threadCtx->_mutex);
         pthread_cond_destroy(&p_threadCtx->_startExecCondVariable);
