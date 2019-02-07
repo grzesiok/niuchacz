@@ -27,11 +27,11 @@ prepare: build_dependencies
 	@$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
 
 clean_dependencies:
-	#@$(MAKE) -C libalgorithms clean
+	@$(MAKE) -C libalgorithms clean
 	#@$(MAKE) -C sqlite clean
 	
 build_dependencies:
-	#@$(MAKE) -C libalgorithms all
+	@$(MAKE) -C libalgorithms all
 	#@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
 	#@$(MAKE) -C sqlite all
 
