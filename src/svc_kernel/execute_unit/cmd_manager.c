@@ -218,7 +218,6 @@ __cleanup:
 
 KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, PJOB* pjob) {
     PJOB pjob2;
-    size_t additionalMemorySize = dataSize+strlen(cmd)+1;
     
     pjob2 = MALLOC2(JOB, 1, dataSize+strlen(cmd)+1);
     if(pjob2 == NULL)
