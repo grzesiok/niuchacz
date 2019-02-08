@@ -200,11 +200,11 @@ KSTATUS testImportPcap(const char* file_name) {
     KSTATUS _status;
     PJOB pjob;
     struct timeval ts;
-    cmd_export_cfg_t cfg;
+    cmd_import_cfg_t cfg;
 
     SYSLOG(LOG_INFO, "Importing PCAP file=%s", file_name);
     strcpy(cfg._file_name, file_name);
-    _status = cmdmgrJobPrepare("IMPORT_PCAP", &cfg, sizeof(cmd_export_cfg_t), ts, &pjob);
+    _status = cmdmgrJobPrepare("IMPORT_PCAP", &cfg, sizeof(cmd_import_cfg_t), ts, &pjob);
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "Error during preparing IMPORT_PCAP command");
         return _status;
