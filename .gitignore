@@ -65,3 +65,6 @@ sqlite/sqlite3session.h
 
 # Hidden files and directories
 .*
+
+# All lib files for liquibase
+oracle/lib/*
