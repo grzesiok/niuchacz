@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+         
+	<changeSet id="1" author="gkasprzyszak" runOnChange="false">
+		<sql splitStatements="true">
+			create sequence attachements_seq
+		</sql>
+	</changeSet>
+	<changeSet id="2" author="gkasprzyszak" runOnChange="false">
+		<sql splitStatements="true">
+			create table attachements_tg
+			(
+			  id number primary key,
+			  dic_type_id number references dictionaries_tg (id) not null,
+			  dic_format_id number references dictionaries_tg (id) not null,
+			  project_id number references projects_tg (id) not null,
+			  content blob
+			) pctfree 0
+		</sql>
+	</changeSet>
+	<changeSet id="3" author="gkasprzyszak" runOnChange="false">
+		<sql splitStatements="true">
+			alter table attachements_tg MOVE
+    			tablespace testinstall_db
+    			lob (content)
+    			store as (
+          			tablespace testinstall_attachements_db
+          			disable storage in row)
+		</sql>
+	</changeSet>
+	<changeSet id="4" author="gkasprzyszak" runOnChange="true">
+		<sql splitStatements="false">
+create or replace 
+trigger j_attachements_tri
+  before insert or update or delete on attachements_tg
+  for each row
+begin
+  journal_api.register_change('ATTACHEMENTS_TG', nvl(:old.id, :new.id), 'DIC_TYPE_ID', journal_api.c_valuetype_id, :old.dic_type_id, :new.dic_type_id);
+  journal_api.register_change('ATTACHEMENTS_TG', nvl(:old.id, :new.id), 'DIC_FORMAT_ID', journal_api.c_valuetype_id, :old.dic_format_id, :dic_format_id.name);
+end;
+		</sql>
+	</changeSet>
+
+</databaseChangeLog>

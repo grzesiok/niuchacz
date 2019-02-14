@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="liquibase">
+
+    <target name="prepare">
+        <path id="classpath">
+            <fileset dir="../lib">
+                <include name="**/*.jar"/>
+            </fileset>
+        </path>
+    	
+    	<property file="../conf/liquibase.properties"/>
+
+        <taskdef resource="liquibasetasks.properties">
+            <classpath refid="classpath"/>
+        </taskdef>
+    </target>
+
+    <target name="niuchacz-upgrade" depends="prepare">
+    	<echo message="niuchacz-changeset: DWH_LOGGING"/>
+        <updateDatabase
+                changeLogFile="../changeSet/${niuchacz.database.version}/dwh_logging/main.xml"
+                driver="${niuchacz.database.driver}"
+                url="${niuchacz.database.url}"
+                username="${niuchacz.database.dwh_logging.username}"
+                password="${niuchacz.database.dwh_logging.password}"
+                classpathref="classpath"
+                />
+    	<echo message="niuchacz-changeset: DWH_LOAD"/>
+        <updateDatabase
+                changeLogFile="../changeSet/${niuchacz.database.version}/dwh_load/main.xml"
+                driver="${niuchacz.database.driver}"
+                url="${niuchacz.database.url}"
+                username="${niuchacz.database.dwh_load.username}"
+                password="${niuchacz.database.dwh_load.password}"
+                classpathref="classpath"
+                />
+    </target>
+</project>

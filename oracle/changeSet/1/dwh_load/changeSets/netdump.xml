@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+         
+	<changeSet id="1" author="grzegorz.kasprzyszak" runOnChange="false">
+		<sql splitStatements="true">
+create table netdump
+(
+  eth_timestamp timestamp,
+  eth_src varchar2(17),
+  eth_dst varchar2(157),
+  ip_src varchar2(15),
+  ip_dst varchar2(15),
+  hostname_src varchar2(255),
+  hostname_dst varchar2(255),
+  ip_len number,
+  ip_sum number
+) pctfree 0;
+		</sql>
+	</changeSet>
+
+</databaseChangeLog>
