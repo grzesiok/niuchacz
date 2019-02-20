@@ -1,5 +1,8 @@
-include Makefile.config
+.PHONY: prepare clean_dependencies build_dependencies devbuild_dependencies build devbuild clean install
+
 include Makefile.compile
+include Makefile.config
+
 #Dodatkowe polecenia
 ECHO=echo
 
@@ -20,8 +23,26 @@ FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 
 #komendy zewnętrzne
-build: $(OUTFILE)
+prepare:
+	@$(ECHO) DEBUG=$(DEBUG)
+	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
+	@$(ECHO) CC=$(CC) CFLAGS=$(CFLAGS)
+	@$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
+
+build: DEBUG=0
+build: ASMFLAGS=-f elf_x86_64
+build: LDFLAGS=-lc -m64 -Wall -lm -shared $(LIBS)
+build: CFLAGS=-c -m64 -O3 -Wall -fPIC -msse4.2 $(INCLUDES) $(addprefix -D, $(DEFINES))
+build: prepare $(OUTFILE)
 	@$(ECHO) Build Finished
+
+devbuild: DEBUG=1
+devbuild: DEFINES+= DEBUG_MODE
+devbuild: ASMFLAGS=-f elf_x86_64 -g
+devbuild: LDFLAGS=-lc -m64 -Wall -g3 -lm -shared $(DEV_LIBS)
+devbuild: CFLAGS=-c -m64 -Wall -g3 -fPIC -msse4.2 -I$(DEV_INCLUDES) $(addprefix -D, $(DEFINES))
+devbuild: prepare $(OUTFILE)
+	@$(ECHO) DEV Build Finished
 
 clean:
 	@$(ECHO) Cleanup...
@@ -32,19 +53,8 @@ clean:
 	@$(ECHO) [RM] $(OUTFILE)
 	@rm -f $(OUTFILE)
 
-all: clean build
-	@$(ECHO) Rebuild Finished
-
-run: all
-	./$(OUTFILE)
-
-prepare:
-	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
-	@$(ECHO) CC=$(CC) CFLAGS=$(CFLAGS)
-	@$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
-
 #kompilacja
-$(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
+$(OUTFILE): $(FILECOBJ) $(FILEASMOBJ)
 	@$(ECHO) [COMPILE] $(OUTFILE)
 	@$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
 	

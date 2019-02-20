@@ -1,7 +1,8 @@
-.PHONY: all prepare clean_dependencies build_dependencies build clean run install
+.PHONY: prepare clean_dependencies build_dependencies devbuild_dependencies build devbuild clean install
 
-include Makefile.config
 include Makefile.compile
+include Makefile.config
+
 #Dodatkowe polecenia
 ECHO=echo
 
@@ -11,7 +12,7 @@ ECHO=echo
 	@$(ASM) $(ASMFLAGS) -o $(OBJDIR)/$@ $<
 
 %.o:%.c
-	@$(ECHO) [C] $(CC) $(CFLAGS) -o $(OBJDIR)/$@
+	@$(ECHO) [C] $@
 	@$(CC) $(CFLAGS) -o $(OBJDIR)/$@ $<
 
 FILEASMOBJ=$(FILEASM64OBJ)
@@ -21,23 +22,41 @@ FILEASM32OBJ_=$(FILEASM32OBJ:%=$(OBJDIR)/%)
 FILECOBJ_=$(FILECOBJ:%=$(OBJDIR)/%)
 FILEOBJ=$(FILEASMOBJ_) $(FILECOBJ_)
 
-prepare: build_dependencies
+prepare:
+	@$(ECHO) DEBUG=$(DEBUG)
 	@$(ECHO) ASM=$(ASM) ASMFLAGS=$(ASMFLAGS)
 	@$(ECHO) CC=$(CC) CFLAGS=$(CFLAGS)
 	@$(ECHO) LD=$(LD) LDFLAGS=$(LDFLAGS)
 
 clean_dependencies:
-	#@$(MAKE) -C libalgorithms clean
-	#@$(MAKE) -C sqlite clean
+	@$(MAKE) -C libalgorithms clean
+	@$(MAKE) -C sqlite clean
 	
 build_dependencies:
-	#@$(MAKE) -C libalgorithms all
-	#@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
-	#@$(MAKE) -C sqlite all
+	@$(MAKE) -C libalgorithms build
+	@cd sqlite && ./configure
+	@$(MAKE) -C sqlite all
+
+devbuild_dependencies:
+	@$(MAKE) -C libalgorithms devbuild
+	@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
+	@$(MAKE) -C sqlite all
 
 #komendy zewnętrzne
-build: build_dependencies $(OUTFILE)
+build: DEBUG=0
+build: ASMFLAGS=-f elf_x86_64
+build: LDFLAGS=-lc -m64 -Wall $(LIBS)
+build: CFLAGS=-c -m64 -O3 -Wall $(INCLUDES) $(addprefix -D, $(DEFINES))
+build: prepare build_dependencies $(OUTFILE)
 	@$(ECHO) Build Finished
+
+devbuild: DEBUG=1
+devbuild: DEFINES+= DEBUG_MODE
+devbuild: ASMFLAGS=-f elf_x86_64 -g
+devbuild: LDFLAGS=-lc -m64 -Wall -g $(DEV_LIBS)
+devbuild: CFLAGS=-c -m64 -Wall -g -I$(DEV_INCLUDES) $(addprefix -D, $(DEFINES))
+devbuild: prepare devbuild_dependencies $(OUTFILE)
+	@$(ECHO) DEV Build Finished
 
 clean: clean_dependencies
 	@$(ECHO) Cleanup...
@@ -48,12 +67,6 @@ clean: clean_dependencies
 	@$(ECHO) [RM] $(OUTFILE)
 	@rm -f $(OUTFILE)
 
-all: clean build
-	@$(ECHO) Rebuild Finished
-
-run: all
-	./$(OUTFILE)
-	
 install:
 	systemctl stop niuchacz.service
 	cp niuchacz.out /usr/bin/niuchacz
@@ -64,7 +77,7 @@ install:
 	systemctl start niuchacz.service
 
 #kompilacja
-$(OUTFILE): prepare $(FILECOBJ) $(FILEASMOBJ)
+$(OUTFILE): $(FILECOBJ) $(FILEASMOBJ)
 	@$(ECHO) [COMPILE] $(OUTFILE)
 	@$(LD) $(LDFLAGS) -o $@ $(FILEOBJ)
 	
