@@ -14,9 +14,17 @@
 #include "import_file.h"
 #include "export_file.h"
 
+const char* gc_statsKey_NiuchaczPCAPEnqTime = "PCAP Enq time";
+const char* gc_statsKey_NiuchaczPCAPEnq = "PCAP Enq";
+const char* gc_statsKey_NiuchaczPCAPEnqFail = "PCAP Enq fail";
+
 typedef struct _NIUCHACZ_MAIN {
     const char* _p_deviceName;
     database_t* _db;
+    stats_list_t* _stats_list;
+    stats_entry_t _statsEntry_NiuchaczPCAPEnq;
+    stats_entry_t _statsEntry_NiuchaczPCAPEnqTime;
+    stats_entry_t _statsEntry_NiuchaczPCAPEnqFail;
 } NIUCHACZ_MAIN, *PNIUCHACZ_MAIN;
 
 NIUCHACZ_MAIN g_Main;
@@ -92,6 +100,7 @@ KSTATUS pcap_thread_routine(void* arg)
     KSTATUS _status;
     PJOB pjob;
     const char* p_deviceName = g_Main._p_deviceName;
+    struct timespec startTime;
 
     SYSLOG(LOG_INFO, "Listen on device=%s", p_deviceName);
     /* get network number and mask associated with capture device */
@@ -124,17 +133,22 @@ KSTATUS pcap_thread_routine(void* arg)
     while(svcKernelIsRunning()) {
         packet = (void*)pcap_next(gp_PcapHandle, &header);
         if(packet != NULL) {
+            timerWatchStart(&startTime);
             _status = cmdmgrJobPrepare("PACKET_ANALYZE", packet, header.caplen, header.ts, &pjob);
             if(!KSUCCESS(_status)) {
                 SYSLOG(LOG_ERR, "Couldn't prepare packet to analyze");
+                statsUpdate(&g_Main._statsEntry_NiuchaczPCAPEnqFail, 1);
                 continue;
             }
             _status = cmdmgrJobExec(pjob, JobModeAsynchronous, JobQueueTypeShortOps);
             if(!KSUCCESS(_status)) {
                 SYSLOG(LOG_ERR, "Couldn't execute job");
                 cmdmgrJobCleanup(pjob);
+                statsUpdate(&g_Main._statsEntry_NiuchaczPCAPEnqFail, 1);
                 continue;
             }
+            statsUpdate(&g_Main._statsEntry_NiuchaczPCAPEnqTime, timerWatchStop(startTime));
+            statsUpdate(&g_Main._statsEntry_NiuchaczPCAPEnq, 1);
         }
     }
     /* cleanup */
@@ -217,48 +231,67 @@ KSTATUS testImportPcap(const char* file_name) {
     return KSTATUS_SUCCESS;
 }
 
-int main(int argc, char* argv[])
-{
-	KSTATUS _status;
-	const char *dbFileName;
+int main(int argc, char* argv[]) {
+    KSTATUS _status;
+    const char *dbFileName;
 
-	_status = svcKernelInit(argv[1]);
-	if(!KSUCCESS(_status))
-		goto __exit;
-	if(!config_lookup_string(svcKernelGetCfg(), "DB.fileName", &dbFileName)) {
-		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
-		goto __exit;
-	}
-	if(!config_lookup_string(svcKernelGetCfg(), "NIUCHACZ.deviceName", &g_Main._p_deviceName)) {
-		SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
-		goto __exit;
-	}
-	_status = dbStart(dbFileName, "DB_LIVE0", &g_Main._db);
-	if(!KSUCCESS(_status))
-		goto __exit;
-	_status = schema_sync();//svcUpdateSync(getNiuchaczPcapDB());
-	if(!KSUCCESS(_status))
-		goto __database_stop_andexit;
-	svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);
-	_status = cmd_sync();
-	if(!KSUCCESS(_status))
-		goto __database_stop_andexit;
-	if(config_lookup(svcKernelGetCfg(), "NIUCHACZ.testMode") == NULL) {
-		SYSLOG(LOG_INFO, "Prepare listen on device=%s", g_Main._p_deviceName);
-		_status = psmgrCreateThread("niuch_pcaplsnr", "Pcap Listener", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, NULL);
-		if(!KSUCCESS(_status))
-			goto __database_stop_andexit;
-	} else {
-		if(strcmp(argv[2], "EXPORT_FILE") == 0) {
-			testExportFile(argv[3]);
-		} else if(strcmp(argv[2], "IMPORT_PCAP") == 0) {
-			testImportPcap(argv[3]);
-                }
-		svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
-	}
-	svcKernelMainLoop();
+    _status = svcKernelInit(argv[1]);
+    if(!KSUCCESS(_status))
+        goto __exit;
+    if(!config_lookup_string(svcKernelGetCfg(), "DB.fileName", &dbFileName)) {
+        SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
+        goto __exit;
+    }
+    if(!config_lookup_string(svcKernelGetCfg(), "NIUCHACZ.deviceName", &g_Main._p_deviceName)) {
+        SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
+        goto __exit;
+    }
+    _status = dbStart(dbFileName, "DB_LIVE0", &g_Main._db);
+    if(!KSUCCESS(_status))
+        goto __exit;
+    _status = schema_sync();//svcUpdateSync(getNiuchaczPcapDB());
+    if(!KSUCCESS(_status))
+        goto __database_stop_andexit;
+    g_Main._stats_list = statsCreate("NIUCHACZ");
+    if(g_Main._stats_list == NULL)
+        goto __free_stats_andexit;
+    _status = statsAlloc(g_Main._stats_list, gc_statsKey_NiuchaczPCAPEnq, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnq);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[NIUCHACZ] Error during allocation StatsKey(%s)!", gc_statsKey_NiuchaczPCAPEnq);
+        goto __free_stats_andexit;
+    }
+    _status = statsAlloc(g_Main._stats_list, gc_statsKey_NiuchaczPCAPEnqTime, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnqTime);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[NIUCHACZ] Error during allocation StatsKey(%s)!", gc_statsKey_NiuchaczPCAPEnqTime);
+        goto __free_stats_andexit;
+    }
+    _status = statsAlloc(g_Main._stats_list, gc_statsKey_NiuchaczPCAPEnqFail, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnqFail);
+    if(!KSUCCESS(_status)) {
+        SYSLOG(LOG_ERR, "[NIUCHACZ] Error during allocation StatsKey(%s)!", gc_statsKey_NiuchaczPCAPEnqFail);
+        goto __free_stats_andexit;
+    }
+    svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);
+    _status = cmd_sync();
+    if(!KSUCCESS(_status))
+        goto __database_stop_andexit;
+    if(config_lookup(svcKernelGetCfg(), "NIUCHACZ.testMode") == NULL) {
+        SYSLOG(LOG_INFO, "Prepare listen on device=%s", g_Main._p_deviceName);
+        _status = psmgrCreateThread("niuch_pcaplsnr", "Pcap Listener", PSMGR_THREAD_USER, pcap_thread_routine, pcap_thread_cancelRoutine, NULL);
+        if(!KSUCCESS(_status))
+            goto __database_stop_andexit;
+    } else {
+        if(strcmp(argv[2], "EXPORT_FILE") == 0) {
+            testExportFile(argv[3]);
+        } else if(strcmp(argv[2], "IMPORT_PCAP") == 0) {
+            testImportPcap(argv[3]);
+        }
+        svcKernelStatus(SVC_KERNEL_STATUS_STOP_PENDING);
+    }
+    svcKernelMainLoop();
+__free_stats_andexit:
+    statsDestroy(g_Main._stats_list);
 __database_stop_andexit:
-	dbStop(getNiuchaczPcapDB());
+    dbStop(getNiuchaczPcapDB());
 __exit:
-	svcKernelExit(0);
+    svcKernelExit(0);
 }
