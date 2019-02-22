@@ -8,4 +8,5 @@
 #include "../src/ext/art/art.h"
 #include "../src/algorithms/tree/bst.h"
 #include "../src/algorithms/timer/timer.h"
+#include "../src/algorithms/perf/perf.h"
 #endif
