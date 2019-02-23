@@ -1,10 +1,10 @@
-#include "import_file.h"
+#include "import_pcap.h"
 #include "packet_analyze.h"
 #include "svc_kernel/execute_unit/cmd_manager.h"
 #include <pcap.h>
 #include <sys/time.h>
 
-int i_importFile(const char* pfile_name, PJOB_EXEC pcallback) {
+int i_importPcap(const char* pfile_name, PJOB_EXEC pcallback) {
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t *pcap;
 	struct pcap_pkthdr header;
@@ -23,18 +23,18 @@ int i_importFile(const char* pfile_name, PJOB_EXEC pcallback) {
 	return 0;
 }
 
-int cmdImportFileExec(struct timeval ts, void* pdata, size_t dataSize) {
+int cmdImportPcapExec(struct timeval ts, void* pdata, size_t dataSize) {
 	if(dataSize != sizeof(cmd_import_cfg_t))
 		return -1;
 	cmd_import_cfg_t* pcfg = (cmd_import_cfg_t*)pdata;
-	SYSLOG(LOG_INFO, "[CMDMGR][IMPORT_FILE](%s)", pcfg->_file_name);
-	return i_importFile(pcfg->_file_name, cmdPacketAnalyzeExec);
+	SYSLOG(LOG_INFO, "[CMDMGR][IMPORT_PCAP](%s)", pcfg->_file_name);
+	return i_importPcap(pcfg->_file_name, cmdPacketAnalyzeExec);
 }
 
-int cmdImportFileCreate(void) {
+int cmdImportPcapCreate(void) {
 	return 0;
 }
 
-int cmdImportFileDestroy(void) {
+int cmdImportPcapDestroy(void) {
 	return 0;
 }

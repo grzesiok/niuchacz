@@ -11,7 +11,7 @@
 #include "algorithms.h"
 //Commands
 #include "packet_analyze.h"
-#include "import_file.h"
+#include "import_pcap.h"
 #include "export_file.h"
 
 const char* gc_statsKey_NiuchaczPCAPEnqTime = "PCAP Enq time";
@@ -180,7 +180,7 @@ KSTATUS cmd_sync(void) {
 	_status = cmdmgrAddCommand("PACKET_ANALYZE", "Analyze network packets and store it in DB file", cmdPacketAnalyzeExec, cmdPacketAnalyzeCreate, cmdPacketAnalyzeDestroy, 1);
 	if(!KSUCCESS(_status))
 		return _status;
-	_status = cmdmgrAddCommand("IMPORT_PCAP", "Import PCAP file to DB", cmdImportFileExec, cmdImportFileCreate, cmdImportFileDestroy, 1);
+	_status = cmdmgrAddCommand("IMPORT_PCAP", "Import PCAP file to DB", cmdImportPcapExec, cmdImportPcapCreate, cmdImportPcapDestroy, 1);
 	if(!KSUCCESS(_status))
 		return _status;
 	_status = cmdmgrAddCommand("EXPORT_FILE", "Export DB to file", cmdExportFileExec, cmdExportFileCreate, cmdExportFileDestroy, 1);
