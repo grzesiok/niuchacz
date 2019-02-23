@@ -219,7 +219,7 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
     int ethSrcID, ethDstID, ipSrcID, ipDstID;
 
     if(!mapFrame((unsigned char *)pdata, dataSize, &results)) {
-    	SYSLOG(LOG_ERR, "Error in parsing message!");
+    	SYSLOG(LOG_ERR, "[CMDMGR][PACKET_ANALYSE] Error in parsing message!");
         return -1;
     }
     ethSrcID = i_cmdPacketAnalyzeCacheEthGet(&results._ethernet.eth_shost);
@@ -227,7 +227,7 @@ int cmdPacketAnalyzeExec(struct timeval ts, void* pdata, size_t dataSize) {
     ipSrcID = i_cmdPacketAnalyzeCacheIPGet(&results._ip.ip_src);
     ipDstID = i_cmdPacketAnalyzeCacheIPGet(&results._ip.ip_dst);
     if(ethSrcID == 0 || ethDstID == 0 || ipSrcID == 0 || ipDstID == 0) {
-    	SYSLOG(LOG_ERR, "Error in translating message!");
+    	SYSLOG(LOG_ERR, "[CMDMGR][PACKET_ANALYSE] Error in translating message!");
         return -2;
     }
     _status = dbExec(getNiuchaczPcapDB(), cgStmtPackets, 16, 
