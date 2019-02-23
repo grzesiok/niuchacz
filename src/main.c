@@ -134,7 +134,7 @@ KSTATUS pcap_thread_routine(void* arg)
         packet = (void*)pcap_next(gp_PcapHandle, &header);
         if(packet != NULL) {
             timerWatchStart(&startTime);
-            _status = cmdmgrJobPrepare("PACKET_ANALYZE", packet, header.caplen, header.ts, &pjob);
+            _status = cmdmgrJobPrepare("PACKET_ANALYZE", packet, header.caplen, header.ts, 0, &pjob);
             if(!KSUCCESS(_status)) {
                 SYSLOG(LOG_ERR, "Couldn't prepare packet to analyze");
                 statsUpdate(&g_Main._statsEntry_NiuchaczPCAPEnqFail, 1);
@@ -197,7 +197,7 @@ KSTATUS testExportFile(const char* file_name) {
 
     SYSLOG(LOG_INFO, "Exporting file=%s", file_name);
     strcpy(cfg._file_name, file_name);
-    _status = cmdmgrJobPrepare("EXPORT_FILE", &cfg, sizeof(cmd_export_cfg_t), ts, &pjob);
+    _status = cmdmgrJobPrepare("EXPORT_FILE", &cfg, sizeof(cmd_export_cfg_t), ts, 0, &pjob);
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "Error during preparing EXPORT_FILE command");
         return _status;
@@ -218,7 +218,7 @@ KSTATUS testImportPcap(const char* file_name) {
 
     SYSLOG(LOG_INFO, "Importing PCAP file=%s", file_name);
     strcpy(cfg._file_name, file_name);
-    _status = cmdmgrJobPrepare("IMPORT_PCAP", &cfg, sizeof(cmd_import_cfg_t), ts, &pjob);
+    _status = cmdmgrJobPrepare("IMPORT_PCAP", &cfg, sizeof(cmd_import_cfg_t), ts, 0, &pjob);
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "Error during preparing IMPORT_PCAP command");
         return _status;

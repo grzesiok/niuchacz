@@ -9,6 +9,7 @@ typedef int (*PJOB_DESTROY)(void);
 typedef struct _JOB_T {
     char* _cmd;
     struct timeval _ts;
+    uint32_t _flags;
     void* _data;
     size_t _dataSize;
 } JOB, *PJOB;
@@ -27,7 +28,7 @@ typedef enum _JobQueueType {
 KSTATUS cmdmgrStart(void);
 void cmdmgrStop(void);
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version);
-KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, PJOB* pjob);
+KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, uint32_t flags, PJOB* pjob);
 void cmdmgrJobCleanup(PJOB pjob);
 KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType);
 #endif /* _CMD_MANAGER_H */

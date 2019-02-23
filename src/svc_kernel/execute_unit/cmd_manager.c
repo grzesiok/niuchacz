@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "cmd_manager.h"
 #include "algorithms.h"
+#include "flags.h"
 
 static const char* cgCreateSchemaCmdList =
 		"create table if not exists cmdmgr_cmdlist ("
@@ -12,15 +13,8 @@ static const char* cgInsertCommand =
 		"values (?, ?, ?, ?, ?, ?, ?);";
 
 typedef struct {
-    stats_entry_t _statsEntry_JobFindRoutine;
-    stats_entry_t _statsEntry_JobExec;
-} job_def_t;
-
-typedef struct {
     queue_t *_pjobQueueShortOps;
     queue_t *_pjobQueueLongOps;
-    PDOUBLYLINKEDLIST _jobDefList;
-    stats_list_t* _stats_list;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
@@ -163,9 +157,6 @@ KSTATUS cmdmgrStart(void) {
     _status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList, 0);
     if(!KSUCCESS(_status))
         return _status;
-    gCmdManager._jobDefList = doublylinkedlistAlloc();
-    if(gCmdManager._jobDefList == NULL)
-        return KSTATUS_UNSUCCESS;
     gCmdManager._pjobQueueShortOps = queue_create(1024*1024);//1MB
     if(gCmdManager._pjobQueueShortOps == NULL)
         return KSTATUS_UNSUCCESS;
@@ -187,8 +178,6 @@ void cmdmgrStop(void) {
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up commands...");
     dbExecQuery(svcKernelGetDb(), "select code from cmdmgr_cmdlist", 0, i_cmdmgrDestroySingleCommand, NULL);
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up...");
-    doublylinkedlistFreeDeletedEntries(gCmdManager._jobDefList);
-    doublylinkedlistFree(gCmdManager._jobDefList);
 }
 
 KSTATUS cmdmgrAddCommand(const char* cmd, const char* description, PJOB_EXEC pexec, PJOB_CREATE pcreate, PJOB_DESTROY pdestroy, int version) {
@@ -216,7 +205,7 @@ __cleanup:
     return KSTATUS_SUCCESS;
 }
 
-KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, PJOB* pjob) {
+KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct timeval ts, uint32_t flags, PJOB* pjob) {
     PJOB pjob2;
     
     pjob2 = MALLOC2(JOB, 1, dataSize+strlen(cmd)+1);
@@ -225,6 +214,7 @@ KSTATUS cmdmgrJobPrepare(const char* cmd, void* pdata, size_t dataSize, struct t
     i_cmdmgrJobStructInitialize(pjob2, cmd);
     strcpy(pjob2->_cmd, cmd);
     pjob2->_ts = ts;
+    pjob2->_flags = flags;
     memcpy(pjob2->_data, pdata, dataSize);
     pjob2->_dataSize = dataSize;
     *pjob = pjob2;
@@ -245,6 +235,7 @@ KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
     case JobModeAsynchronous:
         queueEntrySize = pjob->_dataSize+strlen(pjob->_cmd)+1+sizeof(JOB);
         switch(queueType) {
+        default:
         case JobQueueTypeNone:
             return KSTATUS_UNSUCCESS;
         case JobQueueTypeShortOps:
@@ -263,12 +254,13 @@ KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
         if(ret > 0 && (size_t)ret == queueEntrySize) {
             _status = KSTATUS_SUCCESS;
         }
+        FREE(pjob);
         break;
     //if mode == JobModeSynchronous then function should wait until execution is done
     case JobModeSynchronous:
         _status = i_cmdmgrJobExec(pjob);
+        FREE(pjob);
         break;
     }
-    FREE(pjob);
     return _status;
 }
