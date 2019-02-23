@@ -12,9 +12,10 @@
 
 typedef struct _KERNEL
 {
-	volatile int _status;
-	database_t* _db;
-	config_t _cfg;
+    volatile int _status;
+    database_t* _db;
+    config_t _cfg;
+    stats_list_t* _stats_list;
 } KERNEL, *PKERNEL;
 
 #define SVC_KERNEL_STATUS_START_PENDING 1

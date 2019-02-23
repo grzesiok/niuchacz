@@ -54,6 +54,9 @@ KSTATUS svcKernelInit(const char* confFileName) {
     _status = statsmgrStart();
     if(!KSUCCESS(_status))
         return _status;
+    gKernelCfg._stats_list = statsCreate("KERNEL");
+    if(gKernelCfg._stats_list == NULL)
+        return KSTATUS_UNSUCCESS;
     _status = psmgrStart();
     if(!KSUCCESS(_status))
         return _status;
@@ -82,6 +85,7 @@ void svcKernelExit(int code) {
     dbmgrStop();
     psmgrStopUserThreads();
     psmgrStop();
+    statsDestroy(gKernelCfg._stats_list);
     statsmgrStop();
     config_destroy(&gKernelCfg._cfg);
 
