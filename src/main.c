@@ -233,20 +233,15 @@ KSTATUS testImportPcap(const char* file_name) {
 
 int main(int argc, char* argv[]) {
     KSTATUS _status;
-    const char *dbFileName;
 
     _status = svcKernelInit(argv[1]);
     if(!KSUCCESS(_status))
         goto __exit;
-    if(!config_lookup_string(svcKernelGetCfg(), "DB.fileName", &dbFileName)) {
-        SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
-        goto __exit;
-    }
     if(!config_lookup_string(svcKernelGetCfg(), "NIUCHACZ.deviceName", &g_Main._p_deviceName)) {
         SYSLOG(LOG_ERR, "%s:%d - %s\n", config_error_file(svcKernelGetCfg()), config_error_line(svcKernelGetCfg()), config_error_text(svcKernelGetCfg()));
         goto __exit;
     }
-    _status = dbStart(dbFileName, "DB_LIVE0", &g_Main._db);
+    _status = dbOpen("DB_LIVE0", &g_Main._db);
     if(!KSUCCESS(_status))
         goto __exit;
     _status = schema_sync();//svcUpdateSync(getNiuchaczPcapDB());
@@ -291,7 +286,7 @@ int main(int argc, char* argv[]) {
 __free_stats_andexit:
     statsDestroy(g_Main._stats_list);
 __database_stop_andexit:
-    dbStop(getNiuchaczPcapDB());
+    dbClose(getNiuchaczPcapDB());
 __exit:
     svcKernelExit(0);
 }

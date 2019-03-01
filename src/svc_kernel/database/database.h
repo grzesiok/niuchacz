@@ -3,11 +3,13 @@
 #include "sqlite3.h"
 #include "svc_kernel/svc_status.h"
 #include "svc_kernel/svc_statistics.h"
+#include <libconfig.h>
 
 typedef struct {
     sqlite3* _db;
     stats_list_t* _stats_list;
     char _shortname_8b[9];
+    char* _file_name;
     stats_entry_t _statsEntry_DbExec;
     stats_entry_t _statsEntry_DbExecFail;
     stats_entry_t _statsEntry_DbPrepareTime;
@@ -19,8 +21,8 @@ typedef struct {
 
 KSTATUS dbmgrStart(void);
 void dbmgrStop(void);
-KSTATUS dbStart(const char* p_path, const char* p_shortname_8b, database_t** p_db);
-void dbStop(database_t* p_db);
+KSTATUS dbOpen(const char* p_shortname_8b, database_t** p_db);
+void dbClose(database_t* p_db);
 #define DB_BIND_NULL 0
 #define DB_BIND_INT64 1
 #define DB_BIND_INT 2
