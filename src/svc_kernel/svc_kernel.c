@@ -83,7 +83,6 @@ void svcKernelExit(int code) {
     cmdmgrStop();
     dbClose(gKernelCfg._db);
     dbmgrStop();
-    psmgrStopUserThreads();
     psmgrStop();
     statsDestroy(gKernelCfg._stats_list);
     statsmgrStop();
@@ -109,6 +108,7 @@ void svcKernelMainLoop(void) {
         }
     }
     SYSLOG(LOG_INFO, "[KERNEL] Idle Loop Stopping...");
+    psmgrStopUserThreads();
 }
 
 KSTATUS svcKernelStatus(int requested_status) {
