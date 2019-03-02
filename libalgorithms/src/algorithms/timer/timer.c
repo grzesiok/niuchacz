@@ -31,6 +31,12 @@ void timerWatchStart(struct timespec *ts) {
     timerGetThreadCurrentTimestamp(ts);
 }
 
+uint64_t timerWatchStep(struct timespec *ts) {
+    uint64_t stepTime = timerWatchStop(*ts);
+    timerWatchStart(ts);
+    return stepTime;
+}
+
 uint64_t timerWatchStop(struct timespec startTime) {
     struct timespec stopTime;
     timerGetThreadCurrentTimestamp(&stopTime);

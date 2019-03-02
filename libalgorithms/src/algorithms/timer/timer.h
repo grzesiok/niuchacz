@@ -10,5 +10,6 @@ void timerGetThreadCurrentTimestamp(struct timespec *ts);
 int timerCmp(struct timespec *ts1, struct timespec *ts2);
 bool timerIsNull(struct timespec *ts);
 void timerWatchStart(struct timespec *ts);
+uint64_t timerWatchStep(struct timespec *ts);
 uint64_t timerWatchStop(struct timespec startTime);
 #endif /*_LIBALGORITHMS_ALGORITHMS_TIMER_H */
