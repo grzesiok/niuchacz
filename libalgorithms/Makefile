@@ -40,7 +40,7 @@ devbuild: DEBUG=1
 devbuild: DEFINES+= DEBUG_MODE
 devbuild: ASMFLAGS=-f elf_x86_64 -g
 devbuild: LDFLAGS=-lc -m64 -Wall -g3 -lm -shared $(DEV_LIBS)
-devbuild: CFLAGS=-c -m64 -Wall -g3 -fPIC -msse4.2 -I$(DEV_INCLUDES) $(addprefix -D, $(DEFINES))
+devbuild: CFLAGS=-c -m64 -Wall -g3 -fPIC -msse4.2 $(DEV_INCLUDES) $(addprefix -D, $(DEFINES))
 devbuild: prepare $(OUTFILE)
 	@$(ECHO) DEV Build Finished
 
