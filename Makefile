@@ -30,17 +30,17 @@ prepare:
 
 clean_dependencies:
 	@$(MAKE) -C libalgorithms clean
-	@$(MAKE) -C sqlite clean
+	#@$(MAKE) -C sqlite clean
 	
 build_dependencies:
 	@$(MAKE) -C libalgorithms build
-	@cd sqlite && ./configure
-	@$(MAKE) -C sqlite all
+	#@cd sqlite && ./configure
+	#@$(MAKE) -C sqlite all
 
 devbuild_dependencies:
 	@$(MAKE) -C libalgorithms devbuild
-	@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
-	@$(MAKE) -C sqlite all
+	#@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
+	#@$(MAKE) -C sqlite all
 
 #komendy zewnętrzne
 build: DEBUG=0
@@ -54,7 +54,7 @@ devbuild: DEBUG=1
 devbuild: DEFINES+= DEBUG_MODE
 devbuild: ASMFLAGS=-f elf_x86_64 -g
 devbuild: LDFLAGS=-lc -m64 -Wall -g $(DEV_LIBS)
-devbuild: CFLAGS=-c -m64 -Wall -g -I$(DEV_INCLUDES) $(addprefix -D, $(DEFINES))
+devbuild: CFLAGS=-c -m64 -Wall -g $(DEV_INCLUDES) $(addprefix -D, $(DEFINES))
 devbuild: prepare devbuild_dependencies $(OUTFILE)
 	@$(ECHO) DEV Build Finished
 
