@@ -1,6 +1,7 @@
 #include "database.h"
 #include "../svc_kernel.h"
 #include "algorithms.h"
+#include "flags.h"
 
 const char* gc_statsKey_DbExec = "db exec";
 const char* gc_statsKey_DbExecFail = "db exec fail";
@@ -129,23 +130,34 @@ __dbExec_cleanup:
     return _status;
 }
 
-KSTATUS i_dbMount(const char* p_path, const char* p_shortname_8b) {
+KSTATUS i_dbMount(config_setting_t* p_instance_cfg) {
     KSTATUS _status;
     database_t db;
     database_t* p_db;
+    const char *dbName = NULL, *fileName = NULL;
+    int dropOnClose;
 
-    SYSLOG(LOG_INFO, "[DB][%s] Mounting FileName(%s) Version(%s)...", p_shortname_8b, p_path, sqlite3_libversion());
-    memset(&db, 0, sizeof(database_t));
-    strncpy(db._shortname_8b, p_shortname_8b, sizeof(db._shortname_8b)/sizeof(db._shortname_8b[0]));
-    p_db = doublylinkedlistAdd(g_dbCfg._DBList, *((uint64_t*)db._shortname_8b), &db, sizeof(database_t));
-    if(p_db == NULL) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during mounting DB(%s): internal structures can't be allocated!", p_shortname_8b, p_path);
+    if(!config_setting_lookup_string(p_instance_cfg, "dbName", &dbName)
+    || !config_setting_lookup_string(p_instance_cfg, "fileName", &fileName)
+    || !config_setting_lookup_bool(p_instance_cfg, "dropOnClose", &dropOnClose)) {
+        SYSLOG(LOG_ERR, "[DBMGR] Settings are malformed !");
         return KSTATUS_DB_MOUNT_ERROR;
     }
-    p_db->_file_name = (char*)p_path;
+    SYSLOG(LOG_INFO, "[DB][%s] Mounting FileName(%s) Version(%s)...", dbName, fileName, sqlite3_libversion());
+    memset(&db, 0, sizeof(database_t));
+    strncpy(db._shortname_8b, dbName, sizeof(db._shortname_8b)/sizeof(db._shortname_8b[0]));
+    p_db = doublylinkedlistAdd(g_dbCfg._DBList, *((uint64_t*)db._shortname_8b), &db, sizeof(database_t));
+    if(p_db == NULL) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during mounting DB(%s): internal structures can't be allocated!", p_db->_shortname_8b, p_db->_file_name);
+        return KSTATUS_DB_MOUNT_ERROR;
+    }
+    if(dropOnClose) {
+        flagsSet(p_db->_flags, DB_FLAGS_DROP_ON_CLOSE);
+    }
+    p_db->_file_name = (char*)fileName;
     p_db->_stats_list = statsCreate(p_db->_shortname_8b);
     if(p_db->_stats_list == NULL) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsList(%s)!", p_shortname_8b, p_shortname_8b);
+        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsList(%s)!", p_db->_shortname_8b, p_db->_shortname_8b);
         return KSTATUS_DB_MOUNT_ERROR;
     }
     _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbExec, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExec);
@@ -218,13 +230,7 @@ KSTATUS dbmgrStart(void) {
     int numInstances = config_setting_length(instances_cfg);
     for(i = 0;i < numInstances;i++) {
         config_setting_t *instance_cfg = config_setting_get_elem(instances_cfg, i);
-        const char *dbName = NULL, *fileName = NULL;
-        if(!config_setting_lookup_string(instance_cfg, "dbName", &dbName) || !config_setting_lookup_string(instance_cfg, "fileName", &fileName)) {
-            SYSLOG(LOG_ERR, "[DBMGR] Settings are malformed (dbName=%s, fileName=%s) !", dbName, fileName);
-            return KSTATUS_UNSUCCESS;
-        }
-        if(!KSUCCESS(i_dbMount(fileName, dbName))) {
-            SYSLOG(LOG_ERR, "[DBMGR] DB(%s) Can't be mounted !", dbName);
+        if(!KSUCCESS(i_dbMount(instance_cfg))) {
             return KSTATUS_UNSUCCESS;
         }
     }
@@ -274,6 +280,9 @@ void dbClose(database_t* p_db)
         return;
     SYSLOG(LOG_INFO, "[DB][%s] Closing DB...", p_db->_shortname_8b);
     sqlite3_close(p_db->_db);
+    if(flagsCmp(p_db->_flags, DB_FLAGS_DROP_ON_CLOSE)) {
+        remove(p_db->_file_name);
+    }
     doublylinkedlistRelease(p_db);
 }
 

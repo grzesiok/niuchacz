@@ -5,9 +5,12 @@
 #include "svc_kernel/svc_statistics.h"
 #include <libconfig.h>
 
+#define DB_FLAGS_DROP_ON_CLOSE 1
+
 typedef struct {
     sqlite3* _db;
     stats_list_t* _stats_list;
+    uint32_t _flags;
     char _shortname_8b[9];
     char* _file_name;
     stats_entry_t _statsEntry_DbExec;
