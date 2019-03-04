@@ -403,7 +403,7 @@ KSTATUS dbTxnRollback(database_t* p_db) {
         statsUpdate(&p_db->_statsEntry_DbTxnRollbackTime, l_DbTxnRollbackTime);
         _status = KSTATUS_SUCCESS;
     } else {
-        statsUpdate(&p_db->_statsEntry_DbTxnRollback, 1);
+        statsUpdate(&p_db->_statsEntry_DbTxnRollbackFail, 1);
         _status = KSTATUS_UNSUCCESS;
     }
     return _status;
