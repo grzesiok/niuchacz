@@ -18,6 +18,14 @@ typedef struct {
 static dbmgr_t g_dbCfg;
 // Internal API
 
+bool i_dbCheckState(database_t* p_db, uint32_t required_state) {
+    if(p_db == NULL)
+        return false;
+    if(p_db->_flagsDBState != required_state)
+        return false;
+    return true;
+}
+
 bool i_dbExecBindVariables(database_t *p_db, sqlite3_stmt *pStmt, va_list args, int bindCnt) {
     int i;
     for(i = 1;i <= bindCnt;i++) {
@@ -67,6 +75,8 @@ KSTATUS i_dbExec(database_t* p_db, const char* stmt, int bindCnt, int (*callback
     unsigned int rowCount = 0;
     unsigned long long l_DbPrepareTime = 0, l_DbBindTime = 0, l_DbExecTime = 0, l_DbCallbackTime = 0, l_DbFinalizeTime = 0;
 
+    if(!i_dbCheckState(p_db, DB_FLAGS_STATE_OPEN))
+        return KSTATUS_DB_INCOMPATIBLE_STATE;
     if(callback == NULL)
         callback = i_dbExecEmptyCallback;
     timerWatchStart(&startTime);
@@ -147,14 +157,11 @@ KSTATUS i_dbMount(config_setting_t* p_instance_cfg) {
     memset(&db, 0, sizeof(database_t));
     strncpy(db._shortname_8b, dbName, sizeof(db._shortname_8b)/sizeof(db._shortname_8b[0]));
     p_db = doublylinkedlistAdd(g_dbCfg._DBList, *((uint64_t*)db._shortname_8b), &db, sizeof(database_t));
+    p_db->_flagsDBState = DB_FLAGS_STATE_MOUNTING;
     if(p_db == NULL) {
         SYSLOG(LOG_ERR, "[DB][%s] Error during mounting DB(%s): internal structures can't be allocated!", p_db->_shortname_8b, p_db->_file_name);
         return KSTATUS_DB_MOUNT_ERROR;
     }
-    if(dropOnClose) {
-        flagsSet(p_db->_flags, DB_FLAGS_DROP_ON_CLOSE);
-    }
-    p_db->_file_name = (char*)fileName;
     p_db->_stats_list = statsCreate(p_db->_shortname_8b);
     if(p_db->_stats_list == NULL) {
         SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsList(%s)!", p_db->_shortname_8b, p_db->_shortname_8b);
@@ -195,12 +202,19 @@ KSTATUS i_dbMount(config_setting_t* p_instance_cfg) {
         SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbCallbackTime);
         return KSTATUS_DB_MOUNT_ERROR;
     }
+    p_db->_flagsDBState = DB_FLAGS_STATE_MOUNTED;
+    if(dropOnClose) {
+        p_db->_flagsDBDropOnClose = DB_FLAGS_TRUE;
+    }
+    p_db->_file_name = (char*)fileName;
     return KSTATUS_SUCCESS;
 }
 
 void i_dbUmount(database_t* p_db) {
-    if(p_db == NULL)
+    if(!i_dbCheckState(p_db, DB_FLAGS_STATE_MOUNTING) && !i_dbCheckState(p_db, DB_FLAGS_STATE_MOUNTED)) {
+        SYSLOG(LOG_ERR, "[DB][%s] Error during umounting DB: wrong state!", p_db->_shortname_8b);
         return;
+    }
     SYSLOG(LOG_INFO, "[DB][%s] Umounting...", p_db->_shortname_8b);
     doublylinkedlistDel(g_dbCfg._DBList, p_db);
     SYSLOG(LOG_INFO, "[DB][%s][DbExec] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbExec));
@@ -217,24 +231,26 @@ void i_dbUmount(database_t* p_db) {
 // External API
 
 KSTATUS dbmgrStart(void) {
+    KSTATUS _status = KSTATUS_UNSUCCESS;
     int i;
     config_setting_t *instances_cfg;
 
     SYSLOG(LOG_INFO, "[DBMGR] Start...");
     instances_cfg = config_lookup(svcKernelGetCfg(), "DB.instances");
     if(instances_cfg == NULL)
-        return KSTATUS_UNSUCCESS;
+        return _status;
     g_dbCfg._DBList = doublylinkedlistAlloc();
     if(g_dbCfg._DBList == NULL)
-        return KSTATUS_UNSUCCESS;
+        return _status;
     int numInstances = config_setting_length(instances_cfg);
     for(i = 0;i < numInstances;i++) {
         config_setting_t *instance_cfg = config_setting_get_elem(instances_cfg, i);
-        if(!KSUCCESS(i_dbMount(instance_cfg))) {
-            return KSTATUS_UNSUCCESS;
+        _status = i_dbMount(instance_cfg);
+        if(!KSUCCESS(_status)) {
+            return _status;
         }
     }
-    return KSTATUS_SUCCESS;
+    return _status;
 }
 
 void dbmgrStop(void) {
@@ -260,6 +276,7 @@ KSTATUS dbOpen(const char* p_shortname_8b, database_t** p_out_db) {
         SYSLOG(LOG_ERR, "[DB][%s] Error during starting DB(%s): %s!", p_shortname_8b, p_db->_file_name, dbGetErrmsg(p_db));
         return KSTATUS_DB_OPEN_ERROR;
     }
+    p_db->_flagsDBState = DB_FLAGS_STATE_OPEN;
     _status = dbExec(p_db, "PRAGMA journal_mode = WAL;", 0);
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "[DB][%s] Error during enabling WAL journal_mode for DB: %s!", p_db->_shortname_8b, dbGetErrmsg(p_db));
@@ -274,13 +291,14 @@ KSTATUS dbOpen(const char* p_shortname_8b, database_t** p_out_db) {
     return KSTATUS_SUCCESS;
 }
 
-void dbClose(database_t* p_db)
-{
-    if(p_db == NULL)
+void dbClose(database_t* p_db) {
+    if(!i_dbCheckState(p_db, DB_FLAGS_STATE_OPEN))
         return;
     SYSLOG(LOG_INFO, "[DB][%s] Closing DB...", p_db->_shortname_8b);
     sqlite3_close(p_db->_db);
-    if(flagsCmp(p_db->_flags, DB_FLAGS_DROP_ON_CLOSE)) {
+    p_db->_db = NULL;
+    p_db->_flagsDBState = DB_FLAGS_STATE_MOUNTED;
+    if(p_db->_flagsDBDropOnClose == DB_FLAGS_TRUE) {
         remove(p_db->_file_name);
     }
     doublylinkedlistRelease(p_db);
@@ -289,6 +307,7 @@ void dbClose(database_t* p_db)
 KSTATUS dbExec(database_t* p_db, const char* stmt, int bindCnt, ...) {
     KSTATUS _status;
     va_list args;
+
     va_start(args, bindCnt);
     _status = i_dbExec(p_db, stmt, bindCnt, NULL, NULL, args);
     va_end(args);
@@ -298,6 +317,7 @@ KSTATUS dbExec(database_t* p_db, const char* stmt, int bindCnt, ...) {
 KSTATUS dbExecQuery(database_t* p_db, const char* stmt, int bindCnt, int (*callback)(void*, sqlite3_stmt*), void* param, ...) {
     KSTATUS _status;
     va_list args;
+
     va_start(args, param);
     _status = i_dbExec(p_db, stmt, bindCnt, callback, param, args);
     va_end(args);
@@ -305,20 +325,28 @@ KSTATUS dbExecQuery(database_t* p_db, const char* stmt, int bindCnt, int (*callb
 }
 
 KSTATUS dbTxnBegin(database_t* p_db) {
+    if(!i_dbCheckState(p_db, DB_FLAGS_STATE_OPEN))
+        return KSTATUS_DB_INCOMPATIBLE_STATE;
     sqlite3_exec(p_db->_db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
     return KSTATUS_SUCCESS;
 }
 
 KSTATUS dbTxnCommit(database_t* p_db) {
+    if(!i_dbCheckState(p_db, DB_FLAGS_STATE_OPEN))
+        return KSTATUS_DB_INCOMPATIBLE_STATE;
     sqlite3_exec(p_db->_db, "COMMIT;", NULL, NULL, NULL);
     return KSTATUS_SUCCESS;
 }
 
 KSTATUS dbTxnRollback(database_t* p_db) {
+    if(!i_dbCheckState(p_db, DB_FLAGS_STATE_OPEN))
+        return KSTATUS_DB_INCOMPATIBLE_STATE;
     sqlite3_exec(p_db->_db, "ROLLBACK;", NULL, NULL, NULL);
     return KSTATUS_SUCCESS;
 }
 
 const char* dbGetErrmsg(database_t* p_db) {
+    if(!i_dbCheckState(p_db, DB_FLAGS_STATE_OPEN))
+        return "DB is not open!";
     return sqlite3_errmsg(p_db->_db);
 }
