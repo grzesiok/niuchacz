@@ -10,6 +10,15 @@ const char* gc_statsKey_DbBindTime = "db bind time";
 const char* gc_statsKey_DbExecTime = "db exec time";
 const char* gc_statsKey_DbFinalizeTime = "db finalize time";
 const char* gc_statsKey_DbCallbackTime = "db callback time";
+const char* gc_statsKey_DbTxnTime = "db txn time";
+const char* gc_statsKey_DbTxnCommit = "db txn commit";
+const char* gc_statsKey_DbTxnCommitFail = "db txn commit fail";
+const char* gc_statsKey_DbTxnCommitTime = "db txn commit time";
+const char* gc_statsKey_DbTxnRollback = "db txn rollback";
+const char* gc_statsKey_DbTxnRollbackFail = "db txn rollback fail";
+const char* gc_statsKey_DbTxnRollbackTime = "db txn rollback time";
+const char* gc_statsKey_DbOpen = "db open";
+const char* gc_statsKey_DbOpenTime = "db open time";
 
 typedef struct {
 	PDOUBLYLINKEDLIST _DBList;
@@ -140,6 +149,26 @@ __dbExec_cleanup:
     return _status;
 }
 
+typedef struct {
+    const char* _statsEntry_key;
+    int _statsEntry_flags;
+    stats_entry_t* _statsEntry_ptr;
+} database_mount_init_stats_t;
+
+KSTATUS i_dbMountInitStats(database_t* p_db, database_mount_init_stats_t* p_stats, int stats_num) {
+    KSTATUS _status = KSTATUS_SUCCESS;
+    int i;
+
+    for(i = 0;i < stats_num;i++) {
+        _status = statsAlloc(p_db->_stats_list, p_stats[i]._statsEntry_key, STATS_FLAGS_TYPE_SUM, p_stats[i]._statsEntry_ptr);
+        if(!KSUCCESS(_status)) {
+            SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, p_stats[i]._statsEntry_key);
+            return KSTATUS_DB_MOUNT_ERROR;
+        }
+    }
+    return _status;
+}
+
 KSTATUS i_dbMount(config_setting_t* p_instance_cfg) {
     KSTATUS _status;
     database_t db;
@@ -167,47 +196,31 @@ KSTATUS i_dbMount(config_setting_t* p_instance_cfg) {
         SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsList(%s)!", p_db->_shortname_8b, p_db->_shortname_8b);
         return KSTATUS_DB_MOUNT_ERROR;
     }
-    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbExec, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExec);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbExec);
-        return KSTATUS_DB_MOUNT_ERROR;
-    }
-    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbExecFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecFail);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbExecFail);
-        return KSTATUS_DB_MOUNT_ERROR;
-    }
-    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbExecTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbExecTime);
-        return KSTATUS_DB_MOUNT_ERROR;
-    }
-    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbPrepareTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbPrepareTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbPrepareTime);
-        return KSTATUS_DB_MOUNT_ERROR;
-    }
-    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbBindTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbBindTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbBindTime);
-        return KSTATUS_DB_MOUNT_ERROR;
-    }
-    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbFinalizeTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbFinalizeTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbFinalizeTime);
-        return KSTATUS_DB_MOUNT_ERROR;
-    }
-    _status = statsAlloc(p_db->_stats_list, gc_statsKey_DbCallbackTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbCallbackTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, gc_statsKey_DbCallbackTime);
-        return KSTATUS_DB_MOUNT_ERROR;
-    }
+    database_mount_init_stats_t s_stats[] = {{gc_statsKey_DbExec, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExec},
+                                             {gc_statsKey_DbExecFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecFail},
+                                             {gc_statsKey_DbExecTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecTime},
+                                             {gc_statsKey_DbPrepareTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbPrepareTime},
+                                             {gc_statsKey_DbBindTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbBindTime},
+                                             {gc_statsKey_DbFinalizeTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbFinalizeTime},
+                                             {gc_statsKey_DbCallbackTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbCallbackTime},
+                                             {gc_statsKey_DbTxnTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnTime},
+                                             {gc_statsKey_DbTxnCommit, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnCommit},
+                                             {gc_statsKey_DbTxnCommitFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnCommitFail},
+                                             {gc_statsKey_DbTxnCommitTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnCommitTime},
+                                             {gc_statsKey_DbTxnRollback, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnRollback},
+                                             {gc_statsKey_DbTxnRollbackFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnRollbackFail},
+                                             {gc_statsKey_DbTxnRollbackTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnRollbackTime},
+                                             {gc_statsKey_DbOpen, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbOpen},
+                                             {gc_statsKey_DbOpenTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbOpenTime}};
+    _status = i_dbMountInitStats(p_db, s_stats, sizeof(s_stats)/sizeof(s_stats[0]));
+    if(!KSUCCESS(_status))
+        return _status;
     p_db->_flagsDBState = DB_FLAGS_STATE_MOUNTED;
     if(dropOnClose) {
         p_db->_flagsDBDropOnClose = DB_FLAGS_TRUE;
     }
     p_db->_file_name = (char*)fileName;
-    return KSTATUS_SUCCESS;
+    return _status;
 }
 
 void i_dbUmount(database_t* p_db) {
@@ -224,6 +237,15 @@ void i_dbUmount(database_t* p_db) {
     SYSLOG(LOG_INFO, "[DB][%s][DbExecTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbExecTime));
     SYSLOG(LOG_INFO, "[DB][%s][DbFinalizeTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbFinalizeTime));
     SYSLOG(LOG_INFO, "[DB][%s][DbCallbackTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbCallbackTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbTxnTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbTxnTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbTxnCommit] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbTxnCommit));
+    SYSLOG(LOG_INFO, "[DB][%s][DbTxnCommitFAil] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbTxnCommitFail));
+    SYSLOG(LOG_INFO, "[DB][%s][DbTxnCommitTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbTxnCommitTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbTxnRollback] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbTxnRollback));
+    SYSLOG(LOG_INFO, "[DB][%s][DbTxnRollbackFail] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbTxnRollbackFail));
+    SYSLOG(LOG_INFO, "[DB][%s][DbTxnRollbackTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbTxnRollbackTime));
+    SYSLOG(LOG_INFO, "[DB][%s][DbOpen] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbOpen));
+    SYSLOG(LOG_INFO, "[DB][%s][DbOpenTime] = %llu", p_db->_shortname_8b, statsGetValue(&p_db->_statsEntry_DbOpenTime));
     statsDestroy(p_db->_stats_list);
     doublylinkedlistRelease(p_db);
 }
@@ -263,7 +285,9 @@ KSTATUS dbOpen(const char* p_shortname_8b, database_t** p_out_db) {
     int  rc;
     KSTATUS _status;
     database_t* p_db;
+    struct timespec startTime;
 
+    timerWatchStart(&startTime);
     SYSLOG(LOG_INFO, "[DB][%s] Opening DB Version(%s)...", p_shortname_8b, sqlite3_libversion());
     *p_out_db = doublylinkedlistFind(g_dbCfg._DBList, *((uint64_t*)p_shortname_8b));
     if(!*p_out_db) {
@@ -288,6 +312,8 @@ KSTATUS dbOpen(const char* p_shortname_8b, database_t** p_out_db) {
         return _status;
     }
     SYSLOG(LOG_INFO, "[DB][%s] Opened Version(%s)", p_db->_shortname_8b, sqlite3_libversion());
+    statsUpdate(&p_db->_statsEntry_DbOpenTime, timerWatchStop(startTime));
+    statsUpdate(&p_db->_statsEntry_DbOpen, 1);
     return KSTATUS_SUCCESS;
 }
 
@@ -325,24 +351,62 @@ KSTATUS dbExecQuery(database_t* p_db, const char* stmt, int bindCnt, int (*callb
 }
 
 KSTATUS dbTxnBegin(database_t* p_db) {
+    KSTATUS _status;
+    int rc;
+
     if(!i_dbCheckState(p_db, DB_FLAGS_STATE_OPEN))
         return KSTATUS_DB_INCOMPATIBLE_STATE;
-    sqlite3_exec(p_db->_db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
-    return KSTATUS_SUCCESS;
+    rc = sqlite3_exec(p_db->_db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    if(rc == SQLITE_OK) {
+        _status = KSTATUS_SUCCESS;
+    } else {
+        _status = KSTATUS_UNSUCCESS;
+    }
+    return _status;
 }
 
 KSTATUS dbTxnCommit(database_t* p_db) {
+    KSTATUS _status;
+    int rc;
+    struct timespec startTime;
+    unsigned long long l_DbTxnCommitTime;
+
     if(!i_dbCheckState(p_db, DB_FLAGS_STATE_OPEN))
         return KSTATUS_DB_INCOMPATIBLE_STATE;
-    sqlite3_exec(p_db->_db, "COMMIT;", NULL, NULL, NULL);
-    return KSTATUS_SUCCESS;
+    timerWatchStart(&startTime);
+    rc = sqlite3_exec(p_db->_db, "COMMIT;", NULL, NULL, NULL);
+    l_DbTxnCommitTime = timerWatchStop(startTime);
+    if(rc == SQLITE_OK) {
+        statsUpdate(&p_db->_statsEntry_DbTxnCommit, 1);
+        statsUpdate(&p_db->_statsEntry_DbTxnCommitTime, l_DbTxnCommitTime);
+        _status = KSTATUS_SUCCESS;
+    } else {
+        statsUpdate(&p_db->_statsEntry_DbTxnCommitFail, 1);
+        _status = KSTATUS_UNSUCCESS;
+    }
+    return _status;
 }
 
 KSTATUS dbTxnRollback(database_t* p_db) {
+    KSTATUS _status;
+    int rc;
+    struct timespec startTime;
+    unsigned long long l_DbTxnRollbackTime;
+
     if(!i_dbCheckState(p_db, DB_FLAGS_STATE_OPEN))
         return KSTATUS_DB_INCOMPATIBLE_STATE;
-    sqlite3_exec(p_db->_db, "ROLLBACK;", NULL, NULL, NULL);
-    return KSTATUS_SUCCESS;
+    timerWatchStart(&startTime);
+    rc = sqlite3_exec(p_db->_db, "ROLLBACK;", NULL, NULL, NULL);
+    l_DbTxnRollbackTime = timerWatchStop(startTime);
+    if(rc == SQLITE_OK) {
+        statsUpdate(&p_db->_statsEntry_DbTxnRollback, 1);
+        statsUpdate(&p_db->_statsEntry_DbTxnRollbackTime, l_DbTxnRollbackTime);
+        _status = KSTATUS_SUCCESS;
+    } else {
+        statsUpdate(&p_db->_statsEntry_DbTxnRollback, 1);
+        _status = KSTATUS_UNSUCCESS;
+    }
+    return _status;
 }
 
 const char* dbGetErrmsg(database_t* p_db) {

@@ -30,6 +30,15 @@ typedef struct {
     stats_entry_t _statsEntry_DbExecTime;
     stats_entry_t _statsEntry_DbFinalizeTime;
     stats_entry_t _statsEntry_DbCallbackTime;
+    stats_entry_t _statsEntry_DbTxnTime;//not implemented et
+    stats_entry_t _statsEntry_DbTxnCommit;
+    stats_entry_t _statsEntry_DbTxnCommitFail;
+    stats_entry_t _statsEntry_DbTxnCommitTime;
+    stats_entry_t _statsEntry_DbTxnRollback;
+    stats_entry_t _statsEntry_DbTxnRollbackFail;
+    stats_entry_t _statsEntry_DbTxnRollbackTime;
+    stats_entry_t _statsEntry_DbOpen;
+    stats_entry_t _statsEntry_DbOpenTime;
 } database_t;
 
 KSTATUS dbmgrStart(void);
