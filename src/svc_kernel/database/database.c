@@ -149,26 +149,6 @@ __dbExec_cleanup:
     return _status;
 }
 
-typedef struct {
-    const char* _statsEntry_key;
-    int _statsEntry_flags;
-    stats_entry_t* _statsEntry_ptr;
-} database_mount_init_stats_t;
-
-KSTATUS i_dbMountInitStats(database_t* p_db, database_mount_init_stats_t* p_stats, int stats_num) {
-    KSTATUS _status = KSTATUS_SUCCESS;
-    int i;
-
-    for(i = 0;i < stats_num;i++) {
-        _status = statsAlloc(p_db->_stats_list, p_stats[i]._statsEntry_key, STATS_FLAGS_TYPE_SUM, p_stats[i]._statsEntry_ptr);
-        if(!KSUCCESS(_status)) {
-            SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsKey(%s)!", p_db->_shortname_8b, p_stats[i]._statsEntry_key);
-            return KSTATUS_DB_MOUNT_ERROR;
-        }
-    }
-    return _status;
-}
-
 KSTATUS i_dbMount(config_setting_t* p_instance_cfg) {
     KSTATUS _status;
     database_t db;
@@ -196,23 +176,23 @@ KSTATUS i_dbMount(config_setting_t* p_instance_cfg) {
         SYSLOG(LOG_ERR, "[DB][%s] Error during allocation StatsList(%s)!", p_db->_shortname_8b, p_db->_shortname_8b);
         return KSTATUS_DB_MOUNT_ERROR;
     }
-    database_mount_init_stats_t s_stats[] = {{gc_statsKey_DbExec, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExec},
-                                             {gc_statsKey_DbExecFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecFail},
-                                             {gc_statsKey_DbExecTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecTime},
-                                             {gc_statsKey_DbPrepareTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbPrepareTime},
-                                             {gc_statsKey_DbBindTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbBindTime},
-                                             {gc_statsKey_DbFinalizeTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbFinalizeTime},
-                                             {gc_statsKey_DbCallbackTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbCallbackTime},
-                                             {gc_statsKey_DbTxnTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnTime},
-                                             {gc_statsKey_DbTxnCommit, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnCommit},
-                                             {gc_statsKey_DbTxnCommitFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnCommitFail},
-                                             {gc_statsKey_DbTxnCommitTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnCommitTime},
-                                             {gc_statsKey_DbTxnRollback, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnRollback},
-                                             {gc_statsKey_DbTxnRollbackFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnRollbackFail},
-                                             {gc_statsKey_DbTxnRollbackTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnRollbackTime},
-                                             {gc_statsKey_DbOpen, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbOpen},
-                                             {gc_statsKey_DbOpenTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbOpenTime}};
-    _status = i_dbMountInitStats(p_db, s_stats, sizeof(s_stats)/sizeof(s_stats[0]));
+    stats_bulk_init_t s_stats[] = {{gc_statsKey_DbExec, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExec},
+                                   {gc_statsKey_DbExecFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecFail},
+                                   {gc_statsKey_DbExecTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbExecTime},
+                                   {gc_statsKey_DbPrepareTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbPrepareTime},
+                                   {gc_statsKey_DbBindTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbBindTime},
+                                   {gc_statsKey_DbFinalizeTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbFinalizeTime},
+                                   {gc_statsKey_DbCallbackTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbCallbackTime},
+                                   {gc_statsKey_DbTxnTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnTime},
+                                   {gc_statsKey_DbTxnCommit, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnCommit},
+                                   {gc_statsKey_DbTxnCommitFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnCommitFail},
+                                   {gc_statsKey_DbTxnCommitTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnCommitTime},
+                                   {gc_statsKey_DbTxnRollback, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnRollback},
+                                   {gc_statsKey_DbTxnRollbackFail, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnRollbackFail},
+                                   {gc_statsKey_DbTxnRollbackTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbTxnRollbackTime},
+                                   {gc_statsKey_DbOpen, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbOpen},
+                                   {gc_statsKey_DbOpenTime, STATS_FLAGS_TYPE_SUM, &p_db->_statsEntry_DbOpenTime}};
+    _status = statsAllocBulk(p_db->_stats_list, s_stats, sizeof(s_stats)/sizeof(s_stats[0]));
     if(!KSUCCESS(_status))
         return _status;
     p_db->_flagsDBState = DB_FLAGS_STATE_MOUNTED;
