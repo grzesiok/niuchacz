@@ -105,6 +105,20 @@ KSTATUS statsAlloc(stats_list_t* p_stats, const char* statsName, int flags, stat
     return KSTATUS_SUCCESS;
 }
 
+KSTATUS statsAllocBulk(stats_list_t* p_stats, stats_bulk_init_t* p_stats_array, int stats_num) {
+    KSTATUS _status = KSTATUS_SUCCESS;
+    int i;
+
+    for(i = 0;i < stats_num;i++) {
+        _status = statsAlloc(p_stats, p_stats_array[i]._statsEntry_key, p_stats_array[i]._statsEntry_flags, p_stats_array[i]._statsEntry_ptr);
+        if(!KSUCCESS(_status)) {
+            SYSLOG(LOG_ERR, "statsAllocBulk: Error during allocation StatsKey(%s)!", p_stats_array[i]._statsEntry_key);
+            return _status;
+        }
+    }
+    return _status;
+}
+
 void statsFree(stats_list_t* p_stats, const char* statsName) {
     SYSLOG(LOG_INFO, "statsFree(%s, %s)", p_stats->_name, statsName);
     art_delete(&p_stats->_tree, (const unsigned char*)statsName, strlen(statsName));
