@@ -29,5 +29,6 @@ KSTATUS svcKernelStatus(int requested_status);
 int svcKernelGetCurrentStatus(void);
 database_t* svcKernelGetDb(void);
 config_t* svcKernelGetCfg(void);
+stats_list_t* svcKernelGetStatsList(void);
 #define svcKernelIsRunning() (svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_RUNNING || svcKernelGetCurrentStatus() == SVC_KERNEL_STATUS_START_PENDING)
 #endif

@@ -136,3 +136,7 @@ database_t* svcKernelGetDb(void) {
 config_t* svcKernelGetCfg(void) {
     return &gKernelCfg._cfg;
 }
+
+stats_list_t* svcKernelGetStatsList(void) {
+    return gKernelCfg._stats_list;
+}
