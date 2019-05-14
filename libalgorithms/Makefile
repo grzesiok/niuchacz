@@ -12,7 +12,7 @@ ECHO=echo
 	@$(ASM) $(ASMFLAGS) -o $(OBJDIR)/$@ $<
 
 %.o:%.c
-	@$(ECHO) [C] $@
+	@$(ECHO) [C] $@ CFLAGS=$(CFLAGS)
 	@$(CC) $(CFLAGS) -o $(OBJDIR)/$@ $<
 
 FILEASMOBJ=$(FILEASM64OBJ)
@@ -66,6 +66,14 @@ testdoublylinkedlist.out: $(FILECOBJ_TESTDOUBLYLINKEDLIST)
 	@$(ECHO) [COMPILE] testdoublylinkedlist.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTDOUBLYLINKEDLIST)
 	
+testqueue: DEBUG=1
+testqueue: DEFINES+= DEBUG_MODE
+testqueue: ASMFLAGS=-f elf_x86_64 -g
+testqueue: LDFLAGS=-lc -m64 -Wall -g3 -lm $(DEV_LIBS)
+testqueue: CFLAGS=-c -m64 -Wall -g3 -msse4.2 $(DEV_INCLUDES) $(addprefix -D, $(DEFINES))
+testqueue: prepare testqueue.out
+	@$(ECHO) TESTQUUE build Finished
+
 testqueue.out: $(FILECOBJ_TESTQUEUE)
 	@$(ECHO) [COMPILE] testqueue.out
 	@$(LD) $(LDFLAGS) -o $@ $(FILECOBJ_TESTQUEUE)
