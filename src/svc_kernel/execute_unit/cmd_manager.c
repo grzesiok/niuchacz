@@ -15,6 +15,18 @@ static const char* cgInsertCommand =
 typedef struct {
     queue_t *_pjobQueueShortOps;
     queue_t *_pjobQueueLongOps;
+    stats_entry_t _statsEntry_KernelShortOpsEntriesCurrent;
+    stats_entry_t _statsEntry_KernelShortOpsEntriesMax;
+    stats_entry_t _statsEntry_KernelShortOpsMemUsageCurrent;
+    stats_entry_t _statsEntry_KernelShortOpsMemUsageMax;
+    stats_entry_t _statsEntry_KernelShortOpsMemSizeCurrent;
+    stats_entry_t _statsEntry_KernelShortOpsMemSizeMax;
+    stats_entry_t _statsEntry_KernelLongOpsEntriesCurrent;
+    stats_entry_t _statsEntry_KernelLongOpsEntriesMax;
+    stats_entry_t _statsEntry_KernelLongOpsMemUsageCurrent;
+    stats_entry_t _statsEntry_KernelLongOpsMemUsageMax;
+    stats_entry_t _statsEntry_KernelLongOpsMemSizeCurrent;
+    stats_entry_t _statsEntry_KernelLongOpsMemSizeMax;
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
@@ -25,6 +37,19 @@ const char *cg_CmdMgr_ShortOps = "Short Operation Queue";
 const char *cg_CmdMgr_LongOps = "Long Operation Queue";
 const char *cg_CmdMgr_ShortOps_FullName = "Command Manager - Short Operation Queue";
 const char *cg_CmdMgr_LongOps_FullName = "Command Manager - Long Operation Queue";
+
+const char* gc_statsKey_KernelShortOpsEntriesCurrent = "ShortOps Entries Current";
+const char* gc_statsKey_KernelShortOpsEntriesMax = "ShortOps Entries Current";
+const char* gc_statsKey_KernelShortOpsMemUsageCurrent = "ShortOps Memory Usage Current";
+const char* gc_statsKey_KernelShortOpsMemUsageMax = "ShortOps Memory Usage Max";
+const char* gc_statsKey_KernelShortOpsMemSizeCurrent = "ShortOps Memory Size Current";
+const char* gc_statsKey_KernelShortOpsMemSizeMax = "ShortOps Memory Size Max";
+const char* gc_statsKey_KernelLongOpsEntriesCurrent = "LongOps Entries Current";
+const char* gc_statsKey_KernelLongOpsEntriesMax = "LongOps Entries Current";
+const char* gc_statsKey_KernelLongOpsMemUsageCurrent = "LongOps Memory Usage Current";
+const char* gc_statsKey_KernelLongOpsMemUsageMax = "LongOps Memory Usage Max";
+const char* gc_statsKey_KernelLongOpsMemSizeCurrent = "LongOps Memory Size Current";
+const char* gc_statsKey_KernelLongOpsMemSizeMax = "LongOps Memory Size Max";
 
 /* Internal API */
 
@@ -139,6 +164,21 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
         } else if(ret == QUEUE_RET_ERROR) {
             SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during dequeue job", queueName);
         }
+        if(arg == (void*)gCmdManager._pjobQueueShortOps) {
+            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsEntriesCurrent, gCmdManager._pjobQueueShortOps->_stats_EntriesCurrent);
+            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsEntriesMax, gCmdManager._pjobQueueShortOps->_stats_EntriesMax);
+            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsMemUsageCurrent, gCmdManager._pjobQueueShortOps->_stats_MemUsageCurrent);
+            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsMemUsageMax, gCmdManager._pjobQueueShortOps->_stats_MemUsageMax);
+            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsMemSizeCurrent, gCmdManager._pjobQueueShortOps->_stats_MemSizeCurrent);
+            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsMemSizeMax, gCmdManager._pjobQueueShortOps->_stats_MemSizeMax);
+        } else {
+            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsEntriesCurrent, gCmdManager._pjobQueueLongOps->_stats_EntriesCurrent);
+            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsEntriesMax, gCmdManager._pjobQueueLongOps->_stats_EntriesMax);
+            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsMemUsageCurrent, gCmdManager._pjobQueueLongOps->_stats_MemUsageCurrent);
+            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsMemUsageMax, gCmdManager._pjobQueueLongOps->_stats_MemUsageMax);
+            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsMemSizeCurrent, gCmdManager._pjobQueueLongOps->_stats_MemSizeCurrent);
+            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsMemSizeMax, gCmdManager._pjobQueueLongOps->_stats_MemSizeMax);
+        }
     }
     SYSLOG(LOG_INFO, "[CMDMGR][%s] Detaching queue", queueName);
     queue_consumer_free(pqueue);
@@ -154,6 +194,21 @@ __cleanup:
 KSTATUS cmdmgrStart(void) {
     KSTATUS _status;
     SYSLOG(LOG_INFO, "[CMDMGR] Starting...");
+    stats_bulk_init_t s_stats[] = {{gc_statsKey_KernelShortOpsEntriesCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsEntriesCurrent},
+                                   {gc_statsKey_KernelShortOpsEntriesMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsEntriesMax},
+                                   {gc_statsKey_KernelShortOpsMemUsageCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsMemUsageCurrent},
+                                   {gc_statsKey_KernelShortOpsMemUsageMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsMemUsageMax},
+                                   {gc_statsKey_KernelShortOpsMemSizeCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsMemSizeCurrent},
+                                   {gc_statsKey_KernelShortOpsMemSizeMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsMemSizeMax},
+                                   {gc_statsKey_KernelLongOpsEntriesCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsEntriesCurrent},
+                                   {gc_statsKey_KernelLongOpsEntriesMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsEntriesMax},
+                                   {gc_statsKey_KernelLongOpsMemUsageCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsMemUsageCurrent},
+                                   {gc_statsKey_KernelLongOpsMemUsageMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsMemUsageMax},
+                                   {gc_statsKey_KernelLongOpsMemSizeCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsMemSizeCurrent},
+                                   {gc_statsKey_KernelLongOpsMemSizeMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsMemSizeMax}};
+    _status = statsAllocBulk(svcKernelGetStatsList(), s_stats, sizeof(s_stats)/sizeof(s_stats[0]));
+    if(!KSUCCESS(_status))
+        return _status;
     _status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList, 0);
     if(!KSUCCESS(_status))
         return _status;
