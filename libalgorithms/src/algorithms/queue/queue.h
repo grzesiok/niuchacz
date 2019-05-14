@@ -9,8 +9,6 @@
 typedef struct {
     char* _head;
     char* _tail;
-    size_t _maxsize;
-    volatile size_t _leftsize;
     void* _leftborder;
     void* _rightborder;
     pthread_mutex_t _readMutex;
@@ -20,6 +18,14 @@ typedef struct {
     int _consumers;
     int _producers;
     bool _isActive;
+
+    volatile size_t _stats_EntriesCurrent;//number of entries actually stored in queue
+    volatile size_t _stats_EntriesMax;//maximum number of entries stored in queue
+    volatile size_t _stats_MemUsageCurrent;//Aktual usage of memory for stored entries
+    volatile size_t _stats_MemUsageMax;//Maximum amount of memory needed for entries
+    volatile size_t _stats_MemSizeCurrent;//Current size of queue
+    volatile size_t _stats_MemSizeMin;//Minimum size of queue
+    volatile size_t _stats_MemSizeMax;//Maximum size of queue
 } queue_t;
 
 #define QUEUE_RET_ERROR -1

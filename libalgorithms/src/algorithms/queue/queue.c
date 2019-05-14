@@ -47,11 +47,16 @@ queue_t* queue_create(size_t size) {
     pqueue_tmp->_rightborder = memoryPtrMove(pqueue_tmp->_leftborder, size);
     pqueue_tmp->_head = pqueue_tmp->_leftborder;
     pqueue_tmp->_tail = pqueue_tmp->_leftborder;
-    pqueue_tmp->_maxsize = size;
-    pqueue_tmp->_leftsize = size;
     pqueue_tmp->_consumers = 0;
     pqueue_tmp->_producers = 0;
     pqueue_tmp->_isActive = true;
+    pqueue_tmp->_stats_EntriesCurrent = 0;
+    pqueue_tmp->_stats_EntriesMax = 0;
+    pqueue_tmp->_stats_MemUsageCurrent = 0;
+    pqueue_tmp->_stats_MemUsageMax = 0;
+    pqueue_tmp->_stats_MemSizeCurrent = size;
+    pqueue_tmp->_stats_MemSizeMin = size;
+    pqueue_tmp->_stats_MemSizeMax = size;
     if(pthread_mutex_init(&pqueue_tmp->_readMutex, NULL) != 0) {
         all_mutexes_properly_initialized = false;
     }
@@ -135,7 +140,7 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
 
     pthread_mutex_lock(&pqueue->_readMutex);
     // if tail and head are the same => no entries in queue waiting for read
-    while(pqueue->_leftsize == pqueue->_maxsize) {
+    while(pqueue->_stats_MemUsageCurrent == 0) {
         if(timeout != NULL) {
             ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);
         } else ret = pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
@@ -152,7 +157,8 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
     i_queue_read(pqueue, &header, sizeof(queue_entry_t));
     // then copy data
     i_queue_read(pqueue, pbuf, header._size);
-    __atomic_add_fetch(&pqueue->_leftsize, header._size+sizeof(queue_entry_t), __ATOMIC_RELEASE);
+    __atomic_sub_fetch(&pqueue->_stats_EntriesCurrent, 1, __ATOMIC_RELEASE);
+    __atomic_sub_fetch(&pqueue->_stats_MemUsageCurrent, header._size+sizeof(queue_entry_t), __ATOMIC_RELEASE);
     pthread_mutex_unlock(&pqueue->_readMutex);
     // and broadcast changes to other threads
     pthread_cond_broadcast(&pqueue->_writeCondVariable);
@@ -167,14 +173,14 @@ int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct t
     size_t entrySize = nBytes+sizeof(queue_entry_t);
     int ret;
 
-    if(entrySize >= pqueue->_maxsize)
+    if(entrySize >= pqueue->_stats_MemSizeCurrent)
         return QUEUE_RET_ERROR;
     // prepare header
     header._size = nBytes;
     header._crc32 = sse42_crc32(pbuf, nBytes);
     pthread_mutex_lock(&pqueue->_writeMutex);
     // check if we have enough room to store data
-    while(pqueue->_leftsize < entrySize) {
+    while(pqueue->_stats_MemSizeCurrent-pqueue->_stats_MemUsageCurrent < entrySize) {
         if(timeout != NULL) {
             ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
         } else ret = pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
@@ -191,7 +197,12 @@ int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct t
     i_queue_write(pqueue, &header, sizeof(queue_entry_t));
     // and data
     i_queue_write(pqueue, pbuf, header._size);
-    __atomic_sub_fetch(&pqueue->_leftsize, entrySize, __ATOMIC_RELEASE);
+    size_t numOfEntries = __atomic_add_fetch(&pqueue->_stats_EntriesCurrent, 1, __ATOMIC_RELEASE);
+    if(numOfEntries > pqueue->_stats_EntriesMax)
+        pqueue->_stats_EntriesMax = numOfEntries;
+    size_t usageOfMemory = __atomic_add_fetch(&pqueue->_stats_MemUsageCurrent, entrySize, __ATOMIC_RELEASE);
+    if(usageOfMemory > pqueue->_stats_MemUsageMax)
+        pqueue->_stats_MemUsageMax = usageOfMemory;
     pthread_mutex_unlock(&pqueue->_writeMutex);
     pthread_cond_broadcast(&pqueue->_readCondVariable);
     return header._size;
