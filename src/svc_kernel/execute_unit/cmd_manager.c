@@ -13,39 +13,35 @@ static const char* cgInsertCommand =
 		"values (?, ?, ?, ?, ?, ?, ?);";
 
 typedef struct {
-    queue_t *_pjobQueueShortOps;
-    queue_t *_pjobQueueLongOps;
-    stats_entry_t _statsEntry_KernelShortOpsEntriesCurrent;
-    stats_entry_t _statsEntry_KernelShortOpsEntriesMax;
-    stats_entry_t _statsEntry_KernelShortOpsMemUsageCurrent;
-    stats_entry_t _statsEntry_KernelShortOpsMemUsageMax;
-    stats_entry_t _statsEntry_KernelShortOpsMemSizeCurrent;
-    stats_entry_t _statsEntry_KernelShortOpsMemSizeMax;
-    stats_entry_t _statsEntry_KernelLongOpsEntriesCurrent;
-    stats_entry_t _statsEntry_KernelLongOpsEntriesMax;
-    stats_entry_t _statsEntry_KernelLongOpsMemUsageCurrent;
-    stats_entry_t _statsEntry_KernelLongOpsMemUsageMax;
-    stats_entry_t _statsEntry_KernelLongOpsMemSizeCurrent;
-    stats_entry_t _statsEntry_KernelLongOpsMemSizeMax;
+    const char* _queueName;
+    const char* _queueShortName;
+    const char* _queueFullName;
+    queue_t *_pjobQueue;
+    stats_entry_t _statsEntry_EntriesCurrent;
+    stats_entry_t _statsEntry_EntriesMax;
+    stats_entry_t _statsEntry_MemUsageCurrent;
+    stats_entry_t _statsEntry_MemUsageMax;
+    stats_entry_t _statsEntry_MemSizeCurrent;
+    stats_entry_t _statsEntry_MemSizeMax;
+} cmd_manager_queue_t;
+#define CMD_MANAGER_QUEUE_SHORTOPS 0
+#define CMD_MANAGER_QUEUE_LONGOPS 1
+#define CMD_MANAGER_QUEUE_MAX 2
+
+typedef struct {
+    cmd_manager_queue_t _queues[CMD_MANAGER_QUEUE_MAX];
 } CMD_MANAGER, *PCMD_MANAGER;
 
 CMD_MANAGER gCmdManager;
 
-const char *cg_CmdMgr_ShortOps_ShortName = "niuch_cmdshrt";
-const char *cg_CmdMgr_LongOps_ShortName = "niuch_cmdlong";
-const char *cg_CmdMgr_ShortOps = "Short Operation Queue";
-const char *cg_CmdMgr_LongOps = "Long Operation Queue";
-const char *cg_CmdMgr_ShortOps_FullName = "Command Manager - Short Operation Queue";
-const char *cg_CmdMgr_LongOps_FullName = "Command Manager - Long Operation Queue";
-
 const char* gc_statsKey_KernelShortOpsEntriesCurrent = "ShortOps Entries Current";
-const char* gc_statsKey_KernelShortOpsEntriesMax = "ShortOps Entries Current";
+const char* gc_statsKey_KernelShortOpsEntriesMax = "ShortOps Entries Max";
 const char* gc_statsKey_KernelShortOpsMemUsageCurrent = "ShortOps Memory Usage Current";
 const char* gc_statsKey_KernelShortOpsMemUsageMax = "ShortOps Memory Usage Max";
 const char* gc_statsKey_KernelShortOpsMemSizeCurrent = "ShortOps Memory Size Current";
 const char* gc_statsKey_KernelShortOpsMemSizeMax = "ShortOps Memory Size Max";
 const char* gc_statsKey_KernelLongOpsEntriesCurrent = "LongOps Entries Current";
-const char* gc_statsKey_KernelLongOpsEntriesMax = "LongOps Entries Current";
+const char* gc_statsKey_KernelLongOpsEntriesMax = "LongOps Entries Max";
 const char* gc_statsKey_KernelLongOpsMemUsageCurrent = "LongOps Memory Usage Current";
 const char* gc_statsKey_KernelLongOpsMemUsageMax = "LongOps Memory Usage Max";
 const char* gc_statsKey_KernelLongOpsMemSizeCurrent = "LongOps Memory Size Current";
@@ -131,22 +127,21 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
     KSTATUS _status = KSTATUS_SUCCESS;
     void* buffer;
     PJOB pjob;
-    queue_t* pqueue = (queue_t*)arg;
+    cmd_manager_queue_t* pThreadCtx = (cmd_manager_queue_t*)arg;
     int ret;
     static struct timespec time_to_wait = {0, 0};
-    const char* queueName = (arg == (void*)gCmdManager._pjobQueueShortOps) ? cg_CmdMgr_ShortOps : cg_CmdMgr_LongOps;
 
-    SYSLOG(LOG_INFO, "[CMDMGR][%s] Starting Job Executor", queueName);
+    SYSLOG(LOG_INFO, "[CMDMGR][%s] Starting Job Executor", pThreadCtx->_queueName);
     buffer = MALLOC(char, 1024*1024); //Allocating 1MB per each executor
     if(buffer == NULL) {
-        SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during allocating local memory", queueName);
+        SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during allocating local memory", pThreadCtx->_queueName);
         _status = KSTATUS_UNSUCCESS;
         //TODO: Restrt cmdmgrExecutor and queue on the fly
         goto __cleanup;
     }
     pjob = (PJOB)buffer;
-    if(!queue_consumer_new(pqueue)) {
-        SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during attaching queue", queueName);
+    if(!queue_consumer_new(pThreadCtx->_pjobQueue)) {
+        SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during attaching queue", pThreadCtx->_queueName);
         _status = KSTATUS_UNSUCCESS;
         //TODO: Restrt cmdmgrExecutor and queue on the fly
         goto __cleanup_free_tls;
@@ -154,38 +149,29 @@ KSTATUS i_cmdmgrExecutor(void* arg) {
     while(svcKernelIsRunning()) {
         timerGetRealCurrentTimestamp(&time_to_wait);
         time_to_wait.tv_sec += 1;
-        ret = queue_read(pqueue, pjob, &time_to_wait);
+        ret = queue_read(pThreadCtx->_pjobQueue, pjob, &time_to_wait);
         if(ret > 0) {
             /* Reformat structure after pulling it from queue */
             i_cmdmgrJobStructFormat(pjob);
             if(!KSUCCESS(i_cmdmgrJobExec(pjob))) {
-                SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during executing job(%s, %d)", queueName, pjob->_cmd, ret);
+                SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during executing job(%s, %d)", pThreadCtx->_queueName, pjob->_cmd, ret);
             }
         } else if(ret == QUEUE_RET_ERROR) {
-            SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during dequeue job", queueName);
+            SYSLOG(LOG_ERR, "[CMDMGR][%s] Error during dequeue job", pThreadCtx->_queueName);
         }
-        if(arg == (void*)gCmdManager._pjobQueueShortOps) {
-            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsEntriesCurrent, gCmdManager._pjobQueueShortOps->_stats_EntriesCurrent);
-            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsEntriesMax, gCmdManager._pjobQueueShortOps->_stats_EntriesMax);
-            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsMemUsageCurrent, gCmdManager._pjobQueueShortOps->_stats_MemUsageCurrent);
-            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsMemUsageMax, gCmdManager._pjobQueueShortOps->_stats_MemUsageMax);
-            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsMemSizeCurrent, gCmdManager._pjobQueueShortOps->_stats_MemSizeCurrent);
-            statsUpdate(&gCmdManager._statsEntry_KernelShortOpsMemSizeMax, gCmdManager._pjobQueueShortOps->_stats_MemSizeMax);
-        } else {
-            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsEntriesCurrent, gCmdManager._pjobQueueLongOps->_stats_EntriesCurrent);
-            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsEntriesMax, gCmdManager._pjobQueueLongOps->_stats_EntriesMax);
-            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsMemUsageCurrent, gCmdManager._pjobQueueLongOps->_stats_MemUsageCurrent);
-            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsMemUsageMax, gCmdManager._pjobQueueLongOps->_stats_MemUsageMax);
-            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsMemSizeCurrent, gCmdManager._pjobQueueLongOps->_stats_MemSizeCurrent);
-            statsUpdate(&gCmdManager._statsEntry_KernelLongOpsMemSizeMax, gCmdManager._pjobQueueLongOps->_stats_MemSizeMax);
-        }
+        statsUpdate(&pThreadCtx->_statsEntry_EntriesCurrent, pThreadCtx->_pjobQueue->_stats_EntriesCurrent);
+        statsUpdate(&pThreadCtx->_statsEntry_EntriesMax, pThreadCtx->_pjobQueue->_stats_EntriesMax);
+        statsUpdate(&pThreadCtx->_statsEntry_MemUsageCurrent, pThreadCtx->_pjobQueue->_stats_MemUsageCurrent);
+        statsUpdate(&pThreadCtx->_statsEntry_MemUsageMax, pThreadCtx->_pjobQueue->_stats_MemUsageMax);
+        statsUpdate(&pThreadCtx->_statsEntry_MemSizeCurrent, pThreadCtx->_pjobQueue->_stats_MemSizeCurrent);
+        statsUpdate(&pThreadCtx->_statsEntry_MemSizeMax, pThreadCtx->_pjobQueue->_stats_MemSizeMax);
     }
-    SYSLOG(LOG_INFO, "[CMDMGR][%s] Detaching queue", queueName);
-    queue_consumer_free(pqueue);
+    SYSLOG(LOG_INFO, "[CMDMGR][%s] Detaching queue", pThreadCtx->_queueName);
+    queue_consumer_free(pThreadCtx->_pjobQueue);
 __cleanup_free_tls:
     FREE(buffer);
 __cleanup:
-    SYSLOG(LOG_INFO, "[CMDMGR][%s] Stopping Job Executor", queueName);
+    SYSLOG(LOG_INFO, "[CMDMGR][%s] Stopping Job Executor", pThreadCtx->_queueName);
     return _status;
 }
 
@@ -193,43 +179,58 @@ __cleanup:
 
 KSTATUS cmdmgrStart(void) {
     KSTATUS _status;
+    cmd_manager_queue_t* pqueue;
     SYSLOG(LOG_INFO, "[CMDMGR] Starting...");
-    stats_bulk_init_t s_stats[] = {{gc_statsKey_KernelShortOpsEntriesCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsEntriesCurrent},
-                                   {gc_statsKey_KernelShortOpsEntriesMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsEntriesMax},
-                                   {gc_statsKey_KernelShortOpsMemUsageCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsMemUsageCurrent},
-                                   {gc_statsKey_KernelShortOpsMemUsageMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsMemUsageMax},
-                                   {gc_statsKey_KernelShortOpsMemSizeCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsMemSizeCurrent},
-                                   {gc_statsKey_KernelShortOpsMemSizeMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelShortOpsMemSizeMax},
-                                   {gc_statsKey_KernelLongOpsEntriesCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsEntriesCurrent},
-                                   {gc_statsKey_KernelLongOpsEntriesMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsEntriesMax},
-                                   {gc_statsKey_KernelLongOpsMemUsageCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsMemUsageCurrent},
-                                   {gc_statsKey_KernelLongOpsMemUsageMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsMemUsageMax},
-                                   {gc_statsKey_KernelLongOpsMemSizeCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsMemSizeCurrent},
-                                   {gc_statsKey_KernelLongOpsMemSizeMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._statsEntry_KernelLongOpsMemSizeMax}};
-    _status = statsAllocBulk(svcKernelGetStatsList(), s_stats, sizeof(s_stats)/sizeof(s_stats[0]));
+
+    gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._queueName = "Short Operation Queue";
+    gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._queueShortName = "niuch_cmdshrt";
+    gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._queueFullName = "Command Manager - Short Operation Queue";
+    gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._pjobQueue = queue_create(1024*1024);
+    if(gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._pjobQueue == NULL)
+        return KSTATUS_UNSUCCESS;
+    stats_bulk_init_t s_stats_shortops[] = {
+        {gc_statsKey_KernelShortOpsEntriesCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._statsEntry_EntriesCurrent},
+        {gc_statsKey_KernelShortOpsEntriesMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._statsEntry_EntriesMax},
+        {gc_statsKey_KernelShortOpsMemUsageCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._statsEntry_MemUsageCurrent},
+        {gc_statsKey_KernelShortOpsMemUsageMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._statsEntry_MemUsageMax},
+        {gc_statsKey_KernelShortOpsMemSizeCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._statsEntry_MemSizeCurrent},
+        {gc_statsKey_KernelShortOpsMemSizeMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._statsEntry_MemSizeMax}};
+    _status = statsAllocBulk(svcKernelGetStatsList(), s_stats_shortops, sizeof(s_stats_shortops)/sizeof(s_stats_shortops[0]));
+    if(!KSUCCESS(_status))
+        return _status;
+    gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._queueName = "Long Operation Queue";
+    gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._queueShortName = "niuch_cmdlong";
+    gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._queueFullName = "Command Manager - Long Operation Queue";
+    gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._pjobQueue = queue_create(1024*1024);
+    if(gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._pjobQueue == NULL)
+        return KSTATUS_UNSUCCESS;
+    stats_bulk_init_t s_stats_longops[] = {
+        {gc_statsKey_KernelLongOpsEntriesCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._statsEntry_EntriesCurrent},
+        {gc_statsKey_KernelLongOpsEntriesMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._statsEntry_EntriesMax},
+        {gc_statsKey_KernelLongOpsMemUsageCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._statsEntry_MemUsageCurrent},
+        {gc_statsKey_KernelLongOpsMemUsageMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._statsEntry_MemUsageMax},
+        {gc_statsKey_KernelLongOpsMemSizeCurrent, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._statsEntry_MemSizeCurrent},
+        {gc_statsKey_KernelLongOpsMemSizeMax, STATS_FLAGS_TYPE_LAST, &gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._statsEntry_MemSizeMax}};
+    _status = statsAllocBulk(svcKernelGetStatsList(), s_stats_longops, sizeof(s_stats_longops)/sizeof(s_stats_longops[0]));
     if(!KSUCCESS(_status))
         return _status;
     _status = dbExec(svcKernelGetDb(), cgCreateSchemaCmdList, 0);
     if(!KSUCCESS(_status))
         return _status;
-    gCmdManager._pjobQueueShortOps = queue_create(1024*1024);//1MB
-    if(gCmdManager._pjobQueueShortOps == NULL)
-        return KSTATUS_UNSUCCESS;
-    gCmdManager._pjobQueueLongOps = queue_create(1024*1024/*1024*/);//1GB (should be 1MB at the beginning) TODO: dynamically increase queue_size
-    if(gCmdManager._pjobQueueLongOps == NULL)
-        return KSTATUS_UNSUCCESS;
-    _status = psmgrCreateThread(cg_CmdMgr_ShortOps_ShortName, cg_CmdMgr_ShortOps_FullName, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueShortOps);
+    pqueue = &gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS];
+    _status = psmgrCreateThread(pqueue->_queueShortName, pqueue->_queueFullName, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, pqueue);
     if(!KSUCCESS(_status))
         return _status;
-    _status = psmgrCreateThread(cg_CmdMgr_LongOps_ShortName, cg_CmdMgr_LongOps_FullName, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, gCmdManager._pjobQueueLongOps);
+    pqueue = &gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS];
+    _status = psmgrCreateThread(pqueue->_queueShortName, pqueue->_queueFullName, PSMGR_THREAD_KERNEL, i_cmdmgrExecutor, NULL, pqueue);
     return _status;
 }
 
 void cmdmgrStop(void) {
-    SYSLOG(LOG_INFO, "[CMDMGR] Stopping %s...", cg_CmdMgr_ShortOps);
-    queue_destroy(gCmdManager._pjobQueueShortOps);
-    SYSLOG(LOG_INFO, "[CMDMGR] Stopping %s...", cg_CmdMgr_LongOps);
-    queue_destroy(gCmdManager._pjobQueueLongOps);
+    SYSLOG(LOG_INFO, "[CMDMGR] Stopping %s...", gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._queueName);
+    queue_destroy(gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._pjobQueue);
+    SYSLOG(LOG_INFO, "[CMDMGR] Stopping %s...", gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._queueName);
+    queue_destroy(gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._pjobQueue);
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up commands...");
     dbExecQuery(svcKernelGetDb(), "select code from cmdmgr_cmdlist", 0, i_cmdmgrDestroySingleCommand, NULL);
     SYSLOG(LOG_INFO, "[CMDMGR] Cleaning up...");
@@ -284,6 +285,7 @@ KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
     KSTATUS _status = KSTATUS_UNSUCCESS;
     int ret = 0;
     size_t queueEntrySize;
+    queue_t* pqueue;
 
     switch(mode) {
     //if mode == JobModeAsynchronous then function should back immediatelly and schedule job to future
@@ -294,17 +296,15 @@ KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
         case JobQueueTypeNone:
             return KSTATUS_UNSUCCESS;
         case JobQueueTypeShortOps:
-            if(queue_producer_new(gCmdManager._pjobQueueShortOps)) {
-                ret = queue_write(gCmdManager._pjobQueueShortOps, pjob, queueEntrySize, NULL);
-                queue_producer_free(gCmdManager._pjobQueueShortOps);
-            }
+            pqueue = gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._pjobQueue;
             break;
         case JobQueueTypeLongOps:
-            if(queue_producer_new(gCmdManager._pjobQueueLongOps)) {
-                ret = queue_write(gCmdManager._pjobQueueLongOps, pjob, queueEntrySize, NULL);
-                queue_producer_free(gCmdManager._pjobQueueLongOps);
-            }
+            pqueue = gCmdManager._queues[CMD_MANAGER_QUEUE_LONGOPS]._pjobQueue;
             break;
+        }
+        if(queue_producer_new(pqueue)) {
+            ret = queue_write(pqueue, pjob, queueEntrySize, NULL);
+            queue_producer_free(pqueue);
         }
         if(ret > 0 && (size_t)ret == queueEntrySize) {
             _status = KSTATUS_SUCCESS;
