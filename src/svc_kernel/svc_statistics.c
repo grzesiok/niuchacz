@@ -14,7 +14,7 @@ stats_mgr_t g_statsMgr;
 //internal API
 int i_statsmgrDumpSingleListCallback(void *data, const unsigned char *key, uint32_t key_len, void *value) {
     stats_entry_t *p_entry = (stats_entry_t*)value;
-    SYSLOG(LOG_INFO, "[STATSMGR] Entry flags=%08x value=%llu name=%.*s", p_entry->_flags, p_entry->_value, key_len, key);
+    SYSLOG(LOG_INFO, "[STATSMGR] Entry flags=%08x value=%20llu name=%.*s", p_entry->_flags, p_entry->_value, key_len, key);
     return 0;
 }
 
