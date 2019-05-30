@@ -305,16 +305,16 @@ KSTATUS cmdmgrJobExec(PJOB pjob, JobMode mode, JobQueueType queueType) {
         if(queue_producer_new(pqueue)) {
             ret = queue_write(pqueue, pjob, queueEntrySize, NULL);
             queue_producer_free(pqueue);
+            if(ret > 0 && (size_t)ret == queueEntrySize) {
+                _status = KSTATUS_SUCCESS;
+            }
         }
-        if(ret > 0 && (size_t)ret == queueEntrySize) {
-            _status = KSTATUS_SUCCESS;
-        }
-        FREE(pjob);
+        cmdmgrJobCleanup(pjob);
         break;
     //if mode == JobModeSynchronous then function should wait until execution is done
     case JobModeSynchronous:
         _status = i_cmdmgrJobExec(pjob);
-        FREE(pjob);
+        cmdmgrJobCleanup(pjob);
         break;
     }
     return _status;
