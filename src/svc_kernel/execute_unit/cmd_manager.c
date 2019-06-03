@@ -185,7 +185,7 @@ KSTATUS cmdmgrStart(void) {
     gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._queueName = "Short Operation Queue";
     gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._queueShortName = "niuch_cmdshrt";
     gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._queueFullName = "Command Manager - Short Operation Queue";
-    gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._pjobQueue = queue_create(1024*1024);
+    gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._pjobQueue = queue_create(1024*1024*1024);
     if(gCmdManager._queues[CMD_MANAGER_QUEUE_SHORTOPS]._pjobQueue == NULL)
         return KSTATUS_UNSUCCESS;
     stats_bulk_init_t s_stats_shortops[] = {
