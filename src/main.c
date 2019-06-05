@@ -93,7 +93,7 @@ KSTATUS pcap_thread_routine(void* arg)
     char errbuf[PCAP_ERRBUF_SIZE];
     struct pcap_pkthdr header;
     void* packet;
-    char filter_exp[] = "ip"; /* filter expression (only IP packets) */
+    char filter_exp[] = "ip and not (dst net 192.168.0.0/16 and src net 192.168.0.0/16)"; /* filter expression (only IP packets) */
     struct bpf_program fp; /* compiled filter program (expression) */
     bpf_u_int32 net;
     bpf_u_int32 mask;
