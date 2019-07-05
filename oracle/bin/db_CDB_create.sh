@@ -13,7 +13,7 @@ dbca -silent -createDatabase \
  -numberOfPDBs 0 \
  -databaseType MULTIPURPOSE \
  -automaticMemoryManagement false \
- -totalMemory 1536 \
+ -totalMemory 8192 \
  -storageType FS \
  -datafileDestination "/u01data/" \
  -redoLogFileSize 100 \
