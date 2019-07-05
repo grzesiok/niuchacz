@@ -1,6 +1,6 @@
 #/binbash
 
-CONNECTION_STRING="sys / as sysdba"
+CONNECTION_STRING="/ as sysdba"
 
 sqlplus -s $CONNECTION_STRING <<EOF
 whenever sqlerror exit sql.sqlcode;
