@@ -1,36 +1,26 @@
-alter system set local_listener='(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=localhost)(PORT=1521)))';
-alter system register;
-
-alter session set container = pdbniuchacz;
-
 --Create tablespaces
 create tablespace ts_logging_data
-    datafile '&&PATH/ts_logging_data_1.dbf'
-    size 10M
+    datafile size 10M
     autoextend on next 10M maxsize unlimited
     extent management local
     segment space management auto;
 create tablespace ts_logging_idx
-    datafile '&&PATH/ts_logging_idx_1.dbf'
-    size 10M
+    datafile size 10M
     autoextend on next 10M maxsize unlimited
     extent management local
     segment space management auto;
 create tablespace ts_loader_idx
-    datafile '&&PATH/ts_loader_idx_1.dbf'
-    size 1G
+    datafile size 1G
     autoextend on next 100M maxsize unlimited
     extent management local
     segment space management auto;
 create tablespace ts_loader_data
-    datafile '&&PATH/ts_loader_data_1.dbf'
-    size 5G
+    datafile size 5G
     autoextend on next 100M maxsize unlimited
     extent management local
     segment space management auto;
 create tablespace ts_loader_files
-    datafile '&&PATH/ts_loader_files_1.dbf'
-    size 3G
+    datafile size 3G
     autoextend on next 100M maxsize unlimited
     extent management local
     segment space management auto;
@@ -55,14 +45,5 @@ grant read, write on directory dwh_netdumps_dir to dwh_load;
 
 create directory dwh_netdumpshist_dir as 'ext_tables/netdumps/history';
 grant read, write on directory dwh_netdumpshist_dir to dwh_load;
-
-CREATE OR REPLACE TRIGGER open_pdbs 
-  AFTER STARTUP ON DATABASE 
-BEGIN 
-   EXECUTE IMMEDIATE 'ALTER PLUGGABLE DATABASE ALL OPEN'; 
-END open_pdbs;
-/
-
-@$ORACLE_HOME/rdbms/admin/profload.sql
 
 --privileges
