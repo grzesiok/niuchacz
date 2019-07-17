@@ -16,6 +16,8 @@ alter pluggable database $DB_NAME open read write;
 alter pluggable database $DB_NAME save state;
 alter session set container = $DB_NAME;
 grant DBA to $ADM_LOGINNAME container = current;
+create tablespace users;
+alter user $ADM_LOGINNAME default tablespace users;
 exit;
 EOF
 
