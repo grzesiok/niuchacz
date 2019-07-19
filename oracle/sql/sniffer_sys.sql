@@ -30,14 +30,14 @@ grant connect, resource to dwh_load;
 alter user dwh_load quota unlimited on ts_loader_files;
 alter user dwh_load quota unlimited on ts_loader_data;
 alter user dwh_load quota unlimited on ts_loader_idx;
-alter user dwh_load quota 0M on users;
+alter user dwh_load quota unlimited on users;
 grant create procedure to dwh_load;
 
 create user dwh_logging identified by dwh_logging default tablespace users account unlock;
 grant connect, resource to dwh_logging;
 alter user dwh_logging quota unlimited on ts_logging_data;
 alter user dwh_logging quota unlimited on ts_logging_idx;
-alter user dwh_logging quota 0M on users;
+alter user dwh_logging quota unlimited on users;
 grant create procedure to dwh_logging;
 
 create directory dwh_netdumps_dir as 'ext_tables/netdumps';
