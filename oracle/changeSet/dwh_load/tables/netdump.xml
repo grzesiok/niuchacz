@@ -12,7 +12,7 @@ create table netdump
 (
   eth_timestamp timestamp,
   eth_src varchar2(17),
-  eth_dst varchar2(157),
+  eth_dst varchar2(17),
   ip_src varchar2(15),
   ip_dst varchar2(15),
   hostname_src varchar2(255),
