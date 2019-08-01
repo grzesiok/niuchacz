@@ -1,4 +1,5 @@
 #/binbash
+set -e
 
 TNS_NAME=$1
 ADM_LOGINGNAME=$2
