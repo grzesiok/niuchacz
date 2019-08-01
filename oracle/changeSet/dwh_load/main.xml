@@ -6,4 +6,5 @@
   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
          http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
 	<include file="tables/netdump.xml" relativeToChangelogFile="true"/>
+	<include file="tables/ext_netdump.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
