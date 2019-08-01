@@ -1,4 +1,5 @@
 #/binbash
+set -e
 
 CONNECTION_STRING="/ as sysdba"
 
