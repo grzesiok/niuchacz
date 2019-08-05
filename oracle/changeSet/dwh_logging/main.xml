@@ -6,17 +6,22 @@
   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
          http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
         
-	<changeSet id="1" author="grzegorz.kasprzyszak">
+	<changeSet id="1" author="grzegorz.kasprzyszak" runOnChange="true">
 		<sqlFile path="packages/pk_logging.pks"
                          relativeToChangelogFile="true"
 		         splitStatements="false"
 		         endDelimiter="/"/>
 	</changeSet>
-	<changeSet id="2" author="grzegorz.kasprzyszak">
+	<changeSet id="2" author="grzegorz.kasprzyszak" runOnChange="true">
 		<sqlFile path="packages/pk_logging.pkb"
                          relativeToChangelogFile="true"
 		         splitStatements="false"
 		         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="3" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sql splitStatements="true">
+		grant execute on pk_logging to dwh_load;
+		</sql>
 	</changeSet>
 
 </databaseChangeLog>

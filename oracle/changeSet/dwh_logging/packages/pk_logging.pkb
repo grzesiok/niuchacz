@@ -1,5 +1,5 @@
 create or replace
-package pk_logging as
+package body pk_logging as
 
   procedure log_job_start(p_in_job_name varchar2) as
   begin
@@ -28,4 +28,3 @@ package pk_logging as
   end;
 
 end;
-/
