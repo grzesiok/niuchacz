@@ -1,0 +1,2 @@
+CREATE OR REPLACE EDITIONABLE TYPE "T_IMPORT" is table of o_import;
+/
