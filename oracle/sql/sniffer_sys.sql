@@ -35,6 +35,7 @@ grant create procedure to dwh_load;
 begin
   for c in (select * from dba_directories where directory_name in ('DWH_NETDUMPS_DIR', 'DWH_NETDUMPSHIST_DIR'))
   loop
+    dbms_java.grant_permission('DWH_LOAD', 'SYS:java.io.FilePermission', c.directory_path, 'read');
     dbms_java.grant_permission('DWH_LOAD', 'SYS:java.io.FilePermission', c.directory_path||'/*', 'read');
   end loop;
 end;
