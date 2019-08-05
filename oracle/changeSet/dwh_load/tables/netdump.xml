@@ -22,5 +22,12 @@ create table netdump
 ) pctfree 0;
 		</sql>
 	</changeSet>
+	<changeSet id="2" author="grzegorz.kasprzyszak" runOnChange="false">
+		<sql splitStatements="false">
+		begin
+		  dbms_errlog.create_error_log(dml_table_name => 'NETDUMP');
+		end;
+		</sql>
+	</changeSet>
 
 </databaseChangeLog>
