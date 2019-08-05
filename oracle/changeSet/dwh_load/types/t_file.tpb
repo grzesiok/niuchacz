@@ -5,4 +5,3 @@ CREATE OR REPLACE EDITIONABLE TYPE BODY t_file as
     return;
   end;
 end;
-/

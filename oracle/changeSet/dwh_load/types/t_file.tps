@@ -12,4 +12,3 @@ CREATE OR REPLACE EDITIONABLE TYPE t_file authid current_user as object
   hashvalue number,
   constructor function T_FILE(i_filepath varchar2) return self as result
 );
-/

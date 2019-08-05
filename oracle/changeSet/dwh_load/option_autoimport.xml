@@ -67,6 +67,12 @@
                          endDelimiter="/"/>
 	</changeSet>
 	<changeSet id="11" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="types/t_string.tps"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="12" author="grzegorz.kasprzyszak" runOnChange="true">
 		<sqlFile path="packages/pk_import.pkb"
                          relativeToChangelogFile="true"
                          splitStatements="false"

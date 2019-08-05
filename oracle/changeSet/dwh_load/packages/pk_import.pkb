@@ -1,4 +1,4 @@
-create or replace PACKAGE BODY PKG_IMPORT AS
+create or replace PACKAGE BODY PK_IMPORT AS
 
   function f_get_list_of_imports(l_import_timestamp timestamp) return t_import is
     l_import_types t_string;
@@ -39,7 +39,7 @@ create or replace PACKAGE BODY PKG_IMPORT AS
     l_dir_archive varchar2(4000);
     l_dir_current varchar2(4000);
   begin
-    pk_logging.log_job_start(p_in_job_name => 'IMPORT');
+    dwh_logging.pk_logging.log_job_start(p_in_job_name => 'IMPORT');
     l_all_imports := f_get_list_of_imports(systimestamp);
     for i in 1..l_all_imports.count
     loop
@@ -51,10 +51,10 @@ create or replace PACKAGE BODY PKG_IMPORT AS
       from all_directories where directory_name = l_all_imports(i).f_get_directory_histname;
       for c in c_filelist(l_dir_current, l_all_imports(i).f_get_filterpath)
       loop
-        pk_logging.log_file_start(p_in_job_name => 'IMPORT',
-                                  p_in_file_name => c.filename);
+        dwh_logging.pk_logging.log_file_start(p_in_job_name => 'IMPORT',
+                                              p_in_file_name => c.filename);
         l_all_imports(i).p_import_file(c.filename);
-        pk_logging.log_file_end(p_in_status => pk_logging.c_logstatus_success);
+        dwh_logging.pk_logging.log_file_end(p_in_status => dwh_logging.pk_logging.c_logstatus_success);
         utl_file.frename(l_all_imports(i).f_get_directory_name, c.filename, l_all_imports(i).f_get_directory_histname, c.filename);
       end loop;
       for c in c_filelist(l_dir_archive, l_all_imports(i).f_get_filterpath)
@@ -62,13 +62,12 @@ create or replace PACKAGE BODY PKG_IMPORT AS
         utl_file.fremove(l_all_imports(i).f_get_directory_histname, c.filename);
       end loop;
     end loop;
-    pk_logging.log_job_end(p_in_status => pk_logging.c_logstatus_success);
+    dwh_logging.pk_logging.log_job_end(p_in_status => dwh_logging.pk_logging.c_logstatus_success);
   exception
     when others then
-      pk_logging.log_error(p_in_errortype => pk_logging.c_logerrtype_critical,
-                           p_in_message => sqlerrm);
+      dwh_logging.pk_logging.log_error(p_in_errortype => dwh_logging.pk_logging.c_logerrtype_critical,
+                                       p_in_message => sqlerrm);
       raise_application_error(-20000, DBMS_UTILITY.FORMAT_ERROR_BACKTRACE, true);
   end;
 
-END PKG_IMPORT;
-/
+END PK_IMPORT;

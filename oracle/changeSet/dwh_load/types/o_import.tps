@@ -7,4 +7,3 @@ CREATE OR REPLACE EDITIONABLE TYPE "O_IMPORT" force authid definer AS OBJECT
   member function f_is_active return boolean,
   member procedure p_import_file(i_filename varchar2)
 ) not final not instantiable;
-/
