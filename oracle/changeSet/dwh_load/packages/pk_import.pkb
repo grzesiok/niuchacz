@@ -33,6 +33,7 @@ create or replace PACKAGE BODY PK_IMPORT AS
       with
         tmp as (select filename, lastmodified from table(pk_files.get_file_list(i_dir))
                 where isreadable = 'Y'
+                  and isdir = 'N'
                   and regexp_like(filename, i_filter, 'i')
                 order by filename)
       select filename from tmp;
