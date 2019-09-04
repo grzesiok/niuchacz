@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+	<include file="option_autoimport.xml" relativeToChangelogFile="true"/>
+	<include file="tables/netdump.xml" relativeToChangelogFile="true"/>
+	<include file="tables/ext_netdump.xml" relativeToChangelogFile="true"/>
+        <changeSet id="1" author="grzegorz.kasprzyszak" runOnChange="true">
+                <sqlFile path="types/o_import_netdump.tps"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+        </changeSet>
+        <changeSet id="2" author="grzegorz.kasprzyszak" runOnChange="true">
+                <sqlFile path="types/o_import_netdump.tpb"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+        </changeSet>
+</databaseChangeLog>

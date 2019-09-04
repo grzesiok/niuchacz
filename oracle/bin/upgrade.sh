@@ -1,2 +1,2 @@
 #!/bin/bash
-ant niuchacz-upgrade -Dniuchacz.database.version=1
+ant niuchacz-upgrade

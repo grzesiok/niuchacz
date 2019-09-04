@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+         
+	<changeSet id="1" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="java/jFile.sql"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="2" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="types/t_file.tps"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="3" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="types/t_file.tpb"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="4" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="types/t_files.tps"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="5" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="packages/pk_files.pks"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="6" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="packages/pk_files.pkb"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="7" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="types/o_import.tps"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="8" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="types/o_import.tpb"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="9" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="types/t_import.tps"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="10" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="packages/pk_import.pks"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="11" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="types/t_string.tps"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+	<changeSet id="12" author="grzegorz.kasprzyszak" runOnChange="true">
+		<sqlFile path="packages/pk_import.pkb"
+                         relativeToChangelogFile="true"
+                         splitStatements="false"
+                         endDelimiter="/"/>
+	</changeSet>
+
+</databaseChangeLog>

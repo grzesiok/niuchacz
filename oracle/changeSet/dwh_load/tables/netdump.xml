@@ -12,7 +12,7 @@ create table netdump
 (
   eth_timestamp timestamp,
   eth_src varchar2(17),
-  eth_dst varchar2(157),
+  eth_dst varchar2(17),
   ip_src varchar2(15),
   ip_dst varchar2(15),
   hostname_src varchar2(255),
@@ -20,6 +20,13 @@ create table netdump
   ip_len number,
   ip_sum number
 ) pctfree 0;
+		</sql>
+	</changeSet>
+	<changeSet id="2" author="grzegorz.kasprzyszak" runOnChange="false">
+		<sql splitStatements="false">
+		begin
+		  dbms_errlog.create_error_log(dml_table_name => 'NETDUMP');
+		end;
 		</sql>
 	</changeSet>
 

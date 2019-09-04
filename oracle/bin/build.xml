@@ -19,7 +19,7 @@
     <target name="niuchacz-upgrade" depends="prepare">
     	<echo message="niuchacz-changeset: DWH_LOGGING"/>
         <updateDatabase
-                changeLogFile="../changeSet/${niuchacz.database.version}/dwh_logging/main.xml"
+                changeLogFile="../changeSet/dwh_logging/main.xml"
                 driver="${niuchacz.database.driver}"
                 url="${niuchacz.database.url}"
                 username="${niuchacz.database.dwh_logging.username}"
@@ -28,7 +28,7 @@
                 />
     	<echo message="niuchacz-changeset: DWH_LOAD"/>
         <updateDatabase
-                changeLogFile="../changeSet/${niuchacz.database.version}/dwh_load/main.xml"
+                changeLogFile="../changeSet/dwh_load/main.xml"
                 driver="${niuchacz.database.driver}"
                 url="${niuchacz.database.url}"
                 username="${niuchacz.database.dwh_load.username}"
