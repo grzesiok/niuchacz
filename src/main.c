@@ -253,7 +253,7 @@ int main(int argc, char* argv[]) {
     stats_bulk_init_t s_stats[] = {{gc_statsKey_NiuchaczPCAPEnq, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnq},
                                    {gc_statsKey_NiuchaczPCAPEnqTime, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnqTime},
                                    {gc_statsKey_NiuchaczPCAPEnqFail, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnqFail}};
-    _status = statsAllocBulk(p_db->_stats_list, s_stats, sizeof(s_stats)/sizeof(s_stats[0]));
+    _status = statsAllocBulk(g_Main._stats_list, s_stats, sizeof(s_stats)/sizeof(s_stats[0]));
     if(!KSUCCESS(_status)) {
         SYSLOG(LOG_ERR, "[NIUCHACZ] Error during allocation Niuchacz Stats!");
         goto __free_stats_andexit;
