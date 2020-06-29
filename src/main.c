@@ -250,19 +250,12 @@ int main(int argc, char* argv[]) {
     g_Main._stats_list = statsCreate("NIUCHACZ");
     if(g_Main._stats_list == NULL)
         goto __free_stats_andexit;
-    _status = statsAlloc(g_Main._stats_list, gc_statsKey_NiuchaczPCAPEnq, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnq);
+    stats_bulk_init_t s_stats[] = {{gc_statsKey_NiuchaczPCAPEnq, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnq},
+                                   {gc_statsKey_NiuchaczPCAPEnqTime, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnqTime},
+                                   {gc_statsKey_NiuchaczPCAPEnqFail, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnqFail}};
+    _status = statsAllocBulk(g_Main._stats_list, s_stats, sizeof(s_stats)/sizeof(s_stats[0]));
     if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[NIUCHACZ] Error during allocation StatsKey(%s)!", gc_statsKey_NiuchaczPCAPEnq);
-        goto __free_stats_andexit;
-    }
-    _status = statsAlloc(g_Main._stats_list, gc_statsKey_NiuchaczPCAPEnqTime, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnqTime);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[NIUCHACZ] Error during allocation StatsKey(%s)!", gc_statsKey_NiuchaczPCAPEnqTime);
-        goto __free_stats_andexit;
-    }
-    _status = statsAlloc(g_Main._stats_list, gc_statsKey_NiuchaczPCAPEnqFail, STATS_FLAGS_TYPE_SUM, &g_Main._statsEntry_NiuchaczPCAPEnqFail);
-    if(!KSUCCESS(_status)) {
-        SYSLOG(LOG_ERR, "[NIUCHACZ] Error during allocation StatsKey(%s)!", gc_statsKey_NiuchaczPCAPEnqFail);
+        SYSLOG(LOG_ERR, "[NIUCHACZ] Error during allocation Niuchacz Stats!");
         goto __free_stats_andexit;
     }
     svcKernelStatus(SVC_KERNEL_STATUS_RUNNING);

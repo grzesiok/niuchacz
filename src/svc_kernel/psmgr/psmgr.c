@@ -56,7 +56,7 @@ static signal_handlers_t g_psmgrHandledSignalsMainOld[] = {
 };
 
 static void* i_psmgrExecRoutine(void* p_arg) {
-    int ret;
+    int ret = 1;
     PPSMGR_THREAD p_threadCtx = (PPSMGR_THREAD)p_arg, p_threadCtxOld = (PPSMGR_THREAD)p_arg;
 
     p_threadCtx = doublylinkedlistAdd(g_psmgrCfg._threadList, pthread_self(), p_threadCtx, sizeof(PSMGR_THREAD));
