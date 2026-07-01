@@ -1,7 +1,7 @@
 #include "bst.h"
-#include "../../../include/math.h"
-#include "../../../include/memory.h"
-#include "../timer/timer.h"
+#include "math.h"
+#include "memory.h"
+#include "algorithms/timer/timer.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

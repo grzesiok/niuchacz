@@ -1,5 +1,5 @@
 #include "database.h"
-#include "../svc_kernel.h"
+#include "svc_kernel/svc_kernel.h"
 #include "algorithms.h"
 #include "flags.h"
 

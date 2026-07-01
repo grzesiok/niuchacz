@@ -1,5 +1,5 @@
 #include "doublylinkedlist.h"
-#include "../spinlock/spinlock.h"
+#include "algorithms/spinlock/spinlock.h"
 #include <stdlib.h>
 #include <string.h>
 

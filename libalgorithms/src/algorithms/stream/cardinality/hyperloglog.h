@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include "../../hash/hash.h"
+#include "algorithms/hash/hash.h"
 
 typedef struct HYPERLOGLOG {
 	unsigned int _k;

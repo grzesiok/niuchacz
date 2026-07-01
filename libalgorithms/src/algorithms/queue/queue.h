@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 #include <pthread.h>
-#include "../../../include/memory.h"
+#include "memory.h"
 #include <stdbool.h>
 
 typedef struct {

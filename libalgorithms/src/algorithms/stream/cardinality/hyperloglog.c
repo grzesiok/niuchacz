@@ -2,7 +2,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../../../include/memory.h"
+#include "memory.h"
 
 //internal API
 static unsigned char i_hyperloglogGetRightmost0seqBits(unsigned long long val, unsigned char bitfrom, unsigned char nbits) {
