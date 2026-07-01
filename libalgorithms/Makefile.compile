@@ -10,8 +10,7 @@ FILECOBJ=\
     src/algorithms/doublylinkedlist/doublylinkedlist.o\
     src/algorithms/queue/queue.o\
     src/algorithms/timer/timer.o\
-    src/algorithms/tree/bst.o\
-    src/algorithms/perf/perf.o
+    src/algorithms/tree/bst.o
 
 #plik wynikowy
 OUTFILE=libalgorithms.so
@@ -31,8 +30,7 @@ FILECOBJ_TESTDOUBLYLINKEDLIST=\
 FILECOBJ_TESTQUEUE=\
     tests/testqueue.o\
     src/algorithms/timer/timer.o\
-    src/algorithms/queue/queue.o\
-    src/algorithms/perf/perf.o
+    src/algorithms/queue/queue.o
 
 FILECOBJ_TESTBST=\
     tests/testbst.o\

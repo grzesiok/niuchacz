@@ -30,17 +30,17 @@ prepare:
 
 clean_dependencies:
 	@$(MAKE) -C libalgorithms clean
-	#@$(MAKE) -C sqlite clean
+	@$(MAKE) -C sqlite clean
 	
 build_dependencies:
 	@$(MAKE) -C libalgorithms build
-	#@cd sqlite && ./configure
-	#@$(MAKE) -C sqlite all
+	@cd sqlite && ./configure
+	@$(MAKE) -C sqlite all
 
 devbuild_dependencies:
-	@$(MAKE) -C libalgorithms devbuild
-	#@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
-	#@$(MAKE) -C sqlite all
+	@$(MAKE) -C libalgorithms build
+	@cd sqlite && ./configure CPPFLAGS=-DSQLITE_DEBUG
+	@$(MAKE) -C sqlite all
 
 #komendy zewnętrzne
 build: DEBUG=0

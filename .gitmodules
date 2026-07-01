@@ -1,6 +1,3 @@
 [submodule "libconfig"]
 	path = libconfig
 	url = https://github.com/hyperrealm/libconfig.git
-[submodule "ocilib"]
-	path = ocilib
-	url = https://github.com/vrogier/ocilib
