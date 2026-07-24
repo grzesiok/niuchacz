@@ -25,7 +25,7 @@ $(top_builddir)/sqlite/.libs/libsqlite3.so:
 	@echo "=== Building standalone SQLite component ==="
 	cd $(top_srcdir)/sqlite && \
 	if [ ! -f Makefile ]; then \
-		./configure $(if $(filter -DDEBUG_MODE,$(DEBUG_DEFINES)),CPPFLAGS=-DSQLITE_DEBUG); \
+		./configure $(if $(filter -DDEBUG_MODE,$(DEBUG_DEFINES)),CPPFLAGS="-DSQLITE_DEBUG" CFLAGS="-g -O2 -Wno-implicit-function-declaration"); \
 	fi && \
 	$(MAKE) all
 
