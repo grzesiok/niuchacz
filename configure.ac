@@ -43,7 +43,6 @@ AC_CHECK_LIB([pthread], [pthread_create], [], [AC_MSG_ERROR([libpthread missing]
 AC_CHECK_LIB([pcap], [pcap_open_live], [], [AC_MSG_ERROR([libpcap missing])])
 AC_CHECK_LIB([ssl], [SSL_CTX_new], [], [AC_MSG_ERROR([libssl missing])])
 AC_CHECK_LIB([crypto], [EVP_EncryptInit], [], [AC_MSG_ERROR([libcrypto missing])])
-AC_CHECK_LIB([anl], [gethostbyname_id], [], [AC_MSG_ERROR([libanl missing])])
 AC_CHECK_LIB([config], [config_init], [], [AC_MSG_ERROR([libconfig missing])])
 
 # Define output files (added the Makefile for libalgorithms)
