@@ -55,6 +55,9 @@ AC_CHECK_LIB([ssl], [SSL_CTX_new], [], [AC_MSG_ERROR([libssl missing])])
 AC_CHECK_LIB([crypto], [EVP_EncryptInit], [], [AC_MSG_ERROR([libcrypto missing])])
 AC_CHECK_LIB([config], [config_init], [], [AC_MSG_ERROR([libconfig missing])])
 
+# Verify Check library for C unit testing framework
+PKG_CHECK_MODULES([CHECK], [check >= 0.9.4], [], [AC_MSG_ERROR([Check framework missing (libcheck)])])
+
 # ====================================================================
 # 5. Output Files Configuration
 # ====================================================================

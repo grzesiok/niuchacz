@@ -114,3 +114,13 @@ sqlite/sqlite3session.h
 # ==========================================
 .*
 oracle/lib/*
+
+# ====================================================================
+# Autotools Test Harness Artefacts (NEW)
+# ====================================================================
+# Ignore test runner results summary and execution logs
+*.log
+*.trs
+
+# Ignore the standard test driver script generated in the root
+/test-driver

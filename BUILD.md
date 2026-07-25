@@ -5,10 +5,13 @@ or
 
 autoreconf -fi
 
-# Option A: Production Build (Optimized profile)
+## Option A: Production Build (Optimized profile)
 ./configure
 make
 
-# Option B: Development Build (-g3 and DEBUG_MODE profile)
+## Option B: Development Build (-g3 and DEBUG_MODE profile)
 ./configure --enable-debug
 make
+
+# Run Unit tests
+make check
