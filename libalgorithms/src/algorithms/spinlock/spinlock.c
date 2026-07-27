@@ -1,28 +1,30 @@
 #include "spinlock.h"
 
-bool spinlockLockTry(volatile bool* pFlag)
+bool spinlockLockTry(spinlock_t *pFlag)
 {
-   // acquire memory barrier and compiler barrier
-   return !__atomic_test_and_set(pFlag, __ATOMIC_ACQUIRE);
+    /* Acquire memory barrier and compiler barrier */
+    return !__atomic_test_and_set(pFlag, __ATOMIC_ACQUIRE);
 }
 
-void spinlockLock(volatile bool* pFlag)
+void spinlockLock(spinlock_t *pFlag)
 {
-    for(;;) {
-        // acquire memory barrier and compiler barrier
+    for (;;) {
+        /* Test-and-Set: Try to capture the lock immediately */
         if (!__atomic_test_and_set(pFlag, __ATOMIC_ACQUIRE)) {
             return;
         }
 
-        // relaxed waiting, usually no memory barriers (optional)
-        while(__atomic_load_n(pFlag, __ATOMIC_RELAXED)) {
-            asm("pause");
+        /* Test: Relaxed spinning loop to avoid memory bus flooding */
+        while (__atomic_load_n(pFlag, __ATOMIC_RELAXED) == SPINLOCK_LOCKED) {
+            #if defined(__x86_64__) || defined(_M_X64)
+            asm volatile("pause");
+            #endif
         }
     }
 }
 
-void spinlockUnlock(volatile bool* pFlag)
+void spinlockUnlock(spinlock_t *pFlag)
 {
-    // release memory barrier and compiler barrier
+    /* Release memory barrier and compiler barrier */
     __atomic_clear(pFlag, __ATOMIC_RELEASE);
 }

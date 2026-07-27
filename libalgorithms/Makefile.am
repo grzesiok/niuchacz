@@ -7,7 +7,7 @@ AM_CPPFLAGS = \
     -I$(top_srcdir)/libalgorithms/src \
     -I$(top_srcdir)/libalgorithms/src/algorithms/queue \
     -I$(top_srcdir)/libalgorithms/src/algorithms/spinlock \
-    -I$(top_srcdir)/libalgorithms/src/algorithms/doublylinkedlist \
+    -I$(top_srcdir)/libalgorithms/src/algorithms/dlist \
     -I$(top_srcdir)/libalgorithms/src/algorithms/timer \
     -I$(top_srcdir)/libalgorithms/src/algorithms/tree \
     -I$(top_srcdir)/libalgorithms/src/algorithms/hash \
@@ -24,7 +24,7 @@ libalgorithms_la_SOURCES = \
     src/ext/art/art.c \
     src/algorithms/hash/hash.c \
     src/algorithms/spinlock/spinlock.c \
-    src/algorithms/doublylinkedlist/doublylinkedlist.c \
+    src/algorithms/dlist/dlist.c \
     src/algorithms/queue/queue.c \
     src/algorithms/timer/timer.c \
     src/algorithms/tree/bst.c
@@ -38,8 +38,8 @@ libalgorithms_la_LDFLAGS = -version-info 1:0:0
 # ====================================================================
 
 # Specify test runners executed via 'make check' command execution
-TESTS = test_queue.out test_bst.out
-check_PROGRAMS = test_queue.out test_bst.out
+TESTS = test_queue.out test_bst.out test_spinlock.out test_dlist.out
+check_PROGRAMS = test_queue.out test_bst.out test_spinlock.out test_dlist.out
 
 # Source definitions and compilation flags for the queue test binary
 test_queue_out_SOURCES = tests/test_queue.c
@@ -50,3 +50,13 @@ test_queue_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
 test_bst_out_SOURCES = tests/test_bst.c
 test_bst_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
 test_bst_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
+
+# Source definitions and compilation flags for the Spinlock test binary
+test_spinlock_out_SOURCES = tests/test_spinlock.c
+test_spinlock_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+test_spinlock_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
+
+# Source definitions and compilation flags for the Doubly Linked List test binary
+test_dlist_out_SOURCES = tests/test_dlist.c
+test_dlist_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+test_dlist_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread

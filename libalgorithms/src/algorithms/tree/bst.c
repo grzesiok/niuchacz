@@ -97,16 +97,37 @@ void bst_destroy(bst_t* pbst) {
 int bst_insert(bst_t *pbst, uint64_t key, const void *pbuf, size_t nBytes, const struct timespec *dataTimeout) {
     bst_node_t* pbst_node = pbst->_root;
     bst_node_t* pbst_parentnode = NULL;
+
     while(pbst_node) {
         if(pbst_node->_key == key) {
             if(nBytes <= pbst_node->_dataSize) {
                 memcpy(memoryPtrMove(pbst_node, sizeof(bst_node_t)), pbuf, nBytes);
+                if(dataTimeout == NULL) {
+                    memset(&pbst_node->_dataTimeout, 0, sizeof(struct timespec));
+                } else pbst_node->_dataTimeout = *dataTimeout;
                 return nBytes;
             } else {
-                pbst_node = i_bst_clone_node(pbst_node, nBytes);
-                goto __insert;
+                /* Clone and allocate a larger node memory block */
+                bst_node_t *new_node = i_bst_clone_node(pbst_node, nBytes);
+                if (!new_node) return -1;
+                
+                memcpy(memoryPtrMove(new_node, sizeof(bst_node_t)), pbuf, nBytes);
+                if(dataTimeout == NULL) {
+                    memset(&new_node->_dataTimeout, 0, sizeof(struct timespec));
+                } else new_node->_dataTimeout = *dataTimeout;
+
+                /* Safely link the newly cloned node back to its parent context */
+                if (pbst_parentnode == NULL) {
+                    pbst->_root = new_node;
+                } else if (pbst_parentnode->_key > key) {
+                    pbst_parentnode->_left = new_node;
+                } else {
+                    pbst_parentnode->_right = new_node;
+                }
+                return nBytes;
             }
         }
+        
         pbst_parentnode = pbst_node;
         if(pbst_node->_key > key) {
             pbst_node = pbst_node->_left;
@@ -114,16 +135,21 @@ int bst_insert(bst_t *pbst, uint64_t key, const void *pbuf, size_t nBytes, const
             pbst_node = pbst_node->_right;
         }
     }
+
+    /* Creating a brand new node since no key match was discovered */
     pbst_node = i_bst_alloc_node(key, nBytes);
+    if(!pbst_node) return -1;
+    
     memcpy(memoryPtrMove(pbst_node, sizeof(bst_node_t)), pbuf, nBytes);
+    if(dataTimeout == NULL) {
+        memset(&pbst_node->_dataTimeout, 0, sizeof(struct timespec));
+    } else pbst_node->_dataTimeout = *dataTimeout;
+
     if(pbst->_root == NULL) {
         pbst->_root = pbst_node;
         return nBytes;
     }
-__insert:
-    if(dataTimeout == NULL) {
-        memset(pbst_node, 0, sizeof(struct timespec));
-    } else pbst_node->_dataTimeout = *dataTimeout;
+
     if(pbst_parentnode->_key > key) {
         pbst_parentnode->_left = pbst_node;
     } else {

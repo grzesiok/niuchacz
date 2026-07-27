@@ -1,10 +1,43 @@
 #include "queue.h"
+#include "memory.h"
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <errno.h>
 #include <stdint.h>
+#include <pthread.h>
 #include <immintrin.h>
+
+/* 
+ * Actual structure definition layout.
+ * Visible ONLY inside this compilation unit (queue.c).
+ */
+struct queue_t {
+    /* Pointers and memory boundaries */
+    char *_head;
+    char *_tail;
+    void *_leftborder;
+    void *_rightborder;
+
+    /* Thread synchronization primitives */
+    pthread_mutex_t _readMutex;
+    pthread_cond_t _readCondVariable;
+    pthread_mutex_t _writeMutex;
+    pthread_cond_t _writeCondVariable;
+
+    /* Metrics and queue statistics */
+    size_t _stats_EntriesCurrent;
+    size_t _stats_EntriesMax;
+    size_t _stats_MemUsageCurrent;
+    size_t _stats_MemUsageMax;
+    size_t _stats_MemSizeCurrent;
+    size_t _stats_MemSizeMin;
+    size_t _stats_MemSizeMax;
+
+    /* State and thread tracking counters */
+    int _consumers;
+    int _producers;
+    bool _isActive;
+};
 
 typedef struct {
     size_t _size;
@@ -40,9 +73,10 @@ static void i_queue_read(queue_t *pqueue, void* dst, size_t size) {
 
 queue_t* queue_create(size_t size) {
     bool all_mutexes_properly_initialized = true;
-    queue_t *pqueue_tmp = malloc(size+sizeof(queue_t));
+    queue_t *pqueue_tmp = malloc(size + sizeof(queue_t));
     if(pqueue_tmp == NULL)
         return NULL;
+    
     pqueue_tmp->_leftborder = memoryPtrMove(pqueue_tmp, sizeof(queue_t));
     pqueue_tmp->_rightborder = memoryPtrMove(pqueue_tmp->_leftborder, size);
     pqueue_tmp->_head = pqueue_tmp->_leftborder;
@@ -57,6 +91,7 @@ queue_t* queue_create(size_t size) {
     pqueue_tmp->_stats_MemSizeCurrent = size;
     pqueue_tmp->_stats_MemSizeMin = size;
     pqueue_tmp->_stats_MemSizeMax = size;
+
     if(pthread_mutex_init(&pqueue_tmp->_readMutex, NULL) != 0) {
         all_mutexes_properly_initialized = false;
     }
@@ -139,7 +174,6 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
     int ret;
 
     pthread_mutex_lock(&pqueue->_readMutex);
-    // if tail and head are the same => no entries in queue waiting for read
     while(pqueue->_stats_MemUsageCurrent == 0) {
         if(timeout != NULL) {
             ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);
@@ -153,14 +187,11 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
             return QUEUE_RET_TIMEOUT;
         }
     }
-    // copy header as first bytes)
     i_queue_read(pqueue, &header, sizeof(queue_entry_t));
-    // then copy data
     i_queue_read(pqueue, pbuf, header._size);
     __atomic_sub_fetch(&pqueue->_stats_EntriesCurrent, 1, __ATOMIC_RELEASE);
-    __atomic_sub_fetch(&pqueue->_stats_MemUsageCurrent, header._size+sizeof(queue_entry_t), __ATOMIC_RELEASE);
+    __atomic_sub_fetch(&pqueue->_stats_MemUsageCurrent, header._size + sizeof(queue_entry_t), __ATOMIC_RELEASE);
     pthread_mutex_unlock(&pqueue->_readMutex);
-    // and broadcast changes to other threads
     pthread_cond_broadcast(&pqueue->_writeCondVariable);
     if(sse42_crc32(pbuf, header._size) != header._crc32) {
         return QUEUE_RET_ERROR;
@@ -170,17 +201,15 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
 
 int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct timespec *timeout) {
     queue_entry_t header;
-    size_t entrySize = nBytes+sizeof(queue_entry_t);
+    size_t entrySize = nBytes + sizeof(queue_entry_t);
     int ret;
 
     if(entrySize >= pqueue->_stats_MemSizeCurrent)
         return QUEUE_RET_ERROR;
-    // prepare header
     header._size = nBytes;
     header._crc32 = sse42_crc32(pbuf, nBytes);
     pthread_mutex_lock(&pqueue->_writeMutex);
-    // check if we have enough room to store data
-    while(pqueue->_stats_MemSizeCurrent-pqueue->_stats_MemUsageCurrent < entrySize) {
+    while(pqueue->_stats_MemSizeCurrent - pqueue->_stats_MemUsageCurrent < entrySize) {
         if(timeout != NULL) {
             ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
         } else ret = pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
@@ -193,9 +222,7 @@ int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct t
             return QUEUE_RET_TIMEOUT;
         }
     }
-    // copy header
     i_queue_write(pqueue, &header, sizeof(queue_entry_t));
-    // and data
     i_queue_write(pqueue, pbuf, header._size);
     size_t numOfEntries = __atomic_add_fetch(&pqueue->_stats_EntriesCurrent, 1, __ATOMIC_RELEASE);
     if(numOfEntries > pqueue->_stats_EntriesMax)
