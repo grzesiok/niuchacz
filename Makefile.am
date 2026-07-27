@@ -32,50 +32,13 @@ $(top_builddir)/sqlite/.libs/libsqlite3.so:
 # Inject SQLite shared library as a strict build dependency for all targets
 BUILT_SOURCES = $(top_builddir)/sqlite/.libs/libsqlite3.so
 
-# Source definitions for the main application binary
+# Source definitions for the main application binary service deployment assets
 niuchacz_out_SOURCES = \
-    src/kernel.c \
-    src/svc_kernel/psmgr/psmgr.c \
-    src/svc_kernel/database/database.c \
-    src/svc_kernel/svc_lock.c \
-    src/svc_kernel/svc_kernel.c \
-    src/svc_kernel/svc_statistics.c \
-    src/svc_kernel/svc_update.c \
-    src/svc_kernel/execute_unit/cmd_manager.c \
-    src/main.c \
-    src/import_pcap.c \
-    src/export_file.c \
-    src/packet_analyze.c \
-    src/mapper.c
-niuchacz_out_LDADD = $(LOCAL_LIBS) $(SYSTEM_LIBS)
-
-# Source definitions for the application tests
-#testhashperf_out_SOURCES = src/kernel.c src/tests/testhashperf.c
-#testhashperf_out_LDADD = $(LOCAL_LIBS) $(SYSTEM_LIBS)
-
-#testpsmgr_out_SOURCES = \
-#    src/kernel.c \
-#    src/tests/testpsmgr.c \
-#    src/svc_kernel/database/database.c \
-#    src/svc_kernel/svc_lock.c \
-#    src/svc_kernel/svc_kernel.c \
-#    src/svc_kernel/svc_statistics.c \
-#    src/svc_kernel/svc_update.c \
-#    src/svc_kernel/execute_unit/cmd_manager.c \
-#    src/svc_kernel/psmgr/psmgr.c
-#testpsmgr_out_LDADD = $(LOCAL_LIBS) $(SYSTEM_LIBS)
-
-#testcmdmgr_out_SOURCES = \
-#    src/kernel.c \
-#    src/svc_kernel/psmgr/psmgr.c \
-#    src/svc_kernel/database/database.c \
-#    src/svc_kernel/svc_lock.c \
-#    src/svc_kernel/svc_kernel.c \
-#    src/svc_kernel/svc_statistics.c \
-#    src/svc_kernel/svc_update.c \
-#    src/svc_kernel/execute_unit/cmd_manager.c \
-#    src/tests/testcmdmgr.c
-#testcmdmgr_out_LDADD = $(LOCAL_LIBS) $(SYSTEM_LIBS)
+    src/workermgr/workermgr.c \
+    src/psmgr/psmgr.c \
+    src/database/database.c \
+    src/main.c
+niuchacz_out_LDADD = $(top_builddir)/libalgorithms/libalgorithms.la $(top_builddir)/sqlite/.libs/libsqlite3.so -lpthread -lpcap -lssl -lcrypto -lconfig
 
 # Clean hook to ensure 'make clean' also wipes the SQLite sandbox
 clean-local:

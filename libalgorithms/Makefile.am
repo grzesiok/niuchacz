@@ -11,6 +11,7 @@ AM_CPPFLAGS = \
     -I$(top_srcdir)/libalgorithms/src/algorithms/timer \
     -I$(top_srcdir)/libalgorithms/src/algorithms/tree \
     -I$(top_srcdir)/libalgorithms/src/algorithms/hash \
+    -I$(top_srcdir)/libalgorithms/src/algorithms/telemetry \
     -I$(top_srcdir)/libalgorithms/src/algorithms/stream/cardinality \
     -I$(top_srcdir)/libalgorithms/src/ext/art \
     -I$(top_srcdir)/libalgorithms/src/ext/murmur \
@@ -27,7 +28,8 @@ libalgorithms_la_SOURCES = \
     src/algorithms/dlist/dlist.c \
     src/algorithms/queue/queue.c \
     src/algorithms/timer/timer.c \
-    src/algorithms/tree/bst.c
+    src/algorithms/tree/bst.c \
+    src/algorithms/telemetry/telemetry.c
 
 # Link the library (Automake adds -shared and -fPIC automatically via Libtool)
 libalgorithms_la_LIBADD = -lpthread
@@ -38,8 +40,8 @@ libalgorithms_la_LDFLAGS = -version-info 1:0:0
 # ====================================================================
 
 # Specify test runners executed via 'make check' command execution
-TESTS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out
-check_PROGRAMS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out
+TESTS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out test_telemetry.out
+check_PROGRAMS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out test_telemetry.out
 
 # Source definitions and compilation flags for the queue test binary
 test_queue_out_SOURCES = tests/test_queue.c
@@ -70,3 +72,8 @@ test_timer_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
 test_hll_out_SOURCES = tests/test_hll.c
 test_hll_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
 test_hll_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
+
+# Source definitions and compilation flags for the Telemetry test binary
+test_telemetry_out_SOURCES = tests/test_telemetry.c
+test_telemetry_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+test_telemetry_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
