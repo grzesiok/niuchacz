@@ -15,3 +15,7 @@ make
 
 # Run Unit tests
 make check
+
+or
+
+make check VERBOSE=1
