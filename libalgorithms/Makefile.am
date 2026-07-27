@@ -18,7 +18,7 @@ AM_CPPFLAGS = \
 
 # Library source files (compiled with Libtool)
 libalgorithms_la_SOURCES = \
-    src/algorithms/stream/cardinality/hyperloglog.c \
+    src/algorithms/stream/cardinality/hll.c \
     src/ext/murmur/MurmurHash2.c \
     src/ext/murmur/MurmurHash2_64.c \
     src/ext/art/art.c \
@@ -38,8 +38,8 @@ libalgorithms_la_LDFLAGS = -version-info 1:0:0
 # ====================================================================
 
 # Specify test runners executed via 'make check' command execution
-TESTS = test_queue.out test_bst.out test_spinlock.out test_dlist.out
-check_PROGRAMS = test_queue.out test_bst.out test_spinlock.out test_dlist.out
+TESTS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out
+check_PROGRAMS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out
 
 # Source definitions and compilation flags for the queue test binary
 test_queue_out_SOURCES = tests/test_queue.c
@@ -60,3 +60,13 @@ test_spinlock_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
 test_dlist_out_SOURCES = tests/test_dlist.c
 test_dlist_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
 test_dlist_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
+
+# Source definitions and compilation flags for the Timer test binary
+test_timer_out_SOURCES = tests/test_timer.c
+test_timer_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+test_timer_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
+
+# Source definitions and compilation flags for the HyperLogLog test binary
+test_hll_out_SOURCES = tests/test_hll.c
+test_hll_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+test_hll_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
