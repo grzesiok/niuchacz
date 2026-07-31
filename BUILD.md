@@ -6,11 +6,11 @@ or
 autoreconf -fi
 
 ## Option A: Production Build (Optimized profile)
-./configure
+./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var
 make
 
 ## Option B: Development Build (-g3 and DEBUG_MODE profile)
-./configure --enable-debug
+./configure --enable-debug --prefix=/usr --sysconfdir=/etc --localstatedir=/var
 make
 
 # Run Unit tests

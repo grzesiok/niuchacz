@@ -169,3 +169,10 @@ int psmgr_wait_for_process(pid_t pid, int *out_exit_status) {
     }
     return -1;
 }
+
+bool psmgr_is_running(void) {
+    if (getppid() <= 1) {
+        return false;
+    }
+    return true;
+}

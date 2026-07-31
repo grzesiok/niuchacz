@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Functional callback prototypes for process execution loops - returning standard int status */
+/* Functional callback prototypes for process execution loops */
 typedef int (*psmgr_exec_routine_t)(void *);
 
 /* Process classification categories mapped to system privileges */
@@ -14,7 +14,7 @@ typedef enum {
     PSMGR_PROC_USER   = 2
 } psmgr_proc_type_t;
 
-/* Public API Management Lifecycles (Returns 0 on success, negative on failure) */
+/* Public API Management Lifecycles */
 int psmgr_start(void);
 void psmgr_stop(void);
 void psmgr_stop_user_processes(void);
@@ -31,5 +31,12 @@ int psmgr_create_process(
 );
 
 int psmgr_wait_for_process(pid_t pid, int *out_exit_status);
+
+/* 
+ * PUBLIC API HEALTH CHECK: 
+ * Replacement for svcKernelIsRunning. Multiprocess-safe daemon status evaluator.
+ * Returns true if the calling context process should keep executing loops.
+ */
+bool psmgr_is_running(void);
 
 #endif /* _PS_MANAGER_H */

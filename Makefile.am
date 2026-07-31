@@ -18,7 +18,21 @@ SYSTEM_LIBS = -lpthread -lpcap -lssl -lcrypto -lconfig
 
 # Programs to build
 bin_PROGRAMS = niuchacz.out
-#noinst_PROGRAMS = testhashperf.out testpsmgr.out testcmdmgr.out
+
+# Source definitions for the main application binary service deployment assets
+niuchacz_out_SOURCES = \
+    src/workermgr/workermgr.c \
+    src/psmgr/psmgr.c \
+    src/database/database.c \
+    src/main.c \
+    src/packet_analyze.c
+
+/* FIXED: Replaced raw variables duplicate references to clear native tracking maps variables */
+niuchacz_out_LDADD = $(LOCAL_LIBS) $(SYSTEM_LIBS)
+
+# ====================================================================
+# SQLITE EMBEDDED SANDBOX AUTOMATED COMPILATION INTRINSICS
+# ====================================================================
 
 # Rule to build the standalone SQLite folder using its own configure system
 $(top_builddir)/sqlite/.libs/libsqlite3.so:
@@ -32,28 +46,44 @@ $(top_builddir)/sqlite/.libs/libsqlite3.so:
 # Inject SQLite shared library as a strict build dependency for all targets
 BUILT_SOURCES = $(top_builddir)/sqlite/.libs/libsqlite3.so
 
-# Source definitions for the main application binary service deployment assets
-niuchacz_out_SOURCES = \
-    src/workermgr/workermgr.c \
-    src/psmgr/psmgr.c \
-    src/database/database.c \
-    src/main.c
-niuchacz_out_LDADD = $(top_builddir)/libalgorithms/libalgorithms.la $(top_builddir)/sqlite/.libs/libsqlite3.so -lpthread -lpcap -lssl -lcrypto -lconfig
-
 # Clean hook to ensure 'make clean' also wipes the SQLite sandbox
 clean-local:
 	@if [ -f $(top_srcdir)/sqlite/Makefile ]; then \
 		$(MAKE) -C $(top_srcdir)/sqlite clean; \
 	fi
 
-# Automated installation hook for systemd services and deployment assets
+# ====================================================================
+# CONFIGURATION AND SYSTEMD AUTOMATED NATIVE INSTALLATION PIPELINES
+# ====================================================================
+
+# 1. Define configuration delivery paths (maps down to /etc/niuchacz/)
+niuchaczconfdir = $(sysconfdir)/niuchacz
+niuchaczconf_DATA = sys/etc/niuchacz/niuchacz.conf
+
+# 2. Define Systemd unit configuration targets install directories locations
+systemddir = $(prefix)/lib/systemd/system
+systemd_DATA = sys/etc/systemd/system/niuchacz.service
+
+# 3. Explicitly include non-code file structures assets into the distribution tarball (make dist)
+EXTRA_DIST = \
+    sys/etc/niuchacz/niuchacz.conf \
+    sys/etc/systemd/system/niuchacz.service
+
+# 4. Hook post-install scripts to ensure state folders exist and manage systemd lifecycle safely
+install-data-hook:
+	$(MKDIR_P) $(DESTDIR)$(localstatedir)/lib/niuchacz
+	chmod 750 $(DESTDIR)$(localstatedir)/lib/niuchacz
+	@echo "=== Refreshing systemd unit layout indices ==="
+	-systemctl daemon-reload 2>/dev/null || true
+
+# 5. Pre-install lifecycle hooks to safely stop running daemons before binaries updates
 install-exec-hook:
-	-systemctl stop niuchacz.service
-	$(MKDIR_P) $(DESTDIR)/etc/niuchacz
-	$(MKDIR_P) $(DESTDIR)$(libdir)
-	cp $(top_builddir)/sqlite/.libs/libsqlite3.so $(DESTDIR)$(libdir)/libsqlite3.so
-	cp $(top_builddir)/libalgorithms/.libs/libalgorithms.so $(DESTDIR)$(libdir)/libalgorithms.so
-	cp $(top_srcdir)/sys/etc/systemd/system/niuchacz.service $(DESTDIR)/etc/systemd/system/niuchacz.service
-	cp -r $(top_srcdir)/sys/etc/niuchacz/* $(DESTDIR)/etc/niuchacz/
-	-systemctl daemon-reload
-	-systemctl start niuchacz.service
+	-systemctl stop niuchacz.service 2>/dev/null || true
+
+# 6. Clean deployment files and runtime artifacts during uninstall requests executions
+uninstall-hook:
+	-systemctl stop niuchacz.service 2>/dev/null || true
+	rm -rf $(DESTDIR)$(niuchaczconfdir)
+	rm -f $(DESTDIR)$(systemddir)/niuchacz.service
+	rm -rf $(DESTDIR)$(localstatedir)/lib/niuchacz
+	-systemctl daemon-reload 2>/dev/null || true

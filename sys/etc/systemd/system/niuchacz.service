@@ -1,13 +1,19 @@
 [Unit]
-Description=Niuchacz service
+Description=Niuchacz Multiprocess Packet Sniffer Daemon
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/niuchacz /etc/niuchacz/niuchacz.conf
+ExecStart=/usr/bin/niuchacz.out /etc/niuchacz/niuchacz.conf
 User=root
 ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-abort
+Restart=on-failure
+# Ensures that if one isolated component crashes unexpectedly, systemd monitors the group
+KillMode=control-group
+
+# Sandbox security directory restrictions definitions
+StateDirectory=niuchacz
+ConfigurationDirectory=niuchacz
 
 [Install]
 WantedBy=multi-user.target

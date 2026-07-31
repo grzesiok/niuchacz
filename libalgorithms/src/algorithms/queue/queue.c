@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <immintrin.h>
+#include <sys/mman.h>
 
 /* 
  * Actual structure definition layout.
@@ -73,9 +74,18 @@ static void i_queue_read(queue_t *pqueue, void* dst, size_t size) {
 
 queue_t* queue_create(size_t size) {
     bool all_mutexes_properly_initialized = true;
-    queue_t *pqueue_tmp = malloc(size + sizeof(queue_t));
-    if(pqueue_tmp == NULL)
+    size_t total_allocation_size = size + sizeof(queue_t);
+
+    /* Allocate continuous shared memory layout maps */
+    queue_t *pqueue_tmp = (queue_t*)mmap(NULL, total_allocation_size, 
+                                         PROT_READ | PROT_WRITE, 
+                                         MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+                                         
+    if(pqueue_tmp == MAP_FAILED)
         return NULL;
+    
+    /* FIXED: Zero out the entire allocated memory chunk (header + data buffer) to erase memory garbage */
+    memset(pqueue_tmp, 0, total_allocation_size);
     
     pqueue_tmp->_leftborder = memoryPtrMove(pqueue_tmp, sizeof(queue_t));
     pqueue_tmp->_rightborder = memoryPtrMove(pqueue_tmp->_leftborder, size);
@@ -83,7 +93,7 @@ queue_t* queue_create(size_t size) {
     pqueue_tmp->_tail = pqueue_tmp->_leftborder;
     pqueue_tmp->_consumers = 0;
     pqueue_tmp->_producers = 0;
-    pqueue_tmp->_isActive = true;
+    pqueue_tmp->_isActive = true; /* Now safely explicitly set on clean zeroed memory */
     pqueue_tmp->_stats_EntriesCurrent = 0;
     pqueue_tmp->_stats_EntriesMax = 0;
     pqueue_tmp->_stats_MemUsageCurrent = 0;
@@ -92,45 +102,79 @@ queue_t* queue_create(size_t size) {
     pqueue_tmp->_stats_MemSizeMin = size;
     pqueue_tmp->_stats_MemSizeMax = size;
 
-    if(pthread_mutex_init(&pqueue_tmp->_readMutex, NULL) != 0) {
+    pthread_mutexattr_t mutex_attr;
+    pthread_condattr_t cond_attr;
+
+    pthread_mutexattr_init(&mutex_attr);
+    pthread_mutexattr_setpshared(&mutex_attr, PTHREAD_PROCESS_SHARED);
+
+    pthread_condattr_init(&cond_attr);
+    pthread_condattr_setpshared(&cond_attr, PTHREAD_PROCESS_SHARED);
+
+    if(pthread_mutex_init(&pqueue_tmp->_readMutex, &mutex_attr) != 0) {
         all_mutexes_properly_initialized = false;
     }
-    if(pthread_cond_init(&pqueue_tmp->_readCondVariable, NULL) != 0) {
+    if(pthread_cond_init(&pqueue_tmp->_readCondVariable, &cond_attr) != 0) {
         all_mutexes_properly_initialized = false;
     }
-    if(pthread_mutex_init(&pqueue_tmp->_writeMutex, NULL) != 0) {
+    if(pthread_mutex_init(&pqueue_tmp->_writeMutex, &mutex_attr) != 0) {
         all_mutexes_properly_initialized = false;
     }
-    if(pthread_cond_init(&pqueue_tmp->_writeCondVariable, NULL) != 0) {
+    if(pthread_cond_init(&pqueue_tmp->_writeCondVariable, &cond_attr) != 0) {
         all_mutexes_properly_initialized = false;
     }
+
+    pthread_mutexattr_destroy(&mutex_attr);
+    pthread_condattr_destroy(&cond_attr);
+
     if(!all_mutexes_properly_initialized) {
-        queue_destroy(pqueue_tmp);
+        pqueue_tmp->_isActive = false;
+        pthread_mutex_destroy(&pqueue_tmp->_readMutex);
+        pthread_cond_destroy(&pqueue_tmp->_readCondVariable);
+        pthread_mutex_destroy(&pqueue_tmp->_writeMutex);
+        pthread_cond_destroy(&pqueue_tmp->_writeCondVariable);
+        munmap(pqueue_tmp, total_allocation_size);
         return NULL;
     }
-    memset(pqueue_tmp->_leftborder, 0, size);
+
     return pqueue_tmp;
 }
 
 void queue_destroy(queue_t* pqueue) {
     if(pqueue == NULL)
         return;
+        
+    size_t total_allocation_size = pqueue->_stats_MemSizeCurrent + sizeof(queue_t);
     pqueue->_isActive = false;
+    
+    /* Wake up any sleeping consumers/producers so they can detect the shutdown */
+    pthread_mutex_lock(&pqueue->_writeMutex);
+    pthread_cond_broadcast(&pqueue->_writeCondVariable);
+    pthread_mutex_unlock(&pqueue->_writeMutex);
+    
+    pthread_mutex_lock(&pqueue->_readMutex);
+    pthread_cond_broadcast(&pqueue->_readCondVariable);
+    pthread_mutex_unlock(&pqueue->_readMutex);
+
     pthread_mutex_lock(&pqueue->_writeMutex);
     while(pqueue->_producers > 0) {
         pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
     }
     pthread_mutex_unlock(&pqueue->_writeMutex);
+    
     pthread_mutex_lock(&pqueue->_readMutex);
     while(pqueue->_consumers > 0) {
         pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
     }
     pthread_mutex_unlock(&pqueue->_readMutex);
+    
     pthread_mutex_destroy(&pqueue->_readMutex);
     pthread_cond_destroy(&pqueue->_readCondVariable);
     pthread_mutex_destroy(&pqueue->_writeMutex);
     pthread_cond_destroy(&pqueue->_writeCondVariable);
-    free(pqueue);
+    
+    /* FIXED: Replaced free() with unmap mapping release */
+    munmap(pqueue, total_allocation_size);
 }
 
 bool queue_consumer_new(queue_t* pqueue) {
@@ -174,7 +218,7 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
     int ret;
 
     pthread_mutex_lock(&pqueue->_readMutex);
-    while(pqueue->_stats_MemUsageCurrent == 0) {
+    while(__atomic_load_n(&pqueue->_stats_MemUsageCurrent, __ATOMIC_ACQUIRE) == 0) {
         if(timeout != NULL) {
             ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);
         } else ret = pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
@@ -209,7 +253,7 @@ int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct t
     header._size = nBytes;
     header._crc32 = sse42_crc32(pbuf, nBytes);
     pthread_mutex_lock(&pqueue->_writeMutex);
-    while(pqueue->_stats_MemSizeCurrent - pqueue->_stats_MemUsageCurrent < entrySize) {
+    while(pqueue->_stats_MemSizeCurrent - __atomic_load_n(&pqueue->_stats_MemUsageCurrent, __ATOMIC_ACQUIRE) < entrySize) {
         if(timeout != NULL) {
             ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
         } else ret = pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
