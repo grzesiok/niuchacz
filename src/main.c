@@ -1,3 +1,13 @@
+/*
+ * main.c
+ * Core daemon entry point for the multi-process execution framework.
+ * Orchestrated around Process Manager (psmgr), Work Manager (workmgr), and Shared IPC Queue.
+ */
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,38 +16,47 @@
 #include <libconfig.h>
 #include <sys/types.h>
 
+/* Modular project architecture headers */
 #include "psmgr/psmgr.h"
+#include "workmgr/workmgr.h"
+#include "algorithms/queue/queue.h"
 #include "algorithms/telemetry/telemetry.h"
-#include "workermgr/workermgr.h"
 
-/* Global tracking atomic indicator for the core service run loop lifecycle */
+/* Reference to external functional Work definitions implemented across project modules */
+extern WorkDescriptor_t pcap_producer_work;
+extern WorkDescriptor_t sqlite_consumer_work;
+
+/* Global atomic indicator tracking the primary daemon run loop lifecycle */
 static volatile sig_atomic_t g_service_active = 1;
 
-/* Signal callback wrapper to intercept OS daemon stop pending requests gracefully */
+/* Signal callback intercepts OS termination requests cleanly */
 static void i_main_signal_handler(int signo) {
     (void)signo;
     g_service_active = 0;
 }
 
 int main(int argc, char *argv[]) {
-    /* WYMUSZENIE BRAKU BUFOROWANIA DLA STDOUT */
+    /* 
+     * FIX 1: Disable output stream buffering entirely for stdout.
+     * Guarantees standard printf() strings hit journalctl immediately, 
+     * preventing log losses when terminated via SIGKILL.
+     */
     setvbuf(stdout, NULL, _IONBF, 0);
-    
+
     config_t cfg;
-    config_setting_t *interfaces_setting;
-    workermgr_pipeline_t *shared_pipeline = NULL;
-    int num_interfaces = 0;
+    queue_t *shared_pipeline = NULL;
     
-    /* Variables to hold dynamic scalable worker constraints */
-    int min_workers = 2; /* Safe internal default fallback values */
+    /* Configurable variables holding baseline worker limits */
+    int min_workers = 2;
     int max_workers = 4;
-    int target_consumers_spawn_count = 2;
+    int target_consumers_count = 2;
     
     if (argc < 2) {
         fprintf(stderr, "FATAL: Configuration file argument path missing (argv).\n");
         return EXIT_FAILURE;
     }
 
+    /* Initialize and read configuration layouts */
     config_init(&cfg);
     if (!config_read_file(&cfg, argv[1])) {
         fprintf(stderr, "FATAL: Configuration parsing failure at %s:%d - %s\n",
@@ -46,109 +65,111 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    struct sigaction sa = { .sa_handler = i_main_signal_handler, .sa_flags = SA_RESTART };
+    /* 
+     * FIX 2: Set sa_flags to 0 instead of SA_RESTART.
+     * Removing SA_RESTART prevents the kernel from auto-restarting blocked operations
+     * (like pthread_cond_wait, sem_wait, sleep) when SIGTERM arrives, allowing the main loop to break.
+     */
+    struct sigaction sa = { .sa_handler = i_main_signal_handler, .sa_flags = 0 };
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT,  &sa, NULL);
 
-    /* ------------------------------------------------------------ */
-    /* 1. READ AND VALIDATE DYNAMIC WORKER POOL CONSTRAINTS         */
-    /* ------------------------------------------------------------ */
+    /* 1. Read layout properties from configuration */
     if (config_lookup_int(&cfg, "WORKERS.min_count", &min_workers) == CONFIG_FALSE) {
-        min_workers = 2; /* Recover using default if missing */
+        min_workers = 2;
     }
     if (config_lookup_int(&cfg, "WORKERS.max_count", &max_workers) == CONFIG_FALSE) {
         max_workers = 4;
     }
 
-    /* Enforce strict logical health validations over the configurations bounds */
     if (min_workers <= 0 || max_workers <= 0 || min_workers > max_workers) {
-        fprintf(stderr, "WARNING: Configized WORKERS layout parameters are invalid (min:%d, max:%d). Using safe defaults (2).\n", 
+        fprintf(stderr, "WARNING: Configured WORKERS layout parameters are invalid (min:%d, max:%d). Using safe defaults (2).\n", 
                 min_workers, max_workers);
-        target_consumers_spawn_count = 2;
+        target_consumers_count = 2;
     } else {
-        /* 
-         * Currently initializing the pipeline at baseline min bounds.
-         * The workermgr scaling unit can scale up to max_workers dynamically later.
-         */
-        target_consumers_spawn_count = min_workers;
+        target_consumers_count = min_workers;
     }
 
-    /* ------------------------------------------------------------ */
-    /* 2. START KERNEL UTILITIES AND SERVICES INTERFACES            */
-    /* ------------------------------------------------------------ */
-    if (psmgr_start() != 0 || telemetry_mgr_start() != 0 || workermgr_start() != 0) {
-        fprintf(stderr, "FATAL: Critical system initialization failure encountered on core layout setups.\n");
+    /* 2. Start global shared utility blocks (Telemetry, etc.) */
+    if (telemetry_mgr_start() != 0) {
+        fprintf(stderr, "FATAL: Critical system initialization failure on telemetry setups.\n");
         config_destroy(&cfg);
         return EXIT_FAILURE;
     }
 
-    shared_pipeline = workermgr_pipeline_create("LIVE_TRAFFIC", 512 * 1024 * 1024);
+    /* 3. Initialize low-level sub-systems (Process Manager and Work Manager) */
+    if (psmgr_init(32) != 0 || workmgr_init() != 0) {
+        fprintf(stderr, "FATAL: Core tracking engine layout allocation failed.\n");
+        goto __service_shutdown;
+    }
+
+    /* 
+     * FIX 3: Initialize the shared queue BEFORE spawning worker processes.
+     * The allocated memory region maps behind MAP_SHARED inside queue_create(),
+     * allowing transparent inherited access across following process forks.
+     */
+    size_t ring_buffer_bytes = 512 * 1024 * 1024; /* 512 MB */
+    shared_pipeline = queue_create(ring_buffer_bytes);
     if (shared_pipeline == NULL) {
-        fprintf(stderr, "FATAL: Core ring-buffer pipeline memory allocation failure.\n");
+        fprintf(stderr, "FATAL: Core process-shared ring buffer allocation failure.\n");
         goto __service_shutdown;
     }
 
-    /* ------------------------------------------------------------ */
-    /* 3. SPAWN SCALED CONSUMERS USING THE CONFIGURED TARGET COUNT   */
-    /* ------------------------------------------------------------ */
+    /* 4. Spawn Consumer Work instances using the configuration parameters */
     const char *db_file = "niuchacz_production.db";
-    printf("[MAIN] Provisioning parallel consumers worker pool. Dynamic target count: %d\n", target_consumers_spawn_count);
-    if (workermgr_spawn_consumers(shared_pipeline, db_file, target_consumers_spawn_count) != 0) {
-        fprintf(stderr, "FATAL: Unable to provision parallel execution consumers pool.\n");
+    printf("[MAIN] Provisioning parallel consumers worker pool via Work Manager. Target count: %d\n", target_consumers_count);
+    if (workmgr_start_work(&sqlite_consumer_work, shared_pipeline, (void*)db_file, target_consumers_count) != 0) {
+        fprintf(stderr, "FATAL: Unable to provision SQLite consumer workflows.\n");
         goto __service_shutdown;
     }
 
-    /* ------------------------------------------------------------ */
-    /* 4. CONFIGURE AND DEPLOY MULTIPLE PCAP PRODUCERS VIA ARRAYS   */
-    /* ------------------------------------------------------------ */
-    interfaces_setting = config_lookup(&cfg, "niuchacz.interfaces");
+    /* 5. Read interfaces array configuration block and spawn Producer Work instances */
+    config_setting_t *interfaces_setting = config_lookup(&cfg, "niuchacz.interfaces");
     if (interfaces_setting == NULL) {
-        fprintf(stderr, "[MAIN][ERROR] Required setting configuration 'niuchacz.interfaces' array lookup dropped.\n");
-        /* Treat as non-fatal or handle safely without destroying active consumer loops unexpectedly */
+        fprintf(stderr, "[MAIN][ERROR] Required configuration path 'niuchacz.interfaces' missing.\n");
     } else {
-        num_interfaces = config_setting_length(interfaces_setting);
-        for (int i = 0; i < num_interfaces; i++) {
+        int num_interfaces = config_setting_length(interfaces_setting);
+        int i;
+        for (i = 0; i < num_interfaces; i++) {
             const char *if_name = config_setting_get_string_elem(interfaces_setting, i);
             if (if_name != NULL) {
-                printf("[MAIN] Connecting capture lines: Spawning Producer process for interface: %s\n", if_name);
-                int prod_status = workermgr_spawn_producer(shared_pipeline, if_name);
+                printf("[MAIN] Connecting capture line: Spawning dynamic Producer Work for interface: %s\n", if_name);
+                /* Passes the unique interface identifier string alongside the shared queue reference pointer */
+                int prod_status = workmgr_start_work(&pcap_producer_work, shared_pipeline, (void*)if_name, 1);
                 if (prod_status != 0) {
-                    fprintf(stderr, "[MAIN][WARN] Failed to spawn producer for interface '%s'. Continuing operations.\n", if_name);
+                    fprintf(stderr, "[MAIN][WARN] Failed to spawn Producer Work instance for interface '%s'.\n", if_name);
                 }
             }
         }
     }
 
-    /* ------------------------------------------------------------ */
-    /* 5. CORE SERVICE RUN LOOP: IDLE WAITING BARRIER SLEEP LOOPS   */
-    /* ------------------------------------------------------------ */
-    printf("[MAIN] Service loop transition into active running states finalized successfully.\n");
+    /* 6. Core service monitoring run loop */
+    printf("[MAIN] Service loop transition into active running state finalized successfully.\n");
     
-    /* 
-     * FIXED: Explicitly guarantee the main orchestration thread stays alive 
-     * and monitors the OS shutdown signals without dropping execution frames.
-     */
     while (g_service_active) {
-        psmgr_idle(1); /* Non-blocking background telemetry sweep logs maintenance */
+        /* Non-blocking background health check checks for crashed child PIDs and reaps zombies */
+        psmgr_periodic_check();
+        
+        /* Yield thread context safely to reduce processor spin loads */
+        usleep(250000); 
     }
 
-    /* ------------------------------------------------------------ */
-    /* 6. CLEANUP: DE-PROVISION SUBPROCESSES AND FLUSH ALLOCATIONS   */
-    /* ------------------------------------------------------------ */
-    printf("[MAIN] Shutdown signal received. Evicting and stopping worker processes...\n");
+    /* 7. Graceful teardown phase */
+    printf("[MAIN] Shutdown signal received. Commencing orderly execution termination...\n");
 
 __service_shutdown:
-    /* FIXED: We only trigger pipeline destruction AFTER we request child terminations */
-    psmgr_stop_user_processes();
+    /* Orderly worker cleanup via escalative timed signaling routines (SIGTERM -> SIGKILL) */
+    psmgr_stop_all_workers();
     
+    /* Safely clear shared ring memory configurations */
     if (shared_pipeline) {
-        printf("[MAIN] Reclaiming shared pipeline memory channels...\n");
-        workermgr_pipeline_destroy(shared_pipeline);
+        printf("[MAIN] Reclaiming shared memory queue resources...\n");
+        queue_destroy(shared_pipeline);
     }
     
-    workermgr_stop();
+    /* Free local component infrastructure assets */
+    workmgr_destroy();
     telemetry_mgr_stop();
-    psmgr_stop();
     config_destroy(&cfg);
 
     printf("[MAIN] Service execution cleanup sequence finalized successfully. Done.\n");

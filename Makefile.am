@@ -21,9 +21,11 @@ bin_PROGRAMS = niuchacz.out
 
 # Source definitions for the main application binary service deployment assets
 niuchacz_out_SOURCES = \
-    src/workermgr/workermgr.c \
+    src/workmgr/workmgr.c \
     src/psmgr/psmgr.c \
     src/database/database.c \
+    src/workmgr/work/pcap_producer.c \
+    src/workmgr/work/sqlite_consumer.c \
     src/main.c \
     src/packet_analyze.c
 

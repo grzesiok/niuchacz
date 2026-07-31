@@ -1,42 +1,47 @@
-#ifndef _PS_MANAGER_H
-#define _PS_MANAGER_H
+/*
+ * psmgr.h
+ * Process Supervisor Manager Interface (ANSI C)
+ * Handles isolated process spawning, fault detection, and graceful teardown.
+ */
+
+#ifndef PSMGR_H
+#define PSMGR_H
 
 #include <sys/types.h>
 #include <stdbool.h>
-#include <stdint.h>
 
-/* Functional callback prototypes for process execution loops */
-typedef int (*psmgr_exec_routine_t)(void *);
-
-/* Process classification categories mapped to system privileges */
-typedef enum {
-    PSMGR_PROC_KERNEL = 1,
-    PSMGR_PROC_USER   = 2
-} psmgr_proc_type_t;
-
-/* Public API Management Lifecycles */
-int psmgr_start(void);
-void psmgr_stop(void);
-void psmgr_stop_user_processes(void);
-int psmgr_idle(uint64_t wait_time_in_sec);
-
-/* Public API Core Process Creation and Isolation Hooks */
-int psmgr_create_process(
-    const char *short_name, 
-    const char *full_name, 
-    psmgr_proc_type_t type, 
-    psmgr_exec_routine_t exec_fn, 
-    void *arg,
-    pid_t *out_pid
-);
-
-int psmgr_wait_for_process(pid_t pid, int *out_exit_status);
+#define PSMGR_SUCCESS         0
+#define PSMGR_ERROR          -1
+#define PSMGR_ERR_FULL       -2
 
 /* 
- * PUBLIC API HEALTH CHECK: 
- * Replacement for svcKernelIsRunning. Multiprocess-safe daemon status evaluator.
- * Returns true if the calling context process should keep executing loops.
+ * Callback signature for worker functions executed inside the child process.
+ * Acceptable context includes references to shared queues, identifiers, or database parameters.
  */
-bool psmgr_is_running(void);
+typedef void (*psmgr_worker_fn)(void *ctx);
 
-#endif /* _PS_MANAGER_H */
+/* Initializes the internal process tracking supervisor structures */
+int psmgr_init(int max_process_slots);
+
+/* 
+ * Spawns an isolated sub-process via fork() execution frames.
+ * Captures failures locally without terminating the main daemon framework.
+ */
+pid_t psmgr_spawn_worker(const char *name, psmgr_worker_fn entry_point, void *ctx);
+
+/* 
+ * Non-blocking periodic check sweep loop.
+ * Reaps exited/zombie child processes, tracks statuses, and identifies crashes.
+ */
+void psmgr_periodic_check(void);
+
+/* 
+ * Shuts down all active registered child processes cleanly.
+ * Uses a progressive timed signals escalation cycle (SIGTERM -> SIGKILL).
+ */
+void psmgr_stop_all_workers(void);
+
+/* Free internal arrays and resource footprints managed by the supervisor */
+void psmgr_destroy(void);
+
+#endif /* PSMGR_H */

@@ -1,280 +1,335 @@
-#include "queue.h"
-#include "memory.h"
+/*
+ * src/algorithms/queue/queue.c
+ * High-performance Process-Shared Ring Buffer Implementation (ANSI C/POSIX)
+ */
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
+
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
-#include <stdint.h>
-#include <pthread.h>
-#include <immintrin.h>
 #include <sys/mman.h>
+#include <time.h>
+#include <pthread.h>
+#include <stdbool.h>
 
-/* 
- * Actual structure definition layout.
- * Visible ONLY inside this compilation unit (queue.c).
- */
-struct queue_t {
-    /* Pointers and memory boundaries */
+#include "queue.h"
+
+/* Concrete implementation of the opaque structure definition */
+struct queue_t
+{
     char *_head;
     char *_tail;
     void *_leftborder;
     void *_rightborder;
-
-    /* Thread synchronization primitives */
     pthread_mutex_t _readMutex;
     pthread_cond_t _readCondVariable;
     pthread_mutex_t _writeMutex;
     pthread_cond_t _writeCondVariable;
-
-    /* Metrics and queue statistics */
-    size_t _stats_EntriesCurrent;
-    size_t _stats_EntriesMax;
-    size_t _stats_MemUsageCurrent;
-    size_t _stats_MemUsageMax;
-    size_t _stats_MemSizeCurrent;
-    size_t _stats_MemSizeMin;
-    size_t _stats_MemSizeMax;
-
-    /* State and thread tracking counters */
     int _consumers;
     int _producers;
     bool _isActive;
+
+    volatile size_t _stats_EntriesCurrent;
+    volatile size_t _stats_EntriesMax;
+    volatile size_t _stats_MemUsageCurrent;
+    volatile size_t _stats_MemUsageMax;
+    volatile size_t _stats_MemSizeCurrent;
+    volatile size_t _stats_MemSizeMin;
+    volatile size_t _stats_MemSizeMax;
 };
 
-typedef struct {
-    size_t _size;
-    uint32_t _crc32;
-} queue_entry_t;
+/* Calculation helper macro to allocate control layout alongside data buffer bounds */
+#define QUEUE_TOTAL_ALLOC_SIZE(size) (sizeof(struct queue_t) + (size))
 
-uint32_t sse42_crc32(const uint8_t *bytes, size_t len) {
-    uint32_t hash = 0xffffffff;
-    size_t i = 0;
-    for(i = 0; i < len; i++) {
-        hash = _mm_crc32_u8(hash, bytes[i]);
-    }
-    return hash;
-}
+queue_t *queue_create(size_t size)
+{
+    pthread_mutexattr_t mattr;
+    pthread_condattr_t cattr;
 
-static void i_queue_write(queue_t *pqueue, const void* src, size_t size) {
-    unsigned char* psrc = (unsigned char*)src;
-    while(size-- > 0) {
-        *pqueue->_head++ = *psrc++;
-        if(pqueue->_head == pqueue->_rightborder)
-            pqueue->_head = pqueue->_leftborder;
-    }
-}
+    /*
+     * Allocate space for BOTH the queue_t control block AND the data arena
+     * in a single shared, anonymous memory mapping. This ensures that when we fork,
+     * all subprocesses write and read from the exact same physical memory block.
+     */
+    size_t total_bytes = QUEUE_TOTAL_ALLOC_SIZE(size);
+    void *shm_block = mmap(NULL, total_bytes, PROT_READ | PROT_WRITE,
+                           MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
-static void i_queue_read(queue_t *pqueue, void* dst, size_t size) {
-    unsigned char* pdst = (unsigned char*)dst;
-    while(size-- > 0) {
-        *pdst++ = *pqueue->_tail++;
-        if(pqueue->_tail == pqueue->_rightborder)
-            pqueue->_tail = pqueue->_leftborder;
-    }
-}
-
-queue_t* queue_create(size_t size) {
-    bool all_mutexes_properly_initialized = true;
-    size_t total_allocation_size = size + sizeof(queue_t);
-
-    /* Allocate continuous shared memory layout maps */
-    queue_t *pqueue_tmp = (queue_t*)mmap(NULL, total_allocation_size, 
-                                         PROT_READ | PROT_WRITE, 
-                                         MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-                                         
-    if(pqueue_tmp == MAP_FAILED)
-        return NULL;
-    
-    /* FIXED: Zero out the entire allocated memory chunk (header + data buffer) to erase memory garbage */
-    memset(pqueue_tmp, 0, total_allocation_size);
-    
-    pqueue_tmp->_leftborder = memoryPtrMove(pqueue_tmp, sizeof(queue_t));
-    pqueue_tmp->_rightborder = memoryPtrMove(pqueue_tmp->_leftborder, size);
-    pqueue_tmp->_head = pqueue_tmp->_leftborder;
-    pqueue_tmp->_tail = pqueue_tmp->_leftborder;
-    pqueue_tmp->_consumers = 0;
-    pqueue_tmp->_producers = 0;
-    pqueue_tmp->_isActive = true; /* Now safely explicitly set on clean zeroed memory */
-    pqueue_tmp->_stats_EntriesCurrent = 0;
-    pqueue_tmp->_stats_EntriesMax = 0;
-    pqueue_tmp->_stats_MemUsageCurrent = 0;
-    pqueue_tmp->_stats_MemUsageMax = 0;
-    pqueue_tmp->_stats_MemSizeCurrent = size;
-    pqueue_tmp->_stats_MemSizeMin = size;
-    pqueue_tmp->_stats_MemSizeMax = size;
-
-    pthread_mutexattr_t mutex_attr;
-    pthread_condattr_t cond_attr;
-
-    pthread_mutexattr_init(&mutex_attr);
-    pthread_mutexattr_setpshared(&mutex_attr, PTHREAD_PROCESS_SHARED);
-
-    pthread_condattr_init(&cond_attr);
-    pthread_condattr_setpshared(&cond_attr, PTHREAD_PROCESS_SHARED);
-
-    if(pthread_mutex_init(&pqueue_tmp->_readMutex, &mutex_attr) != 0) {
-        all_mutexes_properly_initialized = false;
-    }
-    if(pthread_cond_init(&pqueue_tmp->_readCondVariable, &cond_attr) != 0) {
-        all_mutexes_properly_initialized = false;
-    }
-    if(pthread_mutex_init(&pqueue_tmp->_writeMutex, &mutex_attr) != 0) {
-        all_mutexes_properly_initialized = false;
-    }
-    if(pthread_cond_init(&pqueue_tmp->_writeCondVariable, &cond_attr) != 0) {
-        all_mutexes_properly_initialized = false;
-    }
-
-    pthread_mutexattr_destroy(&mutex_attr);
-    pthread_condattr_destroy(&cond_attr);
-
-    if(!all_mutexes_properly_initialized) {
-        pqueue_tmp->_isActive = false;
-        pthread_mutex_destroy(&pqueue_tmp->_readMutex);
-        pthread_cond_destroy(&pqueue_tmp->_readCondVariable);
-        pthread_mutex_destroy(&pqueue_tmp->_writeMutex);
-        pthread_cond_destroy(&pqueue_tmp->_writeCondVariable);
-        munmap(pqueue_tmp, total_allocation_size);
+    if (shm_block == MAP_FAILED)
+    {
         return NULL;
     }
 
-    return pqueue_tmp;
+    queue_t *pqueue = (queue_t *)shm_block;
+    memset(pqueue, 0, sizeof(struct queue_t));
+
+    /*
+     * Set borders. Because MAP_SHARED guarantees identical virtual-to-physical
+     * mapping characteristics directly inherited by fork() variants on modern Linux,
+     * these absolute pointers remain valid and synchronized across forks.
+     */
+    pqueue->_leftborder = (char *)shm_block + sizeof(struct queue_t);
+    pqueue->_rightborder = (char *)pqueue->_leftborder + size;
+    pqueue->_head = (char *)pqueue->_leftborder;
+    pqueue->_tail = (char *)pqueue->_leftborder;
+
+    /* Initialize Mutexes with Cross-Process Capabilities */
+    pthread_mutexattr_init(&mattr);
+    pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED); /* CRITICAL FOR FORK */
+    pthread_mutex_init(&pqueue->_readMutex, &mattr);
+    pthread_mutex_init(&pqueue->_writeMutex, &mattr);
+    pthread_mutexattr_destroy(&mattr); /* Clean standard POSIX function name */
+
+    /* Initialize Condition Variables with Cross-Process Capabilities */
+    pthread_condattr_init(&cattr);
+    pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED); /* CRITICAL FOR FORK */
+    pthread_cond_init(&pqueue->_readCondVariable, &cattr);
+    pthread_cond_init(&pqueue->_writeCondVariable, &cattr);
+    pthread_condattr_destroy(&cattr);
+
+    /* Set up baseline statistics and active tracking status flags */
+    pqueue->_isActive = true;
+    pqueue->_stats_MemSizeCurrent = size;
+    pqueue->_stats_MemSizeMin = size;
+    pqueue->_stats_MemSizeMax = size;
+
+    return pqueue;
 }
 
-void queue_destroy(queue_t* pqueue) {
-    if(pqueue == NULL)
+void queue_destroy(queue_t *pqueue)
+{
+    if (!pqueue)
         return;
-        
-    size_t total_allocation_size = pqueue->_stats_MemSizeCurrent + sizeof(queue_t);
+
+    /* Mark inactive and wake up anyone trapped inside blocking calls */
+    pthread_mutex_lock(&pqueue->_readMutex);
+    pthread_mutex_lock(&pqueue->_writeMutex);
     pqueue->_isActive = false;
-    
-    /* Wake up any sleeping consumers/producers so they can detect the shutdown */
-    pthread_mutex_lock(&pqueue->_writeMutex);
+    pthread_cond_broadcast(&pqueue->_readCondVariable);
     pthread_cond_broadcast(&pqueue->_writeCondVariable);
     pthread_mutex_unlock(&pqueue->_writeMutex);
-    
-    pthread_mutex_lock(&pqueue->_readMutex);
-    pthread_cond_broadcast(&pqueue->_readCondVariable);
     pthread_mutex_unlock(&pqueue->_readMutex);
 
-    pthread_mutex_lock(&pqueue->_writeMutex);
-    while(pqueue->_producers > 0) {
-        pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
-    }
-    pthread_mutex_unlock(&pqueue->_writeMutex);
-    
-    pthread_mutex_lock(&pqueue->_readMutex);
-    while(pqueue->_consumers > 0) {
-        pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
-    }
-    pthread_mutex_unlock(&pqueue->_readMutex);
-    
-    pthread_mutex_destroy(&pqueue->_readMutex);
+    /* Clean up the underlying primitives */
     pthread_cond_destroy(&pqueue->_readCondVariable);
-    pthread_mutex_destroy(&pqueue->_writeMutex);
     pthread_cond_destroy(&pqueue->_writeCondVariable);
-    
-    /* FIXED: Replaced free() with unmap mapping release */
-    munmap(pqueue, total_allocation_size);
+    pthread_mutex_destroy(&pqueue->_readMutex);
+    pthread_mutex_destroy(&pqueue->_writeMutex);
+
+    /* Unmap the shared memory page block */
+    size_t total_bytes = QUEUE_TOTAL_ALLOC_SIZE(pqueue->_stats_MemSizeCurrent);
+    munmap((void *)pqueue, total_bytes);
 }
 
-bool queue_consumer_new(queue_t* pqueue) {
-    bool success;
+bool queue_consumer_new(queue_t *pqueue)
+{
+    if (!pqueue)
+        return false;
     pthread_mutex_lock(&pqueue->_readMutex);
-    if(pqueue->_isActive) {
-        pqueue->_consumers++;
-        success = true;
-    } else success = false;
+    pqueue->_consumers++;
     pthread_mutex_unlock(&pqueue->_readMutex);
-    return success;
+    return true;
 }
 
-void queue_consumer_free(queue_t* pqueue) {
+void queue_consumer_free(queue_t *pqueue)
+{
+    if (!pqueue)
+        return;
     pthread_mutex_lock(&pqueue->_readMutex);
-    pqueue->_consumers--;
+    if (pqueue->_consumers > 0)
+        pqueue->_consumers--;
     pthread_mutex_unlock(&pqueue->_readMutex);
-    pthread_cond_broadcast(&pqueue->_readCondVariable);
 }
 
-bool queue_producer_new(queue_t* pqueue) {
-    bool success;
+bool queue_producer_new(queue_t *pqueue)
+{
+    if (!pqueue)
+        return false;
     pthread_mutex_lock(&pqueue->_writeMutex);
-    if(pqueue->_isActive) {
-        pqueue->_producers++;
-        success = true;
-    } else success = false;
+    pqueue->_producers++;
     pthread_mutex_unlock(&pqueue->_writeMutex);
-    return success;
+    return true;
 }
 
-void queue_producer_free(queue_t* pqueue) {
+void queue_producer_free(queue_t *pqueue)
+{
+    if (!pqueue)
+        return;
     pthread_mutex_lock(&pqueue->_writeMutex);
-    pqueue->_producers--;
+    if (pqueue->_producers > 0)
+        pqueue->_producers--;
     pthread_mutex_unlock(&pqueue->_writeMutex);
-    pthread_cond_broadcast(&pqueue->_writeCondVariable);
 }
 
-int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout) {
-    queue_entry_t header;
-    int ret;
+int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct timespec *timeout)
+{
+    if (!pqueue || !pbuf || nBytes == 0)
+        return QUEUE_RET_ERROR;
 
-    pthread_mutex_lock(&pqueue->_readMutex);
-    while(__atomic_load_n(&pqueue->_stats_MemUsageCurrent, __ATOMIC_ACQUIRE) == 0) {
-        if(timeout != NULL) {
-            ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);
-        } else ret = pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
-        if(!pqueue->_isActive) {
-            pthread_mutex_unlock(&pqueue->_readMutex);
-            return QUEUE_RET_DESTROYING;
-        }
-        if(ret == ETIMEDOUT) {
-            pthread_mutex_unlock(&pqueue->_readMutex);
-            return QUEUE_RET_TIMEOUT;
-        }
-    }
-    i_queue_read(pqueue, &header, sizeof(queue_entry_t));
-    i_queue_read(pqueue, pbuf, header._size);
-    __atomic_sub_fetch(&pqueue->_stats_EntriesCurrent, 1, __ATOMIC_RELEASE);
-    __atomic_sub_fetch(&pqueue->_stats_MemUsageCurrent, header._size + sizeof(queue_entry_t), __ATOMIC_RELEASE);
-    pthread_mutex_unlock(&pqueue->_readMutex);
-    pthread_cond_broadcast(&pqueue->_writeCondVariable);
-    if(sse42_crc32(pbuf, header._size) != header._crc32) {
+    /*
+     * FIX: Immediately reject payloads that exceed the total usable buffer size.
+     * We subtract 1 because the ring buffer keeps 1 byte empty to tell full/empty apart.
+     */
+    size_t total_capacity = (char *)pqueue->_rightborder - (char *)pqueue->_leftborder;
+    if (nBytes > (total_capacity - 1))
+    {
         return QUEUE_RET_ERROR;
     }
-    return header._size;
-}
 
-int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct timespec *timeout) {
-    queue_entry_t header;
-    size_t entrySize = nBytes + sizeof(queue_entry_t);
-    int ret;
-
-    if(entrySize >= pqueue->_stats_MemSizeCurrent)
-        return QUEUE_RET_ERROR;
-    header._size = nBytes;
-    header._crc32 = sse42_crc32(pbuf, nBytes);
     pthread_mutex_lock(&pqueue->_writeMutex);
-    while(pqueue->_stats_MemSizeCurrent - __atomic_load_n(&pqueue->_stats_MemUsageCurrent, __ATOMIC_ACQUIRE) < entrySize) {
-        if(timeout != NULL) {
-            ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
-        } else ret = pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
-        if(!pqueue->_isActive) {
+
+    while (1)
+    {
+        if (!pqueue->_isActive)
+        {
             pthread_mutex_unlock(&pqueue->_writeMutex);
             return QUEUE_RET_DESTROYING;
         }
-        if(ret == ETIMEDOUT) {
+
+        /* Compute current available capacity considering the ring wrap-around */
+        size_t used_space = 0;
+        if (pqueue->_tail >= pqueue->_head)
+        {
+            used_space = pqueue->_tail - pqueue->_head;
+        }
+        else
+        {
+            used_space = ((char *)pqueue->_rightborder - pqueue->_head) + ((char *)pqueue->_tail - (char *)pqueue->_leftborder);
+        }
+
+        size_t free_space = total_capacity - used_space - 1; /* Keep 1 byte boundary buffer */
+
+        if (free_space >= nBytes)
+        {
+            /* Space available: Execute writing operation */
+            size_t bytes_to_right = (char *)pqueue->_rightborder - pqueue->_tail;
+
+            if (nBytes <= bytes_to_right)
+            {
+                memcpy(pqueue->_tail, pbuf, nBytes);
+                pqueue->_tail += nBytes;
+                if (pqueue->_tail == pqueue->_rightborder)
+                {
+                    pqueue->_tail = (char *)pqueue->_leftborder;
+                }
+            }
+            else
+            {
+                memcpy(pqueue->_tail, pbuf, bytes_to_right);
+                memcpy(pqueue->_leftborder, (char *)pbuf + bytes_to_right, nBytes - bytes_to_right);
+                pqueue->_tail = (char *)pqueue->_leftborder + (nBytes - bytes_to_right);
+            }
+
+            /* Update tracking statistics variables */
+            pqueue->_stats_EntriesCurrent++;
+            if (pqueue->_stats_EntriesCurrent > pqueue->_stats_EntriesMax)
+            {
+                pqueue->_stats_EntriesMax = pqueue->_stats_EntriesCurrent;
+            }
+            pqueue->_stats_MemUsageCurrent += nBytes;
+            if (pqueue->_stats_MemUsageCurrent > pqueue->_stats_MemUsageMax)
+            {
+                pqueue->_stats_MemUsageMax = pqueue->_stats_MemUsageCurrent;
+            }
+
+            /* Signal any consumers waiting on data inputs */
+            pthread_cond_signal(&pqueue->_readCondVariable);
             pthread_mutex_unlock(&pqueue->_writeMutex);
-            return QUEUE_RET_TIMEOUT;
+            return (int)nBytes;
+        }
+
+        /* Queue is Full: Wait or handle timeout states */
+        if (timeout)
+        {
+            int ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
+            if (ret == ETIMEDOUT)
+            {
+                pthread_mutex_unlock(&pqueue->_writeMutex);
+                return QUEUE_RET_TIMEOUT;
+            }
+        }
+        else
+        {
+            pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
         }
     }
-    i_queue_write(pqueue, &header, sizeof(queue_entry_t));
-    i_queue_write(pqueue, pbuf, header._size);
-    size_t numOfEntries = __atomic_add_fetch(&pqueue->_stats_EntriesCurrent, 1, __ATOMIC_RELEASE);
-    if(numOfEntries > pqueue->_stats_EntriesMax)
-        pqueue->_stats_EntriesMax = numOfEntries;
-    size_t usageOfMemory = __atomic_add_fetch(&pqueue->_stats_MemUsageCurrent, entrySize, __ATOMIC_RELEASE);
-    if(usageOfMemory > pqueue->_stats_MemUsageMax)
-        pqueue->_stats_MemUsageMax = usageOfMemory;
-    pthread_mutex_unlock(&pqueue->_writeMutex);
-    pthread_cond_broadcast(&pqueue->_readCondVariable);
-    return header._size;
+}
+
+int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout)
+{
+    if (!pqueue || !pbuf)
+        return QUEUE_RET_ERROR;
+
+    pthread_mutex_lock(&pqueue->_readMutex);
+
+    while (1)
+    {
+        if (!pqueue->_isActive)
+        {
+            pthread_mutex_unlock(&pqueue->_readMutex);
+            return QUEUE_RET_DESTROYING;
+        }
+
+        if (pqueue->_head != pqueue->_tail)
+        {
+            /* Queue contains data: Parse the next object out */
+            size_t bytes_available = 0;
+            if (pqueue->_tail > pqueue->_head)
+            {
+                bytes_available = pqueue->_tail - pqueue->_head;
+            }
+            else
+            {
+                bytes_available = (char *)pqueue->_rightborder - pqueue->_head;
+            }
+
+            memcpy(pbuf, pqueue->_head, bytes_available);
+            pqueue->_head += bytes_available;
+            if (pqueue->_head == pqueue->_rightborder)
+            {
+                pqueue->_head = (char *)pqueue->_leftborder;
+            }
+
+            /* Adjust stats counters */
+            if (pqueue->_stats_EntriesCurrent > 0)
+                pqueue->_stats_EntriesCurrent--;
+            if (pqueue->_stats_MemUsageCurrent >= bytes_available)
+            {
+                pqueue->_stats_MemUsageCurrent -= bytes_available;
+            }
+            else
+            {
+                pqueue->_stats_MemUsageCurrent = 0;
+            }
+
+            /* Wake up any waiting producers stalling on full buffers */
+            pthread_cond_signal(&pqueue->_writeCondVariable);
+            pthread_mutex_unlock(&pqueue->_readMutex);
+            return (int)bytes_available;
+        }
+
+        /* Queue is Empty: Wait or handle timeout states */
+        if (timeout)
+        {
+            int ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);
+            if (ret == ETIMEDOUT)
+            {
+                pthread_mutex_unlock(&pqueue->_readMutex);
+                return QUEUE_RET_TIMEOUT;
+            }
+        }
+        else
+        {
+            pthread_cond_wait(&pqueue->_readCondVariable, &pqueue->_readMutex);
+        }
+    }
 }
