@@ -15,6 +15,7 @@
 
 #include "workmgr/workmgr.h"
 #include "algorithms/queue/queue.h"
+#include <libconfig.h>
 
 /* Local configuration frame wrapper for internal pcap descriptors */
 typedef struct {
@@ -25,19 +26,33 @@ typedef struct {
 static void i_pcap_producer_setup(void *raw_ctx) {
     WorkContext_t *ctx = (WorkContext_t *)raw_ctx;
     char errbuf[PCAP_ERRBUF_SIZE];
-    
     if (!ctx || !ctx->custom_config) {
-        fprintf(stderr, "[PCAP_PRODUCER][FATAL] Invalid context or interface configuration missing.\n");
+        fprintf(stderr, "[PCAP_PRODUCER][FATAL] Work configuration section missing.\n");
         exit(EXIT_FAILURE);
     }
+
+    /* Expect custom_config to be config_setting_t* pointing to works.pcap_producer */
+    config_setting_t *setting = (config_setting_t *)ctx->custom_config;
 
     PcapProducerState_t *state = (PcapProducerState_t *)malloc(sizeof(PcapProducerState_t));
     if (!state) {
         fprintf(stderr, "[PCAP_PRODUCER][FATAL] Memory allocation failed for local state structure.\n");
         exit(EXIT_FAILURE);
     }
+    /* Read first interface from config list */
+    config_setting_t *iflist = config_setting_lookup(setting, "interfaces");
+    const char *if_name = NULL;
+    if (iflist && config_setting_length(iflist) > 0) {
+        if_name = config_setting_get_string_elem(iflist, 0);
+    }
 
-    state->interface_name = (const char *)ctx->custom_config;
+    if (!if_name) {
+        fprintf(stderr, "[PCAP_PRODUCER][FATAL] No interface configured in works.pcap_producer.interfaces.\n");
+        free(state);
+        exit(EXIT_FAILURE);
+    }
+
+    state->interface_name = if_name;
     
     /* Open the interface in promiscuous mode with a standard 65535 byte snaplen limit */
     state->pcap_handle = pcap_open_live(state->interface_name, 65535, 1, 1000, errbuf);
@@ -93,6 +108,7 @@ static void i_pcap_producer_teardown(void *raw_ctx) {
 /* Public global registration descriptor reference used inside main.c */
 WorkDescriptor_t pcap_producer_work = {
     .work_type_name = "PCAP_PRODUCER",
+    .config_name = "pcap_producer",
     .work_setup = i_pcap_producer_setup,
     .work_run_loop = i_pcap_producer_run_loop,
     .work_teardown = i_pcap_producer_teardown

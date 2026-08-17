@@ -29,7 +29,8 @@ libalgorithms_la_SOURCES = \
     src/algorithms/queue/queue.c \
     src/algorithms/timer/timer.c \
     src/algorithms/tree/bst.c \
-    src/algorithms/telemetry/telemetry.c
+    src/algorithms/telemetry/telemetry.c \
+    src/algorithms/sizeparse.c
 
 # Link the library (Automake adds -shared and -fPIC automatically via Libtool)
 libalgorithms_la_LIBADD = -lpthread
@@ -40,8 +41,8 @@ libalgorithms_la_LDFLAGS = -version-info 1:0:0
 # ====================================================================
 
 # Specify test runners executed via 'make check' command execution
-TESTS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out test_telemetry.out
-check_PROGRAMS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out test_telemetry.out
+TESTS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out test_telemetry.out test_sizeparse.out
+check_PROGRAMS = test_queue.out test_bst.out test_spinlock.out test_dlist.out test_timer.out test_hll.out test_telemetry.out test_sizeparse.out
 
 # Source definitions and compilation flags for the queue test binary
 test_queue_out_SOURCES = tests/test_queue.c
@@ -77,3 +78,8 @@ test_hll_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
 test_telemetry_out_SOURCES = tests/test_telemetry.c
 test_telemetry_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
 test_telemetry_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread
+
+# Size parse unit test
+test_sizeparse_out_SOURCES = tests/test_sizeparse.c
+test_sizeparse_out_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+test_sizeparse_out_LDADD = libalgorithms.la $(CHECK_LIBS) -lpthread

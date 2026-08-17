@@ -18,6 +18,7 @@
  */
 typedef struct {
     const char *work_type_name;         /* e.g., "PCAP_PRODUCER", "SQLITE_CONSUMER" */
+    const char *config_name;           /* config section name under works (e.g., "pcap_producer") */
     void (*work_setup)(void *ctx);      /* Invoked immediately after fork inside child context */
     void (*work_run_loop)(void *ctx);   /* The long-running operational core execution loop */
     void (*work_teardown)(void *ctx);   /* Invoked during graceful child process exit sequence */

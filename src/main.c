@@ -15,12 +15,14 @@
 #include <signal.h>
 #include <libconfig.h>
 #include <sys/types.h>
+#include <ctype.h>
 
 /* Modular project architecture headers */
 #include "psmgr/psmgr.h"
 #include "workmgr/workmgr.h"
 #include "algorithms/queue/queue.h"
 #include "algorithms/telemetry/telemetry.h"
+#include "algorithms/sizeparse.h"
 
 /* Reference to external functional Work definitions implemented across project modules */
 extern WorkDescriptor_t pcap_producer_work;
@@ -108,38 +110,79 @@ int main(int argc, char *argv[]) {
      * The allocated memory region maps behind MAP_SHARED inside queue_create(),
      * allowing transparent inherited access across following process forks.
      */
-    size_t ring_buffer_bytes = 512 * 1024 * 1024; /* 512 MB */
+    /* Ring buffer size (bytes) can be configured in niuchacz.conf.
+     * Supported keys (checked in order):
+     * - niuchacz.ring_buffer (string with units, e.g. "512MB", "1G")
+     * - niuchacz.ring_buffer_bytes (integer bytes)
+     * - niuchacz.ring_buffer_mb (integer megabytes)
+     */
+
+    const size_t DEFAULT_RING = 512ULL * 1024ULL * 1024ULL; /* 512MB */
+    const size_t MIN_RING = 1ULL * 1024ULL * 1024ULL; /* 1MB */
+    const size_t MAX_RING = 4ULL * 1024ULL * 1024ULL * 1024ULL; /* 4GB */
+
+    size_t ring_buffer_bytes = DEFAULT_RING;
+    const char *ring_str = NULL;
+    int tmp_int = 0;
+    int ok = 0;
+
+    if (config_lookup_string(&cfg, "niuchacz.ring_buffer", &ring_str) == CONFIG_TRUE && ring_str != NULL) {
+        size_t parsed = parse_size_string(ring_str, &ok);
+        if (ok && parsed > 0) ring_buffer_bytes = parsed;
+        else fprintf(stderr, "[MAIN][WARN] Invalid niuchacz.ring_buffer value '%s', using default.\n", ring_str);
+    } else if (config_lookup_int(&cfg, "niuchacz.ring_buffer_bytes", &tmp_int) == CONFIG_TRUE && tmp_int > 0) {
+        ring_buffer_bytes = (size_t)tmp_int;
+    } else if (config_lookup_int(&cfg, "niuchacz.ring_buffer_mb", &tmp_int) == CONFIG_TRUE && tmp_int > 0) {
+        ring_buffer_bytes = (size_t)tmp_int * 1024ULL * 1024ULL;
+    }
+
+    if (ring_buffer_bytes < MIN_RING) {
+        fprintf(stderr, "[MAIN][WARN] ring_buffer size too small (%zu), raising to %zu\n", ring_buffer_bytes, MIN_RING);
+        ring_buffer_bytes = MIN_RING;
+    }
+    if (ring_buffer_bytes > MAX_RING) {
+        fprintf(stderr, "[MAIN][WARN] ring_buffer size too large (%zu), capping to %zu\n", ring_buffer_bytes, MAX_RING);
+        ring_buffer_bytes = MAX_RING;
+    }
+
+    printf("[MAIN] Using ring buffer size: %zu bytes\n", ring_buffer_bytes);
     shared_pipeline = queue_create(ring_buffer_bytes);
     if (shared_pipeline == NULL) {
         fprintf(stderr, "FATAL: Core process-shared ring buffer allocation failure.\n");
         goto __service_shutdown;
     }
 
-    /* 4. Spawn Consumer Work instances using the configuration parameters */
-    const char *db_file = "niuchacz_production.db";
-    printf("[MAIN] Provisioning parallel consumers worker pool via Work Manager. Target count: %d\n", target_consumers_count);
-    if (workmgr_start_work(&sqlite_consumer_work, shared_pipeline, (void*)db_file, target_consumers_count) != 0) {
-        fprintf(stderr, "FATAL: Unable to provision SQLite consumer workflows.\n");
-        goto __service_shutdown;
-    }
+    /* 4/5. Dispatch all configured works from the `works` section. */
+    WorkDescriptor_t *registry[] = { &sqlite_consumer_work, &pcap_producer_work, NULL };
+    for (int r = 0; registry[r] != NULL; r++) {
+        WorkDescriptor_t *desc = registry[r];
+        if (!desc || !desc->config_name) continue;
 
-    /* 5. Read interfaces array configuration block and spawn Producer Work instances */
-    config_setting_t *interfaces_setting = config_lookup(&cfg, "niuchacz.interfaces");
-    if (interfaces_setting == NULL) {
-        fprintf(stderr, "[MAIN][ERROR] Required configuration path 'niuchacz.interfaces' missing.\n");
-    } else {
-        int num_interfaces = config_setting_length(interfaces_setting);
-        int i;
-        for (i = 0; i < num_interfaces; i++) {
-            const char *if_name = config_setting_get_string_elem(interfaces_setting, i);
-            if (if_name != NULL) {
-                printf("[MAIN] Connecting capture line: Spawning dynamic Producer Work for interface: %s\n", if_name);
-                /* Passes the unique interface identifier string alongside the shared queue reference pointer */
-                int prod_status = workmgr_start_work(&pcap_producer_work, shared_pipeline, (void*)if_name, 1);
-                if (prod_status != 0) {
-                    fprintf(stderr, "[MAIN][WARN] Failed to spawn Producer Work instance for interface '%s'.\n", if_name);
-                }
-            }
+        char path[128];
+        snprintf(path, sizeof(path), "works.%s", desc->config_name);
+        config_setting_t *wset = config_lookup(&cfg, path);
+        if (!wset) {
+            printf("[MAIN] Work '%s' not configured (missing %s). Skipping.\n", desc->work_type_name, path);
+            continue;
+        }
+
+        int enabled = 1;
+        config_setting_lookup_bool(wset, "enabled", &enabled);
+        if (!enabled) {
+            printf("[MAIN] Work '%s' disabled via config.\n", desc->work_type_name);
+            continue;
+        }
+
+        int instances = target_consumers_count;
+        if (config_setting_lookup_int(wset, "instances", &instances) == CONFIG_FALSE) {
+            instances = target_consumers_count;
+        }
+
+        printf("[MAIN] Provisioning work '%s' (config: %s) instances=%d\n", desc->work_type_name, desc->config_name, instances);
+
+        if (workmgr_start_work(desc, shared_pipeline, (void*)wset, instances) != 0) {
+            fprintf(stderr, "FATAL: Unable to provision work '%s'.\n", desc->work_type_name);
+            goto __service_shutdown;
         }
     }
 
