@@ -21,6 +21,8 @@
 #include <pthread.h>
 #include <stdbool.h>
 
+#include <stdint.h>
+
 #include "queue.h"
 
 /* Concrete implementation of the opaque structure definition */
@@ -49,6 +51,36 @@ struct queue_t
 
 /* Calculation helper macro to allocate control layout alongside data buffer bounds */
 #define QUEUE_TOTAL_ALLOC_SIZE(size) (sizeof(struct queue_t) + (size))
+
+/* Copy `len` bytes from ring buffer starting at `src` into `dst` handling wrap. */
+static void ring_copy_from(const queue_t *pqueue, void *dst, const char *src, size_t len)
+{
+    size_t bytes_to_right = (char *)pqueue->_rightborder - src;
+    if (bytes_to_right >= len)
+    {
+        memcpy(dst, src, len);
+    }
+    else
+    {
+        memcpy(dst, src, bytes_to_right);
+        memcpy((char *)dst + bytes_to_right, pqueue->_leftborder, len - bytes_to_right);
+    }
+}
+
+/* Copy `len` bytes from `src` into ring buffer starting at `dst` handling wrap. */
+static void ring_copy_to(queue_t *pqueue, char *dst, const void *src, size_t len)
+{
+    size_t bytes_to_right = (char *)pqueue->_rightborder - dst;
+    if (bytes_to_right >= len)
+    {
+        memcpy(dst, src, len);
+    }
+    else
+    {
+        memcpy(dst, src, bytes_to_right);
+        memcpy(pqueue->_leftborder, (const char *)src + bytes_to_right, len - bytes_to_right);
+    }
+}
 
 queue_t *queue_create(size_t size)
 {
@@ -130,6 +162,106 @@ void queue_destroy(queue_t *pqueue)
     munmap((void *)pqueue, total_bytes);
 }
 
+/* framed-message write: prepend 4-byte network-order length header, then payload */
+int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct timespec *timeout)
+{
+    if (!pqueue || !pbuf || nBytes == 0)
+        return QUEUE_RET_ERROR;
+
+    size_t total_capacity = (char *)pqueue->_rightborder - (char *)pqueue->_leftborder;
+    /* reserve 1 byte gap for full/empty discrimination and 4 bytes for header */
+    if (nBytes > (total_capacity - 1 - sizeof(uint32_t))) {
+        return QUEUE_RET_ERROR;
+    }
+
+    pthread_mutex_lock(&pqueue->_writeMutex);
+
+    while (1)
+    {
+        if (!pqueue->_isActive)
+        {
+            pthread_mutex_unlock(&pqueue->_writeMutex);
+            return QUEUE_RET_DESTROYING;
+        }
+
+        /* Compute used and free space */
+        size_t used_space = 0;
+        if (pqueue->_tail >= pqueue->_head)
+        {
+            used_space = pqueue->_tail - pqueue->_head;
+        }
+        else
+        {
+            used_space = ((char *)pqueue->_rightborder - pqueue->_head) + ((char *)pqueue->_tail - (char *)pqueue->_leftborder);
+        }
+
+        size_t free_space = total_capacity - used_space - 1;
+
+        size_t needed = sizeof(uint32_t) + nBytes;
+        if (free_space >= needed)
+        {
+            /* Write header then payload, handling wrap-around for each */
+            uint32_t len = (uint32_t)nBytes;
+            size_t bytes_to_right = (char *)pqueue->_rightborder - pqueue->_tail;
+
+            /* write header */
+            ring_copy_to(pqueue, pqueue->_tail, &len, sizeof(len));
+            if (sizeof(len) <= bytes_to_right)
+            {
+                pqueue->_tail += sizeof(len);
+                if (pqueue->_tail == pqueue->_rightborder) pqueue->_tail = (char *)pqueue->_leftborder;
+            }
+            else
+            {
+                pqueue->_tail = (char *)pqueue->_leftborder + (sizeof(len) - bytes_to_right);
+            }
+
+            /* write payload */
+            bytes_to_right = (char *)pqueue->_rightborder - pqueue->_tail;
+            ring_copy_to(pqueue, pqueue->_tail, pbuf, nBytes);
+            if (nBytes <= bytes_to_right)
+            {
+                pqueue->_tail += nBytes;
+                if (pqueue->_tail == pqueue->_rightborder) pqueue->_tail = (char *)pqueue->_leftborder;
+            }
+            else
+            {
+                pqueue->_tail = (char *)pqueue->_leftborder + (nBytes - bytes_to_right);
+            }
+
+            /* Update stats */
+            pqueue->_stats_EntriesCurrent++;
+            if (pqueue->_stats_EntriesCurrent > pqueue->_stats_EntriesMax)
+            {
+                pqueue->_stats_EntriesMax = pqueue->_stats_EntriesCurrent;
+            }
+            pqueue->_stats_MemUsageCurrent += needed;
+            if (pqueue->_stats_MemUsageCurrent > pqueue->_stats_MemUsageMax)
+            {
+                pqueue->_stats_MemUsageMax = pqueue->_stats_MemUsageCurrent;
+            }
+
+            pthread_cond_signal(&pqueue->_readCondVariable);
+            pthread_mutex_unlock(&pqueue->_writeMutex);
+            return (int)nBytes;
+        }
+
+        if (timeout)
+        {
+            int ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
+            if (ret == ETIMEDOUT)
+            {
+                pthread_mutex_unlock(&pqueue->_writeMutex);
+                return QUEUE_RET_TIMEOUT;
+            }
+        }
+        else
+        {
+            pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
+        }
+    }
+}
+
 bool queue_consumer_new(queue_t *pqueue)
 {
     if (!pqueue)
@@ -170,101 +302,9 @@ void queue_producer_free(queue_t *pqueue)
     pthread_mutex_unlock(&pqueue->_writeMutex);
 }
 
-int queue_write(queue_t *pqueue, const void *pbuf, size_t nBytes, const struct timespec *timeout)
-{
-    if (!pqueue || !pbuf || nBytes == 0)
-        return QUEUE_RET_ERROR;
 
-    /*
-     * FIX: Immediately reject payloads that exceed the total usable buffer size.
-     * We subtract 1 because the ring buffer keeps 1 byte empty to tell full/empty apart.
-     */
-    size_t total_capacity = (char *)pqueue->_rightborder - (char *)pqueue->_leftborder;
-    if (nBytes > (total_capacity - 1))
-    {
-        return QUEUE_RET_ERROR;
-    }
 
-    pthread_mutex_lock(&pqueue->_writeMutex);
-
-    while (1)
-    {
-        if (!pqueue->_isActive)
-        {
-            pthread_mutex_unlock(&pqueue->_writeMutex);
-            return QUEUE_RET_DESTROYING;
-        }
-
-        /* Compute current available capacity considering the ring wrap-around */
-        size_t used_space = 0;
-        if (pqueue->_tail >= pqueue->_head)
-        {
-            used_space = pqueue->_tail - pqueue->_head;
-        }
-        else
-        {
-            used_space = ((char *)pqueue->_rightborder - pqueue->_head) + ((char *)pqueue->_tail - (char *)pqueue->_leftborder);
-        }
-
-        size_t free_space = total_capacity - used_space - 1; /* Keep 1 byte boundary buffer */
-
-        if (free_space >= nBytes)
-        {
-            /* Space available: Execute writing operation */
-            size_t bytes_to_right = (char *)pqueue->_rightborder - pqueue->_tail;
-
-            if (nBytes <= bytes_to_right)
-            {
-                memcpy(pqueue->_tail, pbuf, nBytes);
-                pqueue->_tail += nBytes;
-                if (pqueue->_tail == pqueue->_rightborder)
-                {
-                    pqueue->_tail = (char *)pqueue->_leftborder;
-                }
-            }
-            else
-            {
-                memcpy(pqueue->_tail, pbuf, bytes_to_right);
-                memcpy(pqueue->_leftborder, (char *)pbuf + bytes_to_right, nBytes - bytes_to_right);
-                pqueue->_tail = (char *)pqueue->_leftborder + (nBytes - bytes_to_right);
-            }
-
-            /* Update tracking statistics variables */
-            pqueue->_stats_EntriesCurrent++;
-            if (pqueue->_stats_EntriesCurrent > pqueue->_stats_EntriesMax)
-            {
-                pqueue->_stats_EntriesMax = pqueue->_stats_EntriesCurrent;
-            }
-            pqueue->_stats_MemUsageCurrent += nBytes;
-            if (pqueue->_stats_MemUsageCurrent > pqueue->_stats_MemUsageMax)
-            {
-                pqueue->_stats_MemUsageMax = pqueue->_stats_MemUsageCurrent;
-            }
-
-            /* Signal any consumers waiting on data inputs */
-            pthread_cond_signal(&pqueue->_readCondVariable);
-            pthread_mutex_unlock(&pqueue->_writeMutex);
-            return (int)nBytes;
-        }
-
-        /* Queue is Full: Wait or handle timeout states */
-        if (timeout)
-        {
-            int ret = pthread_cond_timedwait(&pqueue->_writeCondVariable, &pqueue->_writeMutex, timeout);
-            if (ret == ETIMEDOUT)
-            {
-                pthread_mutex_unlock(&pqueue->_writeMutex);
-                return QUEUE_RET_TIMEOUT;
-            }
-        }
-        else
-        {
-            pthread_cond_wait(&pqueue->_writeCondVariable, &pqueue->_writeMutex);
-        }
-    }
-}
-
-int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout)
+int queue_read(queue_t *pqueue, void **pbuf, const struct timespec *timeout)
 {
     if (!pqueue || !pbuf)
         return QUEUE_RET_ERROR;
@@ -279,45 +319,68 @@ int queue_read(queue_t *pqueue, void *pbuf, const struct timespec *timeout)
             return QUEUE_RET_DESTROYING;
         }
 
-        if (pqueue->_head != pqueue->_tail)
+        /* compute total used bytes in ring */
+        size_t total_used = 0;
+        if (pqueue->_tail >= pqueue->_head)
         {
-            /* Queue contains data: Parse the next object out */
-            size_t bytes_available = 0;
-            if (pqueue->_tail > pqueue->_head)
-            {
-                bytes_available = pqueue->_tail - pqueue->_head;
-            }
-            else
-            {
-                bytes_available = (char *)pqueue->_rightborder - pqueue->_head;
-            }
-
-            memcpy(pbuf, pqueue->_head, bytes_available);
-            pqueue->_head += bytes_available;
-            if (pqueue->_head == pqueue->_rightborder)
-            {
-                pqueue->_head = (char *)pqueue->_leftborder;
-            }
-
-            /* Adjust stats counters */
-            if (pqueue->_stats_EntriesCurrent > 0)
-                pqueue->_stats_EntriesCurrent--;
-            if (pqueue->_stats_MemUsageCurrent >= bytes_available)
-            {
-                pqueue->_stats_MemUsageCurrent -= bytes_available;
-            }
-            else
-            {
-                pqueue->_stats_MemUsageCurrent = 0;
-            }
-
-            /* Wake up any waiting producers stalling on full buffers */
-            pthread_cond_signal(&pqueue->_writeCondVariable);
-            pthread_mutex_unlock(&pqueue->_readMutex);
-            return (int)bytes_available;
+            total_used = pqueue->_tail - pqueue->_head;
+        }
+        else
+        {
+            total_used = ((char *)pqueue->_rightborder - pqueue->_head) + ((char *)pqueue->_tail - (char *)pqueue->_leftborder);
         }
 
-        /* Queue is Empty: Wait or handle timeout states */
+        if (total_used >= sizeof(uint32_t))
+        {
+            /* Read header (may be split across border) */
+            uint8_t header_buf[sizeof(uint32_t)];
+            ring_copy_from(pqueue, header_buf, pqueue->_head, sizeof(header_buf));
+
+            uint32_t entry_len;
+            memcpy(&entry_len, header_buf, sizeof(entry_len));
+
+            if (total_used >= (sizeof(uint32_t) + entry_len))
+            {
+                /* we have a full entry, allocate and copy payload */
+                void *payload = malloc(entry_len);
+                if (!payload)
+                {
+                    pthread_mutex_unlock(&pqueue->_readMutex);
+                    return QUEUE_RET_ERROR;
+                }
+
+                /* copy payload starting after header */
+                /* compute payload start pointer */
+                char *payload_start = pqueue->_head + sizeof(uint32_t);
+                if (payload_start >= (char *)pqueue->_rightborder)
+                {
+                    payload_start = (char *)pqueue->_leftborder + (payload_start - (char *)pqueue->_rightborder);
+                }
+
+                ring_copy_from(pqueue, payload, payload_start, entry_len);
+
+                /* advance head by header + payload */
+                size_t advance = sizeof(uint32_t) + entry_len;
+                char *new_head = pqueue->_head + advance;
+                if (new_head >= (char *)pqueue->_rightborder)
+                {
+                    new_head = (char *)pqueue->_leftborder + (new_head - (char *)pqueue->_rightborder);
+                }
+                pqueue->_head = new_head;
+
+                /* update stats */
+                if (pqueue->_stats_EntriesCurrent > 0) pqueue->_stats_EntriesCurrent--;
+                if (pqueue->_stats_MemUsageCurrent >= (advance)) pqueue->_stats_MemUsageCurrent -= (advance);
+                else pqueue->_stats_MemUsageCurrent = 0;
+
+                pthread_cond_signal(&pqueue->_writeCondVariable);
+                pthread_mutex_unlock(&pqueue->_readMutex);
+                *pbuf = payload;
+                return (int)entry_len;
+            }
+        }
+
+        /* not enough data yet, wait */
         if (timeout)
         {
             int ret = pthread_cond_timedwait(&pqueue->_readCondVariable, &pqueue->_readMutex, timeout);

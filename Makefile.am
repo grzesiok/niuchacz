@@ -26,8 +26,7 @@ niuchacz_out_SOURCES = \
     src/database/database.c \
     src/workmgr/work/pcap_producer.c \
     src/workmgr/work/sqlite_consumer.c \
-    src/main.c \
-    src/packet_analyze.c
+    src/main.c
 
 /* FIXED: Replaced raw variables duplicate references to clear native tracking maps variables */
 niuchacz_out_LDADD = $(LOCAL_LIBS) $(SYSTEM_LIBS)

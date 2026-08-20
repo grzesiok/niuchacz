@@ -179,6 +179,13 @@ int db_open(const char *p_shortname_8b, const char *filename, database_t **p_db)
         return -1;
     }
 
+    /* Configure busy timeout to reduce 'database is locked' errors when
+     * multiple writers/readers contend for the DB file. Also enable WAL
+     * mode to improve concurrent read/write performance. Failures are
+     * non-fatal for compatibility, but best-effort is applied. */
+    sqlite3_busy_timeout(db->_db, 5000); /* 5 seconds */
+    sqlite3_exec(db->_db, "PRAGMA journal_mode=WAL;", NULL, NULL, NULL);
+
     db->_state = DB_STATE_OPEN;
     *p_db = db;
     return 0;

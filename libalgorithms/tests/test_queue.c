@@ -25,16 +25,17 @@ START_TEST(test_queue_simple_write_read)
 
     const char *msg = "Hello SSE4.2 Queue!";
     size_t msg_len = strlen(msg) + 1;
-    char buffer[128] = {0};
+    char *buffer = NULL;
 
     /* Write operation without timeout */
     int write_res = queue_write(q, msg, msg_len, NULL);
     ck_assert_int_eq(write_res, (int)msg_len);
 
     /* Read operation without timeout */
-    int read_res = queue_read(q, buffer, NULL);
+    int read_res = queue_read(q, (void **)&buffer, NULL);
     ck_assert_int_eq(read_res, (int)msg_len);
     ck_assert_str_eq(buffer, msg);
+    free(buffer);
 
     queue_consumer_free(q);
     queue_producer_free(q);
