@@ -12,6 +12,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <pcap.h>
+#include <time.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "workmgr/workmgr.h"
 #include "algorithms/queue/queue.h"
@@ -21,6 +24,9 @@
 typedef struct {
     pcap_t *pcap_handle;
     const char *interface_name;
+    char *capture_filter;
+    size_t max_payload_bytes;
+    double sampling_rate;
 } PcapProducerState_t;
 
 static void i_pcap_producer_setup(void *raw_ctx) {
@@ -53,6 +59,27 @@ static void i_pcap_producer_setup(void *raw_ctx) {
     }
 
     state->interface_name = if_name;
+    /* read optional configuration values */
+    const char *filter_str = NULL;
+    if (config_setting_lookup_string(setting, "capture_filter", &filter_str) == CONFIG_TRUE && filter_str != NULL) {
+        state->capture_filter = strdup(filter_str);
+    } else {
+        state->capture_filter = NULL;
+    }
+
+    int max_payload = 0;
+    if (config_setting_lookup_int(setting, "max_payload_bytes", &max_payload) == CONFIG_TRUE && max_payload > 0) {
+        state->max_payload_bytes = (size_t)max_payload;
+    } else {
+        state->max_payload_bytes = 65535; /* default: full packet */
+    }
+
+    double sampling = 1.0;
+    if (config_setting_lookup_float(setting, "sampling_rate", &sampling) == CONFIG_TRUE) {
+        if (sampling <= 0.0) sampling = 0.0;
+        if (sampling > 1.0) sampling = 1.0;
+    }
+    state->sampling_rate = sampling;
     
     /* Open the interface in promiscuous mode with a standard 65535 byte snaplen limit */
     state->pcap_handle = pcap_open_live(state->interface_name, 65535, 1, 1000, errbuf);
@@ -61,6 +88,22 @@ static void i_pcap_producer_setup(void *raw_ctx) {
         free(state);
         exit(EXIT_FAILURE);
     }
+
+    /* If a capture filter is configured, compile and apply it. Non-fatal on failure. */
+    if (state->capture_filter) {
+        struct bpf_program fp;
+        if (pcap_compile(state->pcap_handle, &fp, state->capture_filter, 1, PCAP_NETMASK_UNKNOWN) == 0) {
+            if (pcap_setfilter(state->pcap_handle, &fp) != 0) {
+                fprintf(stderr, "[PCAP_PRODUCER][WARN] Failed to set BPF filter '%s' on %s\n", state->capture_filter, state->interface_name);
+            }
+            pcap_freecode(&fp);
+        } else {
+            fprintf(stderr, "[PCAP_PRODUCER][WARN] Failed to compile BPF filter '%s'\n", state->capture_filter);
+        }
+    }
+
+    /* Seed PRNG for sampling decisions per-producer process */
+    srand((unsigned int)(time(NULL) ^ getpid()));
 
     /* Override custom_config pointer to retain our dynamic local state inside this fork */
     ctx->custom_config = (void *)state;
@@ -78,14 +121,24 @@ static void i_pcap_producer_run_loop(void *raw_ctx) {
 
     while (1) {
         packet = pcap_next(state->pcap_handle, &header);
-        if (packet != NULL) {
-            /* Synchronize and write raw packet bounds straight into our shared memory queue ring */
-            int write_res = queue_write(ctx->pipeline, packet, header.caplen, NULL);
-            
-            if (write_res == QUEUE_RET_DESTROYING) {
-                printf("[PCAP_PRODUCER] Shared pipeline is being torn down. Terminating worker execution frame.\n");
-                break;
+        if (packet == NULL) continue;
+
+        /* Probabilistic sampling */
+        if (state->sampling_rate < 1.0) {
+            double r = (double)rand() / (double)RAND_MAX;
+            if (r > state->sampling_rate) {
+                continue; /* drop packet due to sampling */
             }
+        }
+
+        /* Apply payload truncation if configured */
+        size_t write_len = header.caplen;
+        if (write_len > state->max_payload_bytes) write_len = state->max_payload_bytes;
+
+        int write_res = queue_write(ctx->pipeline, packet, write_len, NULL);
+        if (write_res == QUEUE_RET_DESTROYING) {
+            printf("[PCAP_PRODUCER] Shared pipeline is being torn down. Terminating worker execution frame.\n");
+            break;
         }
     }
 }
@@ -102,6 +155,7 @@ static void i_pcap_producer_teardown(void *raw_ctx) {
     
     printf("[PCAP_PRODUCER] Capture session closed cleanly for device interface '%s'.\n", state->interface_name);
     queue_producer_free(ctx->pipeline);
+    if (state->capture_filter) free(state->capture_filter);
     free(state);
 }
 
